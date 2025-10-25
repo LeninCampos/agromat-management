@@ -1,0 +1,25 @@
+{
+  "name": "agromat-2.0",
+  "version": "1.0.0",
+  "description": "Backend agromat",
+  "type": "module",
+  "main": "src/app.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development node src/app.js",
+    "start": "NODE_ENV=production node src/app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-validator": "^7.2.1",
+    "mariadb": "^3.4.5",
+    "sequelize": "^6.37.7"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0"
+  }
+}
