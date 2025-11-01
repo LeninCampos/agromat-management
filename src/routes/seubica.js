@@ -1,5 +1,6 @@
 import express from "express";
 import { SeUbica, Producto, Zona } from "../models/index.js";
+import { validateSeUbica } from "../middleware/validateDetalles.js";
 
 const router = express.Router();
 
@@ -21,18 +22,15 @@ router.get("/", async (req, res, next) => {
 });
 
 // Vincular producto a zona
-router.post("/", async (req, res, next) => {
+router.post("/", validateSeUbica, async (req, res, next) => {
   try {
     const { id_producto, nombre, numero } = req.body;
-    if (!id_producto || !nombre || numero == null) {
-      return res.status(400).json({ error: "Faltan id_producto/nombre/numero" });
-    }
     const created = await SeUbica.create({ id_producto, nombre, numero });
     res.status(201).json(created);
   } catch (e) { next(e); }
 });
 
-router.delete("/", async (req, res, next) => {
+router.delete("/", validateSeUbica, async (req, res, next) => {
   try {
     const { id_producto, nombre, numero } = req.body;
     const row = await SeUbica.findOne({ where: { id_producto, nombre, numero } });

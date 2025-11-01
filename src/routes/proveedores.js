@@ -1,5 +1,6 @@
 import express from "express";
 import { Proveedor } from "../models/index.js";
+import {validateProveedorCreate, validateProveedorUpdate} from "../middleware/validateProveedor.js";
 
 const router = express.Router();
 
@@ -16,18 +17,14 @@ router.get("/:id", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", validateProveedorCreate, async (req, res, next) => {
   try {
-    const { nombre_proveedor, telefono, correo, direccion } = req.body;
-    if (!nombre_proveedor || !telefono || !direccion) {
-      return res.status(400).json({ error: "Faltan campos obligatorios" });
-    }
-    const created = await Proveedor.create({ nombre_proveedor, telefono, correo, direccion });
+    const created = await Proveedor.create(req.body);
     res.status(201).json(created);
   } catch (e) { next(e); }
 });
 
-router.put("/:id", async (req, res, next) => {
+router.put("/:id", validateProveedorUpdate, async (req, res, next) => {
   try {
     const row = await Proveedor.findByPk(req.params.id);
     if (!row) return res.status(404).json({ error: "Proveedor no encontrado" });

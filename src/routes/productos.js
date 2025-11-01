@@ -1,7 +1,7 @@
 // src/routes/productos.js
 import express from "express";
 import { Producto, Proveedor } from "../models/index.js";
-import { ValidateProducto } from "../middleware/validateProducto.js";
+import { validateProductoCreate, validateProductoUpdate } from "../middleware/validateProducto.js";
 
 const router = express.Router();
 
@@ -46,7 +46,7 @@ router.get("/:id", async (req, res, next) => {
  * Crea un producto nuevo
  * Body esperado: { nombre_producto, descripcion?, id_proveedor, precio, stock }
  */
-router.post("/", ValidateProducto, async (req, res, next) => {
+router.post("/", validateProductoCreate, async (req, res, next) => {
   try {
     const nuevo = await Producto.create(req.body);
     res.status(201).json(nuevo);
@@ -59,7 +59,7 @@ router.post("/", ValidateProducto, async (req, res, next) => {
  * PUT /api/productos/:id
  * Actualiza un producto
  */
-router.put("/:id", ValidateProducto, async (req, res, next) => {
+router.put("/:id", validateProductoUpdate, async (req, res, next) => {
   try {
     const { id } = req.params;
     const producto = await Producto.findByPk(id);

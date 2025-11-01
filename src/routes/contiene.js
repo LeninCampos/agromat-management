@@ -1,5 +1,9 @@
 import express from "express";
 import { Contiene, Producto } from "../models/index.js";
+import {
+  validateContieneUpdate,
+  validateContieneDelete
+} from "../middleware/validateDetalles.js";
 
 const router = express.Router();
 
@@ -16,11 +20,12 @@ router.get("/", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.put("/", async (req, res, next) => {
+router.put("/", validateContieneUpdate, async (req, res, next) => {
   try {
     const { id_pedido, id_producto, cantidad, precio_unitario, subtotal_linea } = req.body;
     const row = await Contiene.findOne({ where: { id_pedido, id_producto } });
     if (!row) return res.status(404).json({ error: "Línea no encontrada" });
+    
     await row.update({
       ...(cantidad !== undefined && { cantidad }),
       ...(precio_unitario !== undefined && { precio_unitario }),
@@ -30,11 +35,12 @@ router.put("/", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.delete("/", async (req, res, next) => {
+router.delete("/", validateContieneDelete, async (req, res, next) => {
   try {
     const { id_pedido, id_producto } = req.body;
     const row = await Contiene.findOne({ where: { id_pedido, id_producto } });
     if (!row) return res.status(404).json({ error: "Línea no encontrada" });
+    
     await row.destroy();
     res.json({ ok: true });
   } catch (e) { next(e); }

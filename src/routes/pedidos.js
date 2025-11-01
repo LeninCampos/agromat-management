@@ -1,7 +1,7 @@
 import express from "express";
 import { sequelize, Pedido, Cliente, Empleado, Contiene, Producto } from "../models/index.js";
 import { Op } from "sequelize";
-
+import { validatePedidoCreate, validatePedidoUpdate, validatePedidoItems } from "../middleware/validatePedido.js";
 const router = express.Router();
 
 function calcSubtotalLine(cantidad, precio_unitario) {
@@ -56,24 +56,15 @@ router.get("/:id", async (req, res, next) => {
 });
 
 // POST /api/pedidos (crea pedido con items)
-router.post("/", async (req, res, next) => {
+router.post("/", validatePedidoCreate, async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
     const {
       fecha_pedido, hora_pedido, status,
       id_empleado, id_cliente,
       descuento_total = 0, impuesto_total = 0,
-      items = []
+      items = [] 
     } = req.body;
-
-    if (!fecha_pedido || !hora_pedido || !status || !id_empleado || !id_cliente) {
-      await t.rollback();
-      return res.status(400).json({ error: "Faltan campos del pedido" });
-    }
-    if (!Array.isArray(items) || items.length === 0) {
-      await t.rollback();
-      return res.status(400).json({ error: "Debe incluir al menos un item" });
-    }
 
     const pedido = await Pedido.create({
       fecha_pedido, hora_pedido, status, id_empleado, id_cliente,
@@ -89,10 +80,10 @@ router.post("/", async (req, res, next) => {
     });
     const existentes = new Set(prods.map(p => p.id_producto));
     const faltantes = idsProd.filter(id => !existentes.has(id));
-    if (faltantes.length) {
+    /*if (faltantes.length) {
       await t.rollback();
       return res.status(400).json({ error: "Productos inexistentes", faltantes });
-    }
+    }*/
 
     const lineas = items.map(i => ({
       id_pedido: pedido.id_pedido,
@@ -114,15 +105,12 @@ router.post("/", async (req, res, next) => {
 });
 
 // POST /api/pedidos/:id/items (agrega o actualiza una línea)
-router.post("/:id/items", async (req, res, next) => {
+router.post("/:id/items", validatePedidoItems, async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
     const { id } = req.params;
     const { id_producto, cantidad, precio_unitario, descuento_total, impuesto_total } = req.body;
-    if (!id_producto || cantidad == null || precio_unitario == null) {
-      await t.rollback();
-      return res.status(400).json({ error: "Faltan datos del item" });
-    }
+  
     const pedido = await Pedido.findByPk(id, { transaction: t });
     if (!pedido) { await t.rollback(); return res.status(404).json({ error: "Pedido no encontrado" }); }
 

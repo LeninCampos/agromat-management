@@ -2,7 +2,8 @@ import express from "express";
 import {
   sequelize, Envio, EnvioDetalle, Pedido, Empleado, Producto
 } from "../models/index.js";
-
+import { validateEnvioCreate, validateEnvioUpdate } from "../middleware/validateEnvio.js";
+import { validateEnvioDetalleCreate } from "../middleware/validateDetalles.js";
 const router = express.Router();
 
 // Helper para numerar renglones si no vienen
@@ -49,14 +50,10 @@ router.get("/:id", async (req, res, next) => {
 });
 
 // POST /api/envios (crea envío + detalles)
-router.post("/", async (req, res, next) => {
+router.post("/:id/detalles", validateEnvioDetalleCreate, async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
     const { id_pedido, codigo, id_empleado_responsable, observaciones, detalles = [] } = req.body;
-    if (!id_pedido || !Array.isArray(detalles) || detalles.length === 0) {
-      await t.rollback();
-      return res.status(400).json({ error: "Faltan datos: id_pedido y detalles" });
-    }
 
     // Crear cabecera
     const envio = await Envio.create({
@@ -93,15 +90,12 @@ router.post("/", async (req, res, next) => {
 });
 
 // POST /api/envios/:id/detalles (agregar renglón)
-router.post("/:id/detalles", async (req, res, next) => {
+router.post("/:id/detalles", validateEnvioDetalleCreate, async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
     const { id } = req.params;
     const { id_producto, cantidad, renglon } = req.body;
-    if (!id_producto || cantidad == null) {
-      await t.rollback();
-      return res.status(400).json({ error: "Faltan datos del detalle" });
-    }
+
     const envio = await Envio.findByPk(id, { transaction: t });
     if (!envio) { await t.rollback(); return res.status(404).json({ error: "Envío no encontrado" }); }
 
@@ -122,7 +116,7 @@ router.post("/:id/detalles", async (req, res, next) => {
 });
 
 // PUT /api/envios/:id (estado, responsable, observaciones, fecha_entrega)
-router.put("/:id", async (req, res, next) => {
+router.put("/:id", validateEnvioUpdate, async (req, res, next) => {
   try {
     const envio = await Envio.findByPk(req.params.id);
     if (!envio) return res.status(404).json({ error: "Envío no encontrado" });
