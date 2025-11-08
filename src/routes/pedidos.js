@@ -1,5 +1,6 @@
 import express from "express";
 import { validatePedidoCreate, validatePedidoUpdate, validatePedidoItems } from "../middleware/validatePedido.js";
+import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   getAllPedidos,
   getPedidoById,
@@ -14,9 +15,9 @@ const router = express.Router();
 
 router.get("/", getAllPedidos);
 router.get("/:id", getPedidoById);
-router.post("/", validatePedidoCreate, createPedido);
-router.put("/:id", validatePedidoUpdate, updatePedido);
-router.delete("/:id", deletePedido);
+router.post("/", verificarAuth, validatePedidoCreate, createPedido);
+router.put("/:id", verificarAuth, validatePedidoUpdate, updatePedido);
+router.delete("/:id", verificarAuth, deletePedido);
 
 router.post("/:id/items", validatePedidoItems, addPedidoItem);
 router.delete("/:id/items/:id_producto", deletePedidoItem);

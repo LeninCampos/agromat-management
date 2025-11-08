@@ -1,5 +1,6 @@
 import express from "express";
 import { validateClienteCreate, validateClienteUpdate } from "../middleware/validateCliente.js";
+import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   getAllClientes,
   getClienteById,
@@ -12,8 +13,8 @@ const router = express.Router();
 
 router.get("/", getAllClientes);
 router.get("/:id", getClienteById);
-router.post("/", validateClienteCreate, createCliente);
-router.put("/:id", validateClienteUpdate, updateCliente);
-router.delete("/:id", deleteCliente);
+router.post("/", verificarAuth, validateClienteCreate, createCliente);
+router.put("/:id", verificarAuth,validateClienteUpdate, updateCliente);
+router.delete("/:id", verificarAuth, deleteCliente);
 
 export default router;

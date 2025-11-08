@@ -19,12 +19,26 @@ import suministroRouter from "./routes/suministro.js";
 import suministraRouter from "./routes/suministra.js";
 import envioDetalleRouter from "./routes/envio_detalle.js";
 import contieneRouter from "./routes/contiene.js";
+import authRouter from "./routes/auth.js";
 
 
 const app = express();
 
-// Middlewares base
-app.use(cors());
+// Descomentar bloque y eliminar app.use(cors()); cuando se tenga url frontend
+const whiteList = [process.env.FRONTEND_URL];
+const corsOptions = {
+  origin: function (origin, callback) {
+    // origin es 'undefined' en peticiones de la misma máquina (ej. Postman)
+    if (whiteList.includes(origin) || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error("No permitido por CORS"));
+    }
+  }
+};
+app.use(cors(corsOptions));
+
+
 app.use(express.json());
 
 // Healthcheck mejorado
@@ -38,6 +52,7 @@ app.get("/health", (req, res) => {
 });
 
 // Montaje de rutas
+app.use("/api/auth", authRouter);
 app.use("/api/productos", productosRouter);
 app.use("/api/clientes", clientesRouter);
 app.use("/api/pedidos", pedidosRouter);

@@ -1,5 +1,6 @@
 import express from "express";
 import { validateZonaCreate, validateZonaUpdate, validateZonaDelete } from "../middleware/validateZona.js";
+import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   getAllZonas,
   findZona,
@@ -12,8 +13,8 @@ const router = express.Router();
 
 router.get("/", getAllZonas);
 router.get("/buscar", findZona);
-router.post("/", validateZonaCreate, createZona);
-router.put("/", validateZonaUpdate, updateZona);
-router.delete("/", validateZonaDelete, deleteZona);
+router.post("/", verificarAuth, validateZonaCreate, createZona);
+router.put("/", verificarAuth, validateZonaUpdate, updateZona);
+router.delete("/", verificarAuth, validateZonaDelete, deleteZona);
 
 export default router;

@@ -1,4 +1,5 @@
 import express from "express";
+import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   validateContieneUpdate,
   validateContieneDelete
@@ -13,7 +14,7 @@ import {
 const router = express.Router();
 
 router.get("/", getAllContiene);
-router.put("/", validateContieneUpdate, updateContiene);
-router.delete("/", validateContieneDelete, deleteContiene);
+router.put("/", verificarAuth, validateContieneUpdate, updateContiene);
+router.delete("/", verificarAuth, validateContieneDelete, deleteContiene);
 
 export default router;

@@ -1,5 +1,6 @@
 import express from "express";
 import { validateProductoCreate, validateProductoUpdate } from "../middleware/validateProducto.js";
+import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   getAllProductos,
   getProductoById,
@@ -12,8 +13,9 @@ const router = express.Router();
 
 router.get("/", getAllProductos);
 router.get("/:id", getProductoById);
-router.post("/", validateProductoCreate, createProducto);
-router.put("/:id", validateProductoUpdate, updateProducto);
-router.delete("/:id", deleteProducto);
+
+router.post("/", verificarAuth, validateProductoCreate, createProducto);
+router.put("/:id", verificarAuth, validateProductoUpdate, updateProducto);
+router.delete("/:id", verificarAuth, deleteProducto);
 
 export default router;

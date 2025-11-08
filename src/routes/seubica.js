@@ -1,5 +1,6 @@
 import express from "express";
 import { validateSeUbica } from "../middleware/validateDetalles.js";
+import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   getAllSeUbica,
   createSeUbica,
@@ -9,7 +10,7 @@ import {
 const router = express.Router();
 
 router.get("/", getAllSeUbica);
-router.post("/", validateSeUbica, createSeUbica);
-router.delete("/", validateSeUbica, deleteSeUbica);
+router.post("/", verificarAuth, validateSeUbica, createSeUbica);
+router.delete("/", verificarAuth, validateSeUbica, deleteSeUbica);
 
 export default router;
