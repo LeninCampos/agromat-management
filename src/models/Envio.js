@@ -15,6 +15,7 @@ const Envio = sequelize.define("Envio", {
   fecha_creacion: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   fecha_entrega: { type: DataTypes.DATE },
   observaciones: { type: DataTypes.STRING(255) },
+  url_imagen: { type: DataTypes.STRING, allowNull: true }
 }, {
   tableName: "envios",
   timestamps: false,

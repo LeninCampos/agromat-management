@@ -16,3 +16,6 @@ yarn-error.log*
 # Archivos de OS
 .DS_Store
 Thumbs.db
+
+/public/uploads/*
+!/public/uploads/.gitkeep

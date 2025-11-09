@@ -27,6 +27,39 @@ export const getAllEnvios = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+export const uploadFotoEnvio = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Verificar que el envío exista
+    const envio = await Envio.findByPk(id);
+    if (!envio) {
+      return res.status(404).json({ error: "Envío no encontrado" });
+    }
+
+    // 2. Verificar que el archivo se haya subido
+    if (!req.file) {
+      return res.status(400).json({ error: "No se subió ningún archivo de imagen" });
+    }
+
+    // 3. Construir la URL de la imagen
+    // req.file.filename nos lo da multer (ej: "1678886512345-mi-imagen.png")
+    const urlImagen = `/uploads/envios/${req.file.filename}`;
+
+    // 4. Actualizar la base de datos
+    await envio.update({ url_imagen: urlImagen });
+
+    res.json({ 
+      ok: true, 
+      mensaje: "Imagen subida correctamente", 
+      url: urlImagen 
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
 // GET /api/envios/:id (con detalles)
 export const getEnvioById = async (req, res, next) => {
   try {

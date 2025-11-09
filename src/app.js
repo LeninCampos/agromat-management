@@ -38,6 +38,7 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+app.use(express.static('public'));
 
 app.use(express.json());
 
@@ -91,6 +92,8 @@ const PORT = process.env.PORT || 4000;
     // Si solo consumís tablas ya existentes, dejá sync en falso o sin alter.
     // Si querés que Sequelize cree/ajuste tablas (con cuidado):
     // await sequelize.sync({ alter: false });
+    await sequelize.sync({ alter: true }); 
+    console.log("🔄 Modelos sincronizados con la Base de Datos.");
 
     app.listen(PORT, () => {
       console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`);
