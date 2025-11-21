@@ -1,21 +1,46 @@
-# Dependencias
-/node_modules
+# -----------------------
+# DEPENDENCIAS Y SISTEMA
+# -----------------------
+node_modules/
+.DS_Store
+Thumbs.db
 
-# Archivos de entorno
+# -----------------------
+# SEGURIDAD (CRÍTICO)
+# -----------------------
+# Ignora archivos de variables de entorno en front y back
 .env
 .env.local
-.env.production
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Logs
-logs/
+# -----------------------
+# FRONTEND (React/Vite)
+# -----------------------
+dist/
+dist-ssr/
+coverage/
+
+# -----------------------
+# LOGS (General)
+# -----------------------
+logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Archivos de OS
-.DS_Store
-Thumbs.db
-
-/public/uploads/*
-!/public/uploads/.gitkeep
+# -----------------------
+# EDITORES (VS Code, etc)
+# -----------------------
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
