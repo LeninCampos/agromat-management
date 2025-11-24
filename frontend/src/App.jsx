@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import "leaflet/dist/leaflet.css";
 import AppLayout from "./layout/AppLayout";
+
+import Login from "./Login"; 
 import Dashboard from "./pages/Dashboard";
 import Productos from "./pages/Productos";
 import Clientes from "./pages/Clientes";
@@ -10,20 +11,40 @@ import Proveedores from "./pages/Proveedores";
 import Empleados from "./pages/Empleados";
 import Zonas from "./pages/Zonas";
 
+function PrivateRoute({ children }) {
+  const token = localStorage.getItem("token");
+  return token ? children : <Navigate to="/login" replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/app" replace />} />
-        <Route path="/app/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-        <Route path="/app/productos" element={<AppLayout><Productos /></AppLayout>} />
-        <Route path="/app/clientes" element={<AppLayout><Clientes /></AppLayout>} />
-        <Route path="/app/pedidos" element={<AppLayout><Pedidos /></AppLayout>} />
-        <Route path="/app/envios" element={<AppLayout><Envios /></AppLayout>} />
-        <Route path="/app/proveedores" element={<AppLayout><Proveedores /></AppLayout>} />
-        <Route path="/app/empleados" element={<AppLayout><Empleados /></AppLayout>} />
-        <Route path="/app/zonas" element={<AppLayout><Zonas /></AppLayout>} />
-        <Route path="*" element={<h2>404</h2>} />
+
+        {/* LOGIN FUERA DEL APP LAYOUT */}
+        <Route path="/login" element={<Login />} />
+
+        {/* RUTAS PRIVADAS */}
+        <Route
+          path="/app"
+          element={
+            <PrivateRoute>
+              <AppLayout />
+            </PrivateRoute>
+          }
+        >
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="productos" element={<Productos />} />
+          <Route path="clientes" element={<Clientes />} />
+          <Route path="pedidos" element={<Pedidos />} />
+          <Route path="envios" element={<Envios />} />
+          <Route path="proveedores" element={<Proveedores />} />
+          <Route path="empleados" element={<Empleados />} />
+          <Route path="zonas" element={<Zonas />} />
+        </Route>
+
+        {/* CUALQUIER OTRA RUTA */}
+        <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   );
