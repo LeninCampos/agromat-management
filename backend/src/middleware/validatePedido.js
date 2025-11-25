@@ -63,7 +63,7 @@ export const validatePedidoCreate = [
     .notEmpty().withMessage("Debe incluir al menos un item").bail()
     .isArray({ min: 1 }).withMessage("Items debe ser un arreglo con al menos 1 producto"),
   body("items.*.id_producto")
-    .isInt({ min: 1 }).withMessage("ID de producto en items inválido"),
+    .notEmpty().withMessage("ID producto requerido"),
   body("items.*.cantidad")
     .isInt({ min: 1 }).withMessage("Cantidad en items inválida"),
   body("items.*.precio_unitario")
@@ -78,7 +78,7 @@ export const validatePedidoUpdate = [
 
 export const validatePedidoItems = [
   body("id_producto")
-    .isInt({ min: 1 }).withMessage("ID de producto inválido"),
+    .notEmpty().withMessage("ID producto requerido"),
   body("cantidad")
     .notEmpty().withMessage("Cantidad obligatoria").bail()
     .isInt({ min: 1 }).withMessage("Cantidad debe ser al menos 1"),

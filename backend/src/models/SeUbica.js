@@ -3,7 +3,7 @@ import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
 const SeUbica = sequelize.define("SeUbica", {
-  id_producto: { type: DataTypes.INTEGER, primaryKey: true },
+  id_producto: { type: DataTypes.STRING(50), primaryKey: true },
   nombre: { type: DataTypes.STRING(100), primaryKey: true },
   numero: { type: DataTypes.INTEGER, primaryKey: true },
 }, {

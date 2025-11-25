@@ -87,14 +87,14 @@ const PORT = process.env.PORT || 4000;
   try {
     // Conexión a MariaDB
     await sequelize.authenticate();
-    console.log("✅ Conectado a MariaDB");
+    console.log("Conectado a MariaDB");
 
     // Si solo consumís tablas ya existentes, dejá sync en falso o sin alter.
     // Si querés que Sequelize cree/ajuste tablas (con cuidado):
     // await sequelize.sync({ alter: false });
 
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`);
+      console.log(`Servidor escuchando en http://localhost:${PORT}`);
     });
 
     // Opcional: logs cortos de inventario al iniciar
@@ -102,15 +102,15 @@ const PORT = process.env.PORT || 4000;
     // console.log(`📦 Productos cargados: ${countProd}`);
 
   } catch (error) {
-    console.error("❌ No se pudo iniciar el servidor:", error);
+    console.error("No se pudo iniciar el servidor:", error);
     process.exit(1);
   }
 })();
 
 // Apagado elegante
 process.on("SIGINT", async () => {
-  console.log("\n⏳ Cerrando conexión...");
+  console.log("\nCerrando conexión...");
   await sequelize.close();
-  console.log("👋 Conexión cerrada. Bye!");
+  console.log("Conexión cerrada. Bye!");
   process.exit(0);
 });

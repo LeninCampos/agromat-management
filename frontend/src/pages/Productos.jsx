@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
+import { getProveedores } from "../api/proveedores";
 import {
   getProductos,
   createProducto,
@@ -8,11 +9,12 @@ import {
 } from "../api/productos";
 
 const emptyForm = {
+  id_producto: "", // Nuevo campo
   nombre_producto: "",
   descripcion: "",
   precio: "",
   existencias: "",
-  id_proveedor: 6, // 👈 default temporal
+  id_proveedor: "",
 };
 
 
@@ -23,6 +25,7 @@ export default function Productos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [proveedores, setProveedores] = useState([]); 
 
   // 🔍 Filtrado rápido
   const filtered = useMemo(() => {
@@ -39,25 +42,27 @@ export default function Productos() {
   const load = async () => {
     setLoading(true);
     try {
-      const { data } = await getProductos();
+      // Cargamos productos y proveedores en paralelo
+      const [resProductos, resProveedores] = await Promise.all([
+        getProductos(),
+        getProveedores()
+      ]);
 
-      // 🩵 Ajuste: si la API devuelve con nombres distintos (por ejemplo "existencia" o "stock")
-      // los normalizamos aquí antes de guardarlos:
-    const normalizados = data.map((p) => ({
-  id_producto: p.id_producto,
-  nombre_producto: p.nombre_producto,
-  descripcion: p.descripcion,
-  precio: p.precio,
-  existencias: p.stock,
-  id_proveedor: p.id_proveedor ?? 6,   // 👈 conservarlo
-}));
+      setProveedores(resProveedores.data); // Guardamos los proveedores
 
-
+      const normalizados = resProductos.data.map((p) => ({
+        id_producto: p.id_producto,
+        nombre_producto: p.nombre_producto,
+        descripcion: p.descripcion,
+        precio: p.precio,
+        existencias: p.stock,
+        id_proveedor: p.id_proveedor,
+      }));
 
       setItems(normalizados);
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No pude cargar los productos", "error");
+      Swal.fire("Error", "No pude cargar los datos", "error");
     } finally {
       setLoading(false);
     }
@@ -75,31 +80,37 @@ export default function Productos() {
   };
 
   // ✏️ Editar producto
- const openEdit = (row) => {
-  setEditingId(row.id_producto);
- setForm({
-  nombre_producto: row.nombre_producto ?? "",
-  descripcion: row.descripcion ?? "",
-  precio: row.precio ?? "",
-  existencias: row.existencias ?? "",
-  id_proveedor: row.id_proveedor ?? 6,   // 👈 mantenerlo
-});
+  const openEdit = (row) => {
+    setEditingId(row.id_producto);
+    setForm({
+      id_producto: row.id_producto,
+      nombre_producto: row.nombre_producto ?? "",
+      descripcion: row.descripcion ?? "",
+      precio: row.precio ?? "",
+      existencias: row.existencias ?? "",
+      id_proveedor: row.id_proveedor ?? 6,   // 👈 mantenerlo
+    });
 
-  setModalOpen(true);
-};
+    setModalOpen(true);
+  };
   // 💾 Guardar cambios (nuevo o editado)
   const save = async (e) => {
     e.preventDefault();
+    if (!form.id_proveedor) {
+      Swal.fire("Error", "Selecciona un proveedor", "warning");
+      return;
+    }
     try {
-  const payload = {
-  nombre_producto: form.nombre_producto,
-  descripcion: form.descripcion || null,
-  precio: Number(form.precio) || 0,
-  stock: Number(form.existencias) || 0,
-  id_proveedor: Number(form.id_proveedor) || 6,  // 👈 CLAVE
-};
+      const payload = {
+        id_producto: form.id_producto,
+        nombre_producto: form.nombre_producto,
+        descripcion: form.descripcion || null,
+        precio: Number(form.precio) || 0,
+        stock: Number(form.existencias) || 0,
+        id_proveedor: Number(form.id_proveedor),
+      };
 
-console.log("Payload enviado:", payload); if (editingId) {
+      console.log("Payload enviado:", payload); if (editingId) {
         await updateProducto(editingId, payload);
         Swal.fire("✅ Listo", "Producto actualizado correctamente", "success");
       } else {
@@ -115,7 +126,7 @@ console.log("Payload enviado:", payload); if (editingId) {
       console.error(e);
       Swal.fire("Error", "No pude guardar el producto", "error");
     }
-    
+
   };
 
   // ❌ Eliminar producto
@@ -304,7 +315,48 @@ console.log("Payload enviado:", payload); if (editingId) {
             <h3 style={{ fontSize: "1.2rem", marginBottom: "1rem" }}>
               {editingId ? "Editar producto" : "Nuevo producto"}
             </h3>
-
+            <label>
+              <span>Código de Barras (ID):</span>
+              <input
+                type="text"
+                value={form.id_producto}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, id_producto: e.target.value }))
+                }
+                // Si estamos editando, deshabilitamos el campo para no romper la integridad
+                disabled={!!editingId}
+                required
+                style={{
+                  width: "100%",
+                  marginBottom: "10px",
+                  background: editingId ? "#f3f4f6" : "white"
+                }}
+              />
+            </label>
+            <label>
+              <span>Proveedor:</span>
+              <select
+                value={form.id_proveedor}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, id_proveedor: e.target.value }))
+                }
+                required
+                style={{ 
+                  width: "100%", 
+                  marginBottom: "10px", 
+                  padding: "8px", 
+                  borderRadius: "6px",
+                  border: "1px solid #ccc"
+                }}
+              >
+                <option value="">-- Selecciona un proveedor --</option>
+                {proveedores.map((prov) => (
+                  <option key={prov.id_proveedor} value={prov.id_proveedor}>
+                    {prov.nombre_proveedor}
+                  </option>
+                ))}
+              </select>
+              </label>
             <label>
               <span>Nombre:</span>
               <input

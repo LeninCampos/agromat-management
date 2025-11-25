@@ -13,7 +13,7 @@ const handleValidationErrors = (req, res, next) => {
 // --- Para EnvioDetalle ---
 export const validateEnvioDetalleCreate = [
   body("id_envio").isInt({ min: 1 }).withMessage("ID envío inválido"),
-  body("id_producto").isInt({ min: 1 }).withMessage("ID producto inválido"),
+  body("id_producto").notEmpty().withMessage("Seleccionar producto"),
   body("cantidad").isInt({ min: 1 }).withMessage("Cantidad debe ser al menos 1"),
   body("renglon").optional().isInt({ min: 1 }).withMessage("Renglón inválido"),
   handleValidationErrors,
@@ -21,7 +21,7 @@ export const validateEnvioDetalleCreate = [
 export const validateEnvioDetalleUpdate = [
   body("id_envio").isInt({ min: 1 }).withMessage("ID envío (PK) obligatorio"),
   body("renglon").isInt({ min: 1 }).withMessage("Renglón (PK) obligatorio"),
-  body("id_producto").optional().isInt({ min: 1 }).withMessage("ID producto inválido"),
+  body("id_producto").optional().notEmpty().withMessage("ID producto inválido"),
   body("cantidad").optional().isInt({ min: 1 }).withMessage("Cantidad inválida"),
   handleValidationErrors,
 ];
@@ -34,7 +34,7 @@ export const validateEnvioDetalleDelete = [
 // --- Para Contiene ---
 export const validateContieneUpdate = [
   body("id_pedido").isInt({ min: 1 }).withMessage("ID pedido (PK) obligatorio"),
-  body("id_producto").isInt({ min: 1 }).withMessage("ID producto (PK) obligatorio"),
+  body("id_producto").notEmpty().withMessage("ID producto (PK) obligatorio"),
   body("cantidad").optional().isInt({ min: 1 }).withMessage("Cantidad inválida"),
   body("precio_unitario").optional().isFloat({ min: 0 }).withMessage("Precio inválido"),
   body("subtotal_linea").optional().isFloat({ min: 0 }).withMessage("Subtotal inválido"),
@@ -42,13 +42,13 @@ export const validateContieneUpdate = [
 ];
 export const validateContieneDelete = [
   body("id_pedido").isInt({ min: 1 }).withMessage("ID pedido (PK) obligatorio"),
-  body("id_producto").isInt({ min: 1 }).withMessage("ID producto (PK) obligatorio"),
+  body("id_producto").notEmpty().withMessage("ID producto (PK) obligatorio"),
   handleValidationErrors,
 ];
 
 // --- Para SeUbica ---
 export const validateSeUbica = [
-  body("id_producto").isInt({ min: 1 }).withMessage("ID producto (PK) inválido"),
+  body("id_producto").notEmpty().withMessage("ID producto (PK) inválido"),
   body("nombre").trim().notEmpty().withMessage("Nombre de zona (PK) obligatorio"),
   body("numero").isInt({ min: 0 }).withMessage("Número de zona (PK) inválido"),
   handleValidationErrors,
@@ -57,7 +57,7 @@ export const validateSeUbica = [
 // --- Para Suministra ---
 const validateSuministraPK = [
   body("id_suministro").isInt({ min: 1 }).withMessage("ID suministro (PK) obligatorio"),
-  body("id_producto").isInt({ min: 1 }).withMessage("ID producto (PK) obligatorio"),
+  body("id_producto").notEmpty().withMessage("ID producto (PK) obligatorio"),
 ];
 
 export const validateSuministraCreate = [

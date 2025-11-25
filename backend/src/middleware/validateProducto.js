@@ -12,6 +12,10 @@ const handleValidationErrors = (req, res, next) => {
 };
 
 export const validateProductoCreate = [
+  body("id_producto")
+    .trim()
+    .notEmpty().withMessage("El código de barras/ID es obligatorio")
+    .isLength({ max: 50 }).withMessage("Máximo 50 caracteres"),
   body("nombre_producto")
     .trim()
     .notEmpty().withMessage("El nombre es obligatorio")
