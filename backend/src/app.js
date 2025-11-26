@@ -17,7 +17,6 @@ import zonasRouter from "./routes/zonas.js";
 import seubicaRouter from "./routes/seubica.js";
 import suministroRouter from "./routes/suministro.js";
 import suministraRouter from "./routes/suministra.js";
-import envioDetalleRouter from "./routes/envio_detalle.js";
 import contieneRouter from "./routes/contiene.js";
 import authRouter from "./routes/auth.js";
 
@@ -78,7 +77,6 @@ app.use("/api/zonas", zonasRouter);
 app.use("/api/seubica", seubicaRouter);
 app.use("/api/suministro", suministroRouter);
 app.use("/api/suministra", suministraRouter);
-app.use("/api/envio-detalle", envioDetalleRouter);
 app.use("/api/contiene", contieneRouter);
 
 /* ==========================

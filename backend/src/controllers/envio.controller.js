@@ -1,8 +1,8 @@
 import {
-  sequelize, Envio, EnvioDetalle, Pedido, Empleado, Producto
+  sequelize, Envio, Pedido, Empleado, Producto
 } from "../models/index.js";
 
-// Helper (no se exporta)
+/* Helper (no se exporta)
 async function nextRenglon(id_envio, t) {
   const last = await EnvioDetalle.findOne({
     where: { id_envio },
@@ -11,7 +11,7 @@ async function nextRenglon(id_envio, t) {
     transaction: t,
   });
   return last ? last.renglon + 1 : 1;
-}
+}*/
 
 // GET /api/envios
 export const getAllEnvios = async (req, res, next) => {
@@ -67,10 +67,10 @@ export const getEnvioById = async (req, res, next) => {
       include: [
         { model: Pedido, attributes: ["id_pedido", "status", "total"] },
         { model: Empleado, as: "responsable", attributes: ["id_empleado", "nombre_empleado"] },
-        {
+        /*{
           model: EnvioDetalle,
           include: [{ model: Producto, attributes: ["id_producto", "nombre_producto", "stock"] }],
-        },
+        },*/
       ],
     });
     if (!row) return res.status(404).json({ error: "Envío no encontrado" });
@@ -82,7 +82,7 @@ export const getEnvioById = async (req, res, next) => {
 export const createEnvio = async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
-    const { id_pedido, codigo, id_empleado_responsable, observaciones, detalles = [] } = req.body;
+    const { id_pedido, codigo, id_empleado_responsable, observaciones = [] } = req.body;
 
     // Crear cabecera
     const envio = await Envio.create({
@@ -93,7 +93,7 @@ export const createEnvio = async (req, res, next) => {
       observaciones: observaciones ?? null,
     }, { transaction: t });
 
-    // Insertar detalles
+    /* Insertar detalles
     for (const d of detalles) {
       const renglon = d.renglon ?? await nextRenglon(envio.id_envio, t);
       await EnvioDetalle.create({
@@ -102,7 +102,7 @@ export const createEnvio = async (req, res, next) => {
         id_producto: d.id_producto,
         cantidad: d.cantidad,
       }, { transaction: t });
-    }
+    }*/
 
     await t.commit();
     const created = await Envio.findByPk(envio.id_envio); // respuesta breve

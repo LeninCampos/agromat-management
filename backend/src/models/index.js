@@ -8,7 +8,6 @@ import Producto from "./Producto.js";
 import Pedido from "./Pedido.js";
 import Contiene from "./Contiene.js";
 import Envio from "./Envio.js";
-import EnvioDetalle from "./EnvioDetalle.js";
 import Zona from "./Zona.js";
 import SeUbica from "./SeUbica.js";
 import Suministro from "./Suministro.js";
@@ -44,12 +43,6 @@ Pedido.hasMany(Envio, { foreignKey: "id_pedido" });
 Envio.belongsTo(Empleado, { as: "responsable", foreignKey: "id_empleado_responsable" });
 Empleado.hasMany(Envio, { as: "enviosAsignados", foreignKey: "id_empleado_responsable" });
 
-Envio.hasMany(EnvioDetalle, { foreignKey: "id_envio" });
-EnvioDetalle.belongsTo(Envio, { foreignKey: "id_envio" });
-
-EnvioDetalle.belongsTo(Producto, { foreignKey: "id_producto" });
-Producto.hasMany(EnvioDetalle, { foreignKey: "id_producto" });
-
 SeUbica.belongsTo(Producto, { foreignKey: "id_producto" });
 Producto.hasMany(SeUbica, { foreignKey: "id_producto" });
 
@@ -74,7 +67,6 @@ export {
   Pedido,
   Contiene,
   Envio,
-  EnvioDetalle,
   Zona,
   SeUbica,
   Suministro,
