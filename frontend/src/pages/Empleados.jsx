@@ -83,7 +83,7 @@ export default function Empleados() {
         numero_empleado: form.numero_empleado,
         correo: form.correo,
         fecha_alta: form.fecha_alta,
-        password: (form.password ? { password: form.password } : {}),
+        ...(form.password ? { password: form.password } : {}),
       };
 
       if (editingId) {
