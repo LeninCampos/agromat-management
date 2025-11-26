@@ -78,7 +78,7 @@ export default function Clientes() {
 
     const payload = {
       nombre_cliente: form.nombre_cliente,
-      correo: form.correo || null,
+      correo_cliente: form.correo || null,
       telefono: form.telefono || null,
       direccion: form.direccion || null,
     };
