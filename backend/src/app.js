@@ -3,8 +3,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
-import sequelize from "./config/db.js";   // ✅ única import de la conexión
-import "./models/index.js";               // ✅ carga asociaciones
+import sequelize from "./config/db.js";   // única conexión
+import "./models/index.js";               // carga asociaciones
 
 // Rutas
 import productosRouter from "./routes/productos.js";
@@ -27,16 +27,16 @@ const app = express();
    🔐 CORS CONFIG
    ========================== */
 
-// En desarrollo, tu front casi seguro está en Vite: http://localhost:5173
+// Permitimos tu FRONT local + lo que venga en FRONTEND_URL
 const whiteList = [
-  process.env.FRONTEND_URL,      // valor desde .env (si existe)
+  process.env.FRONTEND_URL,
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ];
 
 const corsOptions = {
   origin(origin, callback) {
-    // origin === undefined cuando llamas desde Postman o mismo host
+    // origin === undefined cuando es misma máquina (Postman, curl, etc.)
     if (!origin || whiteList.includes(origin)) {
       callback(null, true);
     } else {
@@ -47,7 +47,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
 app.use(express.static("public"));
 app.use(express.json());
 
@@ -58,7 +57,7 @@ app.use(express.json());
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
-    service: "agromath-backend",
+    service: "agromat-backend",
     db: sequelize.getDatabaseName(),
     time: new Date().toISOString(),
   });
@@ -108,7 +107,7 @@ const PORT = process.env.PORT || 4000;
     await sequelize.authenticate();
     console.log("Conectado a MariaDB");
 
-    // await sequelize.sync({ alter: false }); // si algún día lo necesitas
+    // await sequelize.sync({ alter: false }); // si algún día lo necesitan
 
     app.listen(PORT, () => {
       console.log(`Servidor escuchando en http://localhost:${PORT}`);
