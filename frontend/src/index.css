@@ -1,10 +1,36 @@
 /* Estilos base globales */
 body {
   font-family: "Inter", Arial, sans-serif;
-  background-color: #f5f6fa;
-  color: #222;
+  /* Fondo claro general; el sidebar trae su propio fondo oscuro */
+  background-color: #f3f4f6;
+  /* Color de texto base OSCURO para que todo se vea bien */
+  color: #111827;
   margin: 0;
   padding: 0;
+}
+
+/* Aseguramos que todo el contenido principal (no sidebar) tenga texto oscuro
+   y tipografía limpia. Sidebar está fuera de <main>, así que no le afecta. */
+main {
+  font-family: "Inter", Arial, sans-serif;
+  color: #111827;
+}
+
+/* Fuerza texto oscuro en títulos y contenido dentro del main */
+main h1,
+main h2,
+main h3,
+main h4,
+main h5,
+main h6,
+main p,
+main span,
+main label,
+main input,
+main textarea,
+main th,
+main td {
+  color: #111827;
 }
 
 /* Clase contenedor general */
@@ -36,6 +62,8 @@ th, td {
   border-bottom: 1px solid #eee;
 }
 
+/* Encabezados de tabla ligeramente más suaves,
+   pero los datos (td) heredan el negro del body/main */
 th {
   background-color: #f9fafb;
   font-weight: 600;
@@ -211,4 +239,35 @@ button:hover {
 
 .agromat-btn-primary:hover {
   background: #4f46e5;
+}
+
+/* ===== Sidebar moderna (dark mode) ===== */
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: #e5e7eb;
+  text-decoration: none;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.15s ease,
+    box-shadow 0.18s ease;
+}
+
+.sidebar-link:hover {
+  background: rgba(148, 163, 184, 0.18);
+  transform: translateX(2px);
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.2);
+}
+
+.sidebar-link-active {
+  background: linear-gradient(90deg, #4f46e5, #22c55e);
+  color: #f9fafb;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9);
 }

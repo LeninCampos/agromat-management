@@ -1,3 +1,4 @@
+// frontend/src/layout/Sidebar.jsx
 import { NavLink } from "react-router-dom";
 import {
   Package,
@@ -9,8 +10,6 @@ import {
   MapPin,
   LayoutDashboard,
 } from "lucide-react";
-
-// 👇 Importamos el logo (ruta desde src/layout → src/assets)
 import agromatLogo from "../assets/agromat-logo.png";
 
 export default function Sidebar() {
@@ -28,63 +27,80 @@ export default function Sidebar() {
   return (
     <aside
       style={{
-        width: "250px",
+        width: "240px",
         height: "100vh",
-        background: "rgba(255,255,255,0.7)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        borderRight: "1px solid rgba(229,231,235,0.5)",
-        boxShadow: "2px 0 12px rgba(0,0,0,0.05)",
+        background: "radial-gradient(circle at top left, #1d2438 0, #020617 55%, #020617 100%)",
+        color: "#e5e7eb",
+        borderRight: "1px solid rgba(15,23,42,0.9)",
         display: "flex",
         flexDirection: "column",
-        padding: "1.5rem 1rem",
+        padding: "1.25rem 1rem 1.5rem",
         position: "sticky",
         top: 0,
       }}
     >
-      {/* LOGO + TEXTO */}
+      {/* HEADER / LOGO */}
       <div
         style={{
-          marginBottom: "2rem",
           display: "flex",
           alignItems: "center",
           gap: "0.75rem",
-          padding: "0 0.25rem",
+          marginBottom: "1.75rem",
+          padding: "0.25rem 0.5rem",
         }}
       >
-        <img
-          src={agromatLogo}
-          alt="Agromat"
+        <div
           style={{
-            width: "36px",
-            height: "36px",
-            borderRadius: "12px",
-            objectFit: "contain",
-            boxShadow: "0 8px 20px rgba(15,23,42,0.25)",
+            width: "40px",
+            height: "40px",
+            borderRadius: "999px",
+            background: "rgba(15,23,42,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            boxShadow: "0 0 0 1px rgba(148,163,184,0.25)",
           }}
-        />
+        >
+          <img
+            src={agromatLogo}
+            alt="Agromat"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        </div>
         <div>
-          <h1
+          <div
             style={{
-              fontSize: "1.1rem",
-              fontWeight: "700",
-              color: "#111827",
-              letterSpacing: "-0.02em",
-              margin: 0,
-              marginBottom: "0.1rem",
+              fontSize: "0.95rem",
+              fontWeight: 600,
+              letterSpacing: "0.03em",
             }}
           >
             Agromat
-          </h1>
-          <span
+          </div>
+          <div
             style={{
-              fontSize: "0.8rem",
+              fontSize: "0.75rem",
               color: "#9ca3af",
             }}
           >
             Panel administrativo
-          </span>
+          </div>
         </div>
+      </div>
+
+      {/* LABEL NAVEGACIÓN */}
+      <div
+        style={{
+          fontSize: "0.7rem",
+          textTransform: "uppercase",
+          letterSpacing: "0.12em",
+          color: "#6b7280",
+          marginBottom: "0.75rem",
+          paddingLeft: "0.4rem",
+        }}
+      >
+        Navegación
       </div>
 
       {/* LINKS */}
@@ -92,7 +108,7 @@ export default function Sidebar() {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: "0.25rem",
+          gap: "0.35rem",
           flex: 1,
         }}
       >
@@ -100,35 +116,16 @@ export default function Sidebar() {
           <NavLink
             key={link.name}
             to={link.to}
-            style={({ isActive }) => ({
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              padding: "10px 14px",
-              borderRadius: "10px",
-              textDecoration: "none",
-              fontWeight: isActive ? "600" : "500",
-              color: isActive ? "#4F46E5" : "#374151",
-              background: isActive
-                ? "linear-gradient(90deg, rgba(79,70,229,0.1), rgba(79,70,229,0.05))"
-                : "transparent",
-              boxShadow: isActive ? "inset 0 0 6px rgba(79,70,229,0.1)" : "none",
-              transition: "all 0.25s ease",
-            })}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background =
-                "linear-gradient(90deg, rgba(79,70,229,0.08), rgba(79,70,229,0.03))";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-            }}
+            className={({ isActive }) =>
+              "sidebar-link" + (isActive ? " sidebar-link-active" : "")
+            }
           >
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: "24px",
+                width: "22px",
               }}
             >
               {link.icon}
@@ -141,15 +138,17 @@ export default function Sidebar() {
       {/* FOOTER */}
       <div
         style={{
-          marginTop: "auto",
-          borderTop: "1px solid rgba(229,231,235,0.5)",
-          paddingTop: "1rem",
-          textAlign: "center",
-          fontSize: "0.8rem",
-          color: "#9ca3af",
+          marginTop: "1.75rem",
+          paddingTop: "0.75rem",
+          borderTop: "1px dashed rgba(51,65,85,0.9)",
+          fontSize: "0.7rem",
+          color: "#6b7280",
         }}
       >
-        © 2025 Agromat
+        <div style={{ marginBottom: "0.15rem" }}>
+          © {new Date().getFullYear()} Agromat
+        </div>
+        <div>Inventario inteligente</div>
       </div>
     </aside>
   );
