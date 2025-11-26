@@ -266,111 +266,119 @@ export default function Proveedores() {
         </table>
       </div>
 
-      {/* MODAL */}
+      {/* MODAL moderno */}
       {modalOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.3)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 50,
-          }}
-        >
-          <form
-            onSubmit={save}
-            style={{
-              background: "white",
-              padding: "1.5rem",
-              borderRadius: "12px",
-              width: "100%",
-              maxWidth: "500px",
-              boxShadow: "0 5px 20px rgba(0,0,0,0.15)",
-            }}
-          >
-            <h3 style={{ marginBottom: "1rem", fontSize: "1.2rem" }}>
-              {editingId ? "Editar proveedor" : "Nuevo proveedor"}
-            </h3>
-
-            <label>Nombre:</label>
-            <input
-              type="text"
-              value={form.nombre_proveedor}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, nombre_proveedor: e.target.value }))
-              }
-              required
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
-
-            <label>Correo:</label>
-            <input
-              type="email"
-              value={form.correo}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, correo: e.target.value }))
-              }
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
-
-            <label>Teléfono:</label>
-            <input
-              type="text"
-              value={form.telefono}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, telefono: e.target.value }))
-              }
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
-
-            <label>Dirección:</label>
-            <input
-              type="text"
-              value={form.direccion}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, direccion: e.target.value }))
-              }
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
-
-            <label>RFC:</label>
-            <input
-              type="text"
-              value={form.rfc}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, rfc: e.target.value }))
-              }
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+        <div className="agromat-modal-backdrop">
+          <div className="agromat-modal-card">
+            <div className="agromat-modal-header">
+              <div>
+                <h2>{editingId ? "Editar proveedor" : "Nuevo proveedor"}</h2>
+                <p>
+                  {editingId
+                    ? "Modifica los datos del proveedor."
+                    : "Completa los datos para agregar un nuevo proveedor."}
+                </p>
+              </div>
               <button
                 type="button"
+                className="agromat-modal-close"
                 onClick={() => setModalOpen(false)}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: "6px",
-                  border: "1px solid #ddd",
-                }}
               >
-                Cancelar
-              </button>
-
-              <button
-                type="submit"
-                style={{
-                  background: "#4F46E5",
-                  color: "white",
-                  padding: "8px 14px",
-                  borderRadius: "6px",
-                  border: "none",
-                }}
-              >
-                Guardar
+                ✕
               </button>
             </div>
-          </form>
+
+            <form onSubmit={save} className="agromat-modal-body">
+              <div className="agromat-form-grid">
+                {/* Nombre */}
+                <div className="agromat-form-field agromat-full-row">
+                  <label>Nombre</label>
+                  <input
+                    type="text"
+                    value={form.nombre_proveedor}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        nombre_proveedor: e.target.value,
+                      }))
+                    }
+                    required
+                    className="agromat-input"
+                    placeholder="Ej. Yamaha"
+                  />
+                </div>
+
+                {/* Correo */}
+                <div className="agromat-form-field agromat-full-row">
+                  <label>Correo</label>
+                  <input
+                    type="email"
+                    value={form.correo}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, correo: e.target.value }))
+                    }
+                    className="agromat-input"
+                    placeholder="proveedor@ejemplo.com"
+                  />
+                </div>
+
+                {/* Teléfono */}
+                <div className="agromat-form-field">
+                  <label>Teléfono</label>
+                  <input
+                    type="text"
+                    value={form.telefono}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, telefono: e.target.value }))
+                    }
+                    className="agromat-input"
+                    placeholder="818 000 0000"
+                  />
+                </div>
+
+                {/* RFC */}
+                <div className="agromat-form-field">
+                  <label>RFC</label>
+                  <input
+                    type="text"
+                    value={form.rfc}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, rfc: e.target.value }))
+                    }
+                    className="agromat-input"
+                    placeholder="XAXX010101000"
+                  />
+                </div>
+
+                {/* Dirección */}
+                <div className="agromat-form-field agromat-full-row">
+                  <label>Dirección</label>
+                  <textarea
+                    value={form.direccion}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, direccion: e.target.value }))
+                    }
+                    className="agromat-textarea"
+                    rows={2}
+                    placeholder="Calle, número, colonia, ciudad"
+                  />
+                </div>
+              </div>
+
+              <div className="agromat-modal-footer">
+                <button
+                  type="button"
+                  className="agromat-btn-secondary"
+                  onClick={() => setModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="agromat-btn-primary">
+                  Guardar proveedor
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
