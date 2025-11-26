@@ -72,7 +72,6 @@ export default function Clientes() {
     setModalOpen(true);
   };
 
-  // 💾 GUARDAR
   const save = async (e) => {
     e.preventDefault();
 
