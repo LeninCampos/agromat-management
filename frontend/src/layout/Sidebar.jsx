@@ -10,6 +10,9 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 
+// 👇 Importamos el logo (ruta desde src/layout → src/assets)
+import agromatLogo from "../assets/agromat-logo.png";
+
 export default function Sidebar() {
   const links = [
     { name: "Dashboard", icon: <LayoutDashboard size={18} />, to: "/app/dashboard" },
@@ -39,32 +42,49 @@ export default function Sidebar() {
         top: 0,
       }}
     >
-      {/* LOGO */}
+      {/* LOGO + TEXTO */}
       <div
         style={{
           marginBottom: "2rem",
-          textAlign: "center",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          padding: "0 0.25rem",
         }}
       >
-        <h1
+        <img
+          src={agromatLogo}
+          alt="Agromat"
           style={{
-            fontSize: "1.6rem",
-            fontWeight: "700",
-            color: "#4F46E5",
-            letterSpacing: "-0.5px",
-            marginBottom: "0.25rem",
+            width: "36px",
+            height: "36px",
+            borderRadius: "12px",
+            objectFit: "contain",
+            boxShadow: "0 8px 20px rgba(15,23,42,0.25)",
           }}
-        >
-          Agromat
-        </h1>
-        <span
-          style={{
-            fontSize: "0.85rem",
-            color: "#9ca3af",
-          }}
-        >
-          Panel administrativo
-        </span>
+        />
+        <div>
+          <h1
+            style={{
+              fontSize: "1.1rem",
+              fontWeight: "700",
+              color: "#111827",
+              letterSpacing: "-0.02em",
+              margin: 0,
+              marginBottom: "0.1rem",
+            }}
+          >
+            Agromat
+          </h1>
+          <span
+            style={{
+              fontSize: "0.8rem",
+              color: "#9ca3af",
+            }}
+          >
+            Panel administrativo
+          </span>
+        </div>
       </div>
 
       {/* LINKS */}

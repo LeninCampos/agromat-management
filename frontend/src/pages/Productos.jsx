@@ -17,7 +17,6 @@ const emptyForm = {
   id_proveedor: "",
 };
 
-
 export default function Productos() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +24,7 @@ export default function Productos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
-  const [proveedores, setProveedores] = useState([]); 
+  const [proveedores, setProveedores] = useState([]);
 
   // 🔍 Filtrado rápido
   const filtered = useMemo(() => {
@@ -45,7 +44,7 @@ export default function Productos() {
       // Cargamos productos y proveedores en paralelo
       const [resProductos, resProveedores] = await Promise.all([
         getProductos(),
-        getProveedores()
+        getProveedores(),
       ]);
 
       setProveedores(resProveedores.data); // Guardamos los proveedores
@@ -88,11 +87,12 @@ export default function Productos() {
       descripcion: row.descripcion ?? "",
       precio: row.precio ?? "",
       existencias: row.existencias ?? "",
-      id_proveedor: row.id_proveedor ?? 6,   // 👈 mantenerlo
+      id_proveedor: row.id_proveedor ?? 6, // 👈 mantenerlo
     });
 
     setModalOpen(true);
   };
+
   // 💾 Guardar cambios (nuevo o editado)
   const save = async (e) => {
     e.preventDefault();
@@ -110,7 +110,8 @@ export default function Productos() {
         id_proveedor: Number(form.id_proveedor),
       };
 
-      console.log("Payload enviado:", payload); if (editingId) {
+      console.log("Payload enviado:", payload);
+      if (editingId) {
         await updateProducto(editingId, payload);
         Swal.fire("✅ Listo", "Producto actualizado correctamente", "success");
       } else {
@@ -126,7 +127,6 @@ export default function Productos() {
       console.error(e);
       Swal.fire("Error", "No pude guardar el producto", "error");
     }
-
   };
 
   // ❌ Eliminar producto
@@ -289,160 +289,147 @@ export default function Productos() {
         </table>
       </div>
 
-      {/* Modal */}
+      {/* Modal moderno */}
       {modalOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.3)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 1000,
-          }}
-        >
-          <form
-            onSubmit={save}
-            style={{
-              background: "white",
-              padding: "1.5rem",
-              borderRadius: "10px",
-              width: "100%",
-              maxWidth: "480px",
-              boxShadow: "0 5px 20px rgba(0,0,0,0.15)",
-            }}
-          >
-            <h3 style={{ fontSize: "1.2rem", marginBottom: "1rem" }}>
-              {editingId ? "Editar producto" : "Nuevo producto"}
-            </h3>
-            <label>
-              <span>Código de Barras (ID):</span>
-              <input
-                type="text"
-                value={form.id_producto}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, id_producto: e.target.value }))
-                }
-                // Si estamos editando, deshabilitamos el campo para no romper la integridad
-                disabled={!!editingId}
-                required
-                style={{
-                  width: "100%",
-                  marginBottom: "10px",
-                  background: editingId ? "#f3f4f6" : "white"
-                }}
-              />
-            </label>
-            <label>
-              <span>Proveedor:</span>
-              <select
-                value={form.id_proveedor}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, id_proveedor: e.target.value }))
-                }
-                required
-                style={{ 
-                  width: "100%", 
-                  marginBottom: "10px", 
-                  padding: "8px", 
-                  borderRadius: "6px",
-                  border: "1px solid #ccc"
-                }}
-              >
-                <option value="">-- Selecciona un proveedor --</option>
-                {proveedores.map((prov) => (
-                  <option key={prov.id_proveedor} value={prov.id_proveedor}>
-                    {prov.nombre_proveedor}
-                  </option>
-                ))}
-              </select>
-              </label>
-            <label>
-              <span>Nombre:</span>
-              <input
-                type="text"
-                value={form.nombre_producto}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, nombre_producto: e.target.value }))
-                }
-                required
-                style={{ width: "100%", marginBottom: "10px" }}
-              />
-            </label>
-
-            <label>
-              <span>Descripción:</span>
-              <textarea
-                value={form.descripcion}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, descripcion: e.target.value }))
-                }
-                style={{ width: "100%", marginBottom: "10px" }}
-              />
-            </label>
-
-            <div style={{ display: "flex", gap: "10px" }}>
-              <label style={{ flex: 1 }}>
-                <span>Precio:</span>
-                <input
-                  type="number"
-                  value={form.precio}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, precio: e.target.value }))
-                  }
-                  style={{ width: "100%" }}
-                />
-              </label>
-
-              <label style={{ flex: 1 }}>
-                <span>Existencias:</span>
-                <input
-                  type="number"
-                  value={form.existencias}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, existencias: e.target.value }))
-                  }
-                  style={{ width: "100%" }}
-                />
-              </label>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: "10px",
-                marginTop: "15px",
-              }}
-            >
+        <div className="agromat-modal-backdrop">
+          <div className="agromat-modal-card">
+            <div className="agromat-modal-header">
+              <div>
+                <h2>{editingId ? "Editar producto" : "Nuevo producto"}</h2>
+                <p>
+                  {editingId
+                    ? "Modifica los datos del producto."
+                    : "Completa los datos para agregarlo al inventario."}
+                </p>
+              </div>
               <button
                 type="button"
+                className="agromat-modal-close"
                 onClick={() => setModalOpen(false)}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: "6px",
-                  border: "1px solid #ddd",
-                  background: "#f9fafb",
-                  cursor: "pointer",
-                }}
               >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                style={{
-                  background: "#4F46E5",
-                  color: "white",
-                  padding: "8px 14px",
-                  borderRadius: "6px",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                Guardar
+                ✕
               </button>
             </div>
-          </form>
+
+            <form onSubmit={save} className="agromat-modal-body">
+              <div className="agromat-form-grid">
+                {/* Código de barras / ID */}
+                <div className="agromat-form-field">
+                  <label>Código de Barras (ID)</label>
+                  <input
+                    type="text"
+                    value={form.id_producto}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, id_producto: e.target.value }))
+                    }
+                    disabled={!!editingId}
+                    required
+                    className="agromat-input"
+                    placeholder="0000000001"
+                    style={{
+                      backgroundColor: editingId ? "#f3f4f6" : "white",
+                    }}
+                  />
+                </div>
+
+                {/* Proveedor */}
+                <div className="agromat-form-field">
+                  <label>Proveedor</label>
+                  <select
+                    value={form.id_proveedor}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, id_proveedor: e.target.value }))
+                    }
+                    required
+                    className="agromat-select"
+                  >
+                    <option value="">Selecciona un proveedor</option>
+                    {proveedores.map((prov) => (
+                      <option
+                        key={prov.id_proveedor}
+                        value={prov.id_proveedor}
+                      >
+                        {prov.nombre_proveedor}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Nombre */}
+                <div className="agromat-form-field agromat-full-row">
+                  <label>Nombre</label>
+                  <input
+                    type="text"
+                    value={form.nombre_producto}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, nombre_producto: e.target.value }))
+                    }
+                    required
+                    className="agromat-input"
+                    placeholder="Ej. Incubadora modelo X"
+                  />
+                </div>
+
+                {/* Descripción */}
+                <div className="agromat-form-field agromat-full-row">
+                  <label>Descripción</label>
+                  <textarea
+                    value={form.descripcion}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, descripcion: e.target.value }))
+                    }
+                    className="agromat-textarea"
+                    rows={3}
+                    placeholder="Agrega una breve descripción del producto"
+                  />
+                </div>
+
+                {/* Precio */}
+                <div className="agromat-form-field">
+                  <label>Precio</label>
+                  <input
+                    type="number"
+                    value={form.precio}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, precio: e.target.value }))
+                    }
+                    className="agromat-input"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                {/* Existencias */}
+                <div className="agromat-form-field">
+                  <label>Existencias</label>
+                  <input
+                    type="number"
+                    value={form.existencias}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, existencias: e.target.value }))
+                    }
+                    className="agromat-input"
+                    min="0"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="agromat-modal-footer">
+                <button
+                  type="button"
+                  className="agromat-btn-secondary"
+                  onClick={() => setModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="agromat-btn-primary">
+                  Guardar producto
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

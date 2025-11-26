@@ -74,3 +74,141 @@ button:hover {
   background-color: #dc2626;
   color: white;
 }
+
+/* ==========================
+   Modal moderno Agromat
+   ========================== */
+
+/* Fondo difuminado detrás del modal */
+.agromat-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+/* Tarjeta principal del modal */
+.agromat-modal-card {
+  width: 100%;
+  max-width: 560px;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.35);
+  padding: 22px 26px 20px;
+}
+
+/* Header del modal */
+.agromat-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.agromat-modal-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.agromat-modal-header p {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  color: #6b7280;
+}
+
+.agromat-modal-close {
+  border: none;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 4px 9px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+/* Cuerpo del formulario */
+.agromat-modal-body {
+  margin-top: 4px;
+}
+
+.agromat-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.agromat-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agromat-form-field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.agromat-full-row {
+  grid-column: 1 / -1;
+}
+
+/* Inputs / selects */
+.agromat-input,
+.agromat-select,
+.agromat-textarea {
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.agromat-input:focus,
+.agromat-select:focus,
+.agromat-textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2);
+}
+
+.agromat-textarea {
+  resize: vertical;
+}
+
+/* Footer del modal */
+.agromat-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+/* Botones del modal */
+.agromat-btn-secondary {
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 7px 16px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.agromat-btn-primary {
+  border-radius: 999px;
+  border: none;
+  background: #6366f1;
+  color: white;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agromat-btn-primary:hover {
+  background: #4f46e5;
+}
