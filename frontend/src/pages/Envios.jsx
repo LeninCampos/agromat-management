@@ -81,7 +81,7 @@ export default function Envios() {
       observaciones: form.observaciones,
       detalles: [
         {
-          id_producto: Number(form.id_producto),
+          id_producto: form.id_producto,
           cantidad: Number(form.cantidad),
         }
       ]

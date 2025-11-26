@@ -28,7 +28,7 @@ export const validateEnvioCreate = [
     .notEmpty().withMessage("Debe incluir al menos un detalle").bail()
     .isArray({ min: 1 }).withMessage("Detalles debe ser un arreglo con al menos 1 producto"),
   body("detalles.*.id_producto")
-    .isInt({ min: 1 }).withMessage("ID de producto en detalles inválido"),
+    .notEmpty().withMessage("ID de producto requerido"),
   body("detalles.*.cantidad")
     .isInt({ min: 1 }).withMessage("Cantidad en detalles inválida"),
   handleValidationErrors,

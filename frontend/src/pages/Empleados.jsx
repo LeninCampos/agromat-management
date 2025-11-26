@@ -12,6 +12,7 @@ const emptyForm = {
   numero_empleado: "",
   correo: "",
   fecha_alta: "",
+  password: "",
 };
 
 export default function Empleados() {
@@ -82,6 +83,7 @@ export default function Empleados() {
         numero_empleado: form.numero_empleado,
         correo: form.correo,
         fecha_alta: form.fecha_alta,
+        password: (form.password ? { password: form.password } : {}),
       };
 
       if (editingId) {
@@ -305,7 +307,15 @@ export default function Empleados() {
               }
               style={{ width: "100%", marginBottom: "10px" }}
             />
-
+            <label>Contraseña:</label>
+            <input
+              type="password"
+              value={form.password || ""}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              placeholder={editingId ? "Dejar en blanco para no cambiar" : "Mínimo 6 caracteres"}
+              required={!editingId}
+              style={{ width: "100%", marginBottom: "10px" }}
+            />
             <label>Fecha alta:</label>
             <input
               type="date"
