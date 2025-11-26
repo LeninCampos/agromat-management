@@ -1,12 +1,7 @@
 // src/pages/Zonas.jsx
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
-import {
-  getZonas,
-  createZona,
-  updateZona,
-  deleteZona,
-} from "../api/zonas";
+import { getZonas, createZona, updateZona, deleteZona } from "../api/zonas";
 
 const emptyForm = {
   nombre: "",
@@ -91,7 +86,6 @@ export default function Zonas() {
       };
 
       if (editingKey) {
-        // si algún día hay ID de la base, aquí se usa
         await updateZona(editingKey, payload);
         Swal.fire("✔️ Listo", "Zona actualizada", "success");
       } else {
@@ -133,6 +127,7 @@ export default function Zonas() {
 
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
+      {/* HEADER */}
       <div className="flex items-center justify-between">
         <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}>🗺️ Zonas</h2>
 
@@ -142,15 +137,17 @@ export default function Zonas() {
             background: "#4F46E5",
             color: "white",
             padding: "8px 14px",
-            borderRadius: "6px",
+            borderRadius: "999px",
             border: "none",
             cursor: "pointer",
+            fontWeight: 500,
           }}
         >
           + Nueva
         </button>
       </div>
 
+      {/* BUSCADOR */}
       <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
         <input
           value={q}
@@ -159,8 +156,9 @@ export default function Zonas() {
           style={{
             flex: 1,
             padding: "8px 12px",
-            borderRadius: "6px",
-            border: "1px solid #ddd",
+            borderRadius: "999px",
+            border: "1px solid #e5e7eb",
+            fontSize: "0.9rem",
           }}
         />
         <button
@@ -168,9 +166,10 @@ export default function Zonas() {
           style={{
             background: "#f3f4f6",
             padding: "8px 14px",
-            border: "1px solid #ddd",
-            borderRadius: "6px",
+            border: "1px solid #e5e7eb",
+            borderRadius: "999px",
             cursor: "pointer",
+            fontSize: "0.9rem",
           }}
         >
           Recargar
@@ -180,19 +179,34 @@ export default function Zonas() {
       {/* TABLA */}
       <div
         style={{
+          marginTop: "0.75rem",
           background: "white",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          overflowX: "auto",
+          borderRadius: "16px",
+          boxShadow: "0 12px 30px rgba(15,23,42,0.08)",
+          overflow: "hidden",
         }}
       >
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f9fafb", color: "#555" }}>
-            <tr>
-              <th style={{ padding: "10px" }}>Número</th>
-              <th style={{ padding: "10px" }}>Nombre</th>
-              <th style={{ padding: "10px" }}>Descripción</th>
-              <th style={{ padding: "10px", textAlign: "center" }}>Acciones</th>
+          <thead>
+            <tr style={{ background: "#f9fafb", color: "#6b7280" }}>
+              <th style={{ padding: "12px 16px", fontSize: "0.8rem" }}>
+                Número
+              </th>
+              <th style={{ padding: "12px 16px", fontSize: "0.8rem" }}>
+                Nombre
+              </th>
+              <th style={{ padding: "12px 16px", fontSize: "0.8rem" }}>
+                Descripción
+              </th>
+              <th
+                style={{
+                  padding: "12px 16px",
+                  fontSize: "0.8rem",
+                  textAlign: "center",
+                }}
+              >
+                Acciones
+              </th>
             </tr>
           </thead>
 
@@ -211,38 +225,53 @@ export default function Zonas() {
               </tr>
             ) : (
               filtered.map((row) => (
-                <tr key={row.key} style={{ borderTop: "1px solid #eee" }}>
-                  <td style={{ padding: "10px" }}>{row.numero}</td>
-                  <td style={{ padding: "10px" }}>{row.nombre}</td>
-                  <td style={{ padding: "10px" }}>{row.descripcion}</td>
+                <tr key={row.key} style={{ borderTop: "1px solid #f3f4f6" }}>
+                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
+                    {row.numero}
+                  </td>
+                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
+                    {row.nombre}
+                  </td>
+                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
+                    {row.descripcion}
+                  </td>
 
-                  <td style={{ padding: "10px", textAlign: "center" }}>
-                    <button
-                      onClick={() => openEdit(row)}
+                  <td style={{ padding: "10px 16px", textAlign: "center" }}>
+                    <div
                       style={{
-                        background: "#F59E0B",
-                        color: "white",
-                        padding: "5px 10px",
-                        borderRadius: "6px",
-                        border: "none",
-                        marginRight: "8px",
+                        display: "flex",
+                        gap: "8px",
+                        justifyContent: "center",
                       }}
                     >
-                      Editar
-                    </button>
+                      <button
+                        onClick={() => openEdit(row)}
+                        style={{
+                          background: "#F59E0B",
+                          color: "white",
+                          padding: "5px 12px",
+                          borderRadius: "999px",
+                          border: "none",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        Editar
+                      </button>
 
-                    <button
-                      onClick={() => remove(row)}
-                      style={{
-                        background: "#DC2626",
-                        color: "white",
-                        padding: "5px 10px",
-                        borderRadius: "6px",
-                        border: "none",
-                      }}
-                    >
-                      Eliminar
-                    </button>
+                      <button
+                        onClick={() => remove(row)}
+                        style={{
+                          background: "#DC2626",
+                          color: "white",
+                          padding: "5px 12px",
+                          borderRadius: "999px",
+                          border: "none",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -257,7 +286,7 @@ export default function Zonas() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.3)",
+            background: "rgba(15,23,42,0.35)",
             display: "grid",
             placeItems: "center",
             zIndex: 1000,
@@ -267,60 +296,136 @@ export default function Zonas() {
             onSubmit={save}
             style={{
               background: "white",
-              padding: "1.5rem",
-              borderRadius: "10px",
+              padding: "1.75rem",
+              borderRadius: "18px",
               width: "100%",
-              maxWidth: "480px",
-              boxShadow: "0 5px 20px rgba(0,0,0,0.15)",
+              maxWidth: "520px",
+              boxShadow: "0 20px 45px rgba(15,23,42,0.35)",
             }}
           >
-            <h3 style={{ fontSize: "1.2rem", marginBottom: "1rem" }}>
+            <h3
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 600,
+                marginBottom: "1rem",
+              }}
+            >
               {editingKey ? "Editar zona" : "Nueva zona"}
             </h3>
 
-            <label>Nombre:</label>
-            <input
-              type="text"
-              value={form.nombre}
-              onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-              required
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.75rem",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    color: "#6b7280",
+                    marginBottom: "0.25rem",
+                  }}
+                >
+                  Nombre de la zona
+                </label>
+                <input
+                  type="text"
+                  value={form.nombre}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, nombre: e.target.value }))
+                  }
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                    border: "1px solid #e5e7eb",
+                    fontSize: "0.9rem",
+                  }}
+                />
+              </div>
 
-            <label>Número:</label>
-            <input
-              type="number"
-              value={form.numero}
-              onChange={(e) => setForm((f) => ({ ...f, numero: e.target.value }))}
-              required
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    color: "#6b7280",
+                    marginBottom: "0.25rem",
+                  }}
+                >
+                  Número de zona
+                </label>
+                <input
+                  type="number"
+                  value={form.numero}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, numero: e.target.value }))
+                  }
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                    border: "1px solid #e5e7eb",
+                    fontSize: "0.9rem",
+                  }}
+                />
+              </div>
 
-            <label>Descripción:</label>
-            <input
-              type="text"
-              value={form.descripcion}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, descripcion: e.target.value }))
-              }
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    color: "#6b7280",
+                    marginBottom: "0.25rem",
+                  }}
+                >
+                  Descripción
+                </label>
+                <input
+                  type="text"
+                  value={form.descripcion}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, descripcion: e.target.value }))
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                    border: "1px solid #e5e7eb",
+                    fontSize: "0.9rem",
+                  }}
+                />
+              </div>
+            </div>
 
+            {/* BOTONES */}
             <div
               style={{
                 display: "flex",
                 justifyContent: "flex-end",
                 gap: "10px",
+                marginTop: "1.25rem",
               }}
             >
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
                 style={{
-                  padding: "8px 14px",
-                  borderRadius: "6px",
-                  border: "1px solid #ddd",
+                  padding: "8px 16px",
+                  borderRadius: "999px",
+                  border: "1px solid #e5e7eb",
                   background: "#f9fafb",
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
                 }}
               >
                 Cancelar
@@ -331,9 +436,12 @@ export default function Zonas() {
                 style={{
                   background: "#4F46E5",
                   color: "white",
-                  padding: "8px 14px",
-                  borderRadius: "6px",
+                  padding: "8px 18px",
+                  borderRadius: "999px",
                   border: "none",
+                  fontSize: "0.9rem",
+                  fontWeight: 500,
+                  cursor: "pointer",
                 }}
               >
                 Guardar
