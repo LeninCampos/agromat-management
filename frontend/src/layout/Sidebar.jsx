@@ -15,11 +15,12 @@ import agromatLogo from "../assets/agromat-logo.png";
 export default function Sidebar() {
   const links = [
     { name: "Dashboard", icon: <LayoutDashboard size={18} />, to: "/app/dashboard" },
+    { name: "Proveedores", icon: <Building2 size={18} />, to: "/app/proveedores" },
     { name: "Productos", icon: <Package size={18} />, to: "/app/productos" },
+    { name: "Suministros", icon: <Archive size={18} />, to: "/app/suministros" },
     { name: "Clientes", icon: <Users size={18} />, to: "/app/clientes" },
     { name: "Pedidos", icon: <ShoppingBag size={18} />, to: "/app/pedidos" },
     { name: "Envíos", icon: <Truck size={18} />, to: "/app/envios" },
-    { name: "Proveedores", icon: <Building2 size={18} />, to: "/app/proveedores" },
     { name: "Empleados", icon: <UserCog size={18} />, to: "/app/empleados" },
     { name: "Zonas", icon: <MapPin size={18} />, to: "/app/zonas" },
   ];

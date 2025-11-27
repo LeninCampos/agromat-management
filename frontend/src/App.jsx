@@ -10,6 +10,7 @@ import Envios from "./pages/Envios";
 import Proveedores from "./pages/Proveedores";
 import Empleados from "./pages/Empleados";
 import Zonas from "./pages/Zonas";
+import Suministros from "./pages/Suministros";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -34,11 +35,12 @@ export default function App() {
           }
         >
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="proveedores" element={<Proveedores />} />
           <Route path="productos" element={<Productos />} />
+          <Route path="suministros" element={<Suministros />} />
           <Route path="clientes" element={<Clientes />} />
           <Route path="pedidos" element={<Pedidos />} />
           <Route path="envios" element={<Envios />} />
-          <Route path="proveedores" element={<Proveedores />} />
           <Route path="empleados" element={<Empleados />} />
           <Route path="zonas" element={<Zonas />} />
         </Route>
