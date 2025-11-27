@@ -1,14 +1,16 @@
-// src/api/empleados.js
 import axios from "axios";
 
 const API_URL = "http://localhost:4000/api/empleados";
 
+// 👇 1. Función para obtener el token
 function getAuthHeaders() {
   const token = localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export const getEmpleados = () => axios.get(API_URL, { headers: getAuthHeaders() });
+// 👇 2. Agregar { headers: getAuthHeaders() } a todas las peticiones que modifican datos
+export const getEmpleados = () => 
+  axios.get(API_URL);
 
 export const createEmpleado = (data) => 
   axios.post(API_URL, data, { headers: getAuthHeaders() });

@@ -69,28 +69,38 @@ export const getEnvioById = async (req, res, next) => {
 
 // POST /api/envios (crea envío + detalles)
 export const createEnvio = async (req, res, next) => {
-  try {
-    const { id_pedido, codigo, id_empleado_responsable, observaciones = [] } = req.body;
+  const t = await sequelize.transaction();
 
-    // Crear cabecera
+  try {
+    const { id_pedido, codigo, id_empleado_responsable, observaciones } = req.body;
+
     const envio = await Envio.create({
       codigo: codigo || `ENV-${Date.now()}`,
       id_pedido,
       id_empleado_responsable: id_empleado_responsable ?? null,
       status: "EN_PREPARACION",
       observaciones: observaciones ?? null,
-    });
+    }, { transaction: t });
 
-    res.status(201).json(created);
+    await t.commit();
+    
+    res.status(201).json(envio);
+
   } catch (err) {
-    await t.rollback();
+    // CORRECCIÓN: Verificar si la transacción ya terminó antes de hacer rollback
+    if (!t.finished) {
+      await t.rollback();
+    }
+
+    // Importante: Ver en consola cuál fue el error real que causó esto
+    console.error("Error en createEnvio:", err);
+
     if (err.original?.sqlMessage) {
       return next(new Error(err.original.sqlMessage));
     }
     next(err);
   }
 };
-
 // POST /api/envios/:id/detalles (agregar renglón)
 export const addEnvioDetalle = async (req, res, next) => {
   const t = await sequelize.transaction();
@@ -133,4 +143,22 @@ export const updateEnvio = async (req, res, next) => {
 
     res.json(envio);
   } catch (err) { next(err); }
+};
+
+export const deleteEnvio = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const envio = await Envio.findByPk(id);
+
+    if (!envio) {
+      return res.status(404).json({ error: "Envío no encontrado" });
+    }
+
+    // Eliminar el envío
+    await envio.destroy();
+
+    res.json({ ok: true, message: "Envío eliminado correctamente" });
+  } catch (err) {
+    next(err);
+  }
 };
