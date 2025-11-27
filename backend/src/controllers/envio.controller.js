@@ -1,17 +1,6 @@
 import {
-  sequelize, Envio, Pedido, Empleado, Producto
+  sequelize, Envio, Pedido, Empleado
 } from "../models/index.js";
-
-/* Helper (no se exporta)
-async function nextRenglon(id_envio, t) {
-  const last = await EnvioDetalle.findOne({
-    where: { id_envio },
-    order: [["renglon", "DESC"]],
-    attributes: ["renglon"],
-    transaction: t,
-  });
-  return last ? last.renglon + 1 : 1;
-}*/
 
 // GET /api/envios
 export const getAllEnvios = async (req, res, next) => {
@@ -80,7 +69,6 @@ export const getEnvioById = async (req, res, next) => {
 
 // POST /api/envios (crea envío + detalles)
 export const createEnvio = async (req, res, next) => {
-  const t = await sequelize.transaction();
   try {
     const { id_pedido, codigo, id_empleado_responsable, observaciones = [] } = req.body;
 
@@ -91,21 +79,8 @@ export const createEnvio = async (req, res, next) => {
       id_empleado_responsable: id_empleado_responsable ?? null,
       status: "EN_PREPARACION",
       observaciones: observaciones ?? null,
-    }, { transaction: t });
+    });
 
-    /* Insertar detalles
-    for (const d of detalles) {
-      const renglon = d.renglon ?? await nextRenglon(envio.id_envio, t);
-      await EnvioDetalle.create({
-        id_envio: envio.id_envio,
-        renglon,
-        id_producto: d.id_producto,
-        cantidad: d.cantidad,
-      }, { transaction: t });
-    }*/
-
-    await t.commit();
-    const created = await Envio.findByPk(envio.id_envio); // respuesta breve
     res.status(201).json(created);
   } catch (err) {
     await t.rollback();

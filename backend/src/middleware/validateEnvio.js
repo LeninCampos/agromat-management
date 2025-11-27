@@ -1,4 +1,3 @@
-// src/middleware/validateEnvio.js
 import { body, validationResult } from "express-validator";
 
 const handleValidationErrors = (req, res, next) => {
@@ -24,13 +23,9 @@ export const validateEnvioCreate = [
   body("observaciones")
     .optional()
     .isLength({ max: 255 }).withMessage("Máximo 255 caracteres"),
-  body("detalles")
-    .notEmpty().withMessage("Debe incluir al menos un detalle").bail()
-    .isArray({ min: 1 }).withMessage("Detalles debe ser un arreglo con al menos 1 producto"),
-  body("detalles.*.id_producto")
-    .notEmpty().withMessage("ID de producto requerido"),
-  body("detalles.*.cantidad")
-    .isInt({ min: 1 }).withMessage("Cantidad en detalles inválida"),
+    
+  // HE BORRADO LA VALIDACIÓN DE 'detalles' AQUÍ
+    
   handleValidationErrors,
 ];
 

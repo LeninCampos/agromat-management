@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { getProveedores } from "../api/proveedores";
+import { getZonas } from "../api/zonas"; // <--- 1. Importar API Zonas
 import {
   getProductos,
   createProducto,
@@ -9,12 +10,13 @@ import {
 } from "../api/productos";
 
 const emptyForm = {
-  id_producto: "", // Nuevo campo
+  id_producto: "",
   nombre_producto: "",
   descripcion: "",
   precio: "",
   existencias: "",
   id_proveedor: "",
+  zonaString: "", // <--- 2. Campo temporal para manejar el select combinado
 };
 
 export default function Productos() {
@@ -25,6 +27,7 @@ export default function Productos() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [proveedores, setProveedores] = useState([]);
+  const [zonas, setZonas] = useState([]); // <--- 3. Estado para zonas
 
   // 🔍 Filtrado rápido
   const filtered = useMemo(() => {
@@ -37,26 +40,36 @@ export default function Productos() {
     );
   }, [q, items]);
 
-  // 📦 Cargar productos
+  // 📦 Cargar datos
   const load = async () => {
     setLoading(true);
     try {
-      // Cargamos productos y proveedores en paralelo
-      const [resProductos, resProveedores] = await Promise.all([
+      const [resProductos, resProveedores, resZonas] = await Promise.all([
         getProductos(),
         getProveedores(),
+        getZonas(), // <--- 4. Cargar zonas
       ]);
 
-      setProveedores(resProveedores.data); // Guardamos los proveedores
+      setProveedores(resProveedores.data);
+      setZonas(resZonas.data);
 
-      const normalizados = resProductos.data.map((p) => ({
-        id_producto: p.id_producto,
-        nombre_producto: p.nombre_producto,
-        descripcion: p.descripcion,
-        precio: p.precio,
-        existencias: p.stock,
-        id_proveedor: p.id_proveedor,
-      }));
+      const normalizados = resProductos.data.map((p) => {
+        // Extraer la primera ubicación si existe
+        const ubicacion = p.SeUbicas?.[0]; 
+        const zonaStr = ubicacion ? `${ubicacion.nombre}|${ubicacion.numero}` : "";
+
+        return {
+          id_producto: p.id_producto,
+          nombre_producto: p.nombre_producto,
+          descripcion: p.descripcion,
+          precio: p.precio,
+          existencias: p.stock,
+          id_proveedor: p.id_proveedor,
+          zonaString: zonaStr, // Guardamos la ubicación actual
+          nombre_zona: ubicacion?.nombre, // Para mostrar en tabla
+          numero_zona: ubicacion?.numero,
+        };
+      });
 
       setItems(normalizados);
     } catch (e) {
@@ -71,14 +84,12 @@ export default function Productos() {
     load();
   }, []);
 
-  // ➕ Nuevo producto
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
     setModalOpen(true);
   };
 
-  // ✏️ Editar producto
   const openEdit = (row) => {
     setEditingId(row.id_producto);
     setForm({
@@ -87,20 +98,28 @@ export default function Productos() {
       descripcion: row.descripcion ?? "",
       precio: row.precio ?? "",
       existencias: row.existencias ?? "",
-      id_proveedor: row.id_proveedor ?? 6, // 👈 mantenerlo
+      id_proveedor: row.id_proveedor ?? "",
+      zonaString: row.zonaString ?? "", // Cargar la zona actual en el form
     });
 
     setModalOpen(true);
   };
 
-  // 💾 Guardar cambios (nuevo o editado)
   const save = async (e) => {
     e.preventDefault();
     if (!form.id_proveedor) {
       Swal.fire("Error", "Selecciona un proveedor", "warning");
       return;
     }
+
     try {
+      // Procesar la zona seleccionada
+      let zonaObj = null;
+      if (form.zonaString) {
+        const [nombre, numero] = form.zonaString.split("|");
+        zonaObj = { nombre, numero: Number(numero) };
+      }
+
       const payload = {
         id_producto: form.id_producto,
         nombre_producto: form.nombre_producto,
@@ -108,15 +127,15 @@ export default function Productos() {
         precio: Number(form.precio) || 0,
         stock: Number(form.existencias) || 0,
         id_proveedor: Number(form.id_proveedor),
+        zona: zonaObj, // <--- Enviamos el objeto zona al backend
       };
 
-      console.log("Payload enviado:", payload);
       if (editingId) {
         await updateProducto(editingId, payload);
-        Swal.fire("✅ Listo", "Producto actualizado correctamente", "success");
+        Swal.fire("✅ Listo", "Producto actualizado", "success");
       } else {
         await createProducto(payload);
-        Swal.fire("✅ Listo", "Producto creado correctamente", "success");
+        Swal.fire("✅ Listo", "Producto creado", "success");
       }
 
       setModalOpen(false);
@@ -129,7 +148,6 @@ export default function Productos() {
     }
   };
 
-  // ❌ Eliminar producto
   const remove = async (row) => {
     const result = await Swal.fire({
       title: "¿Eliminar producto?",
@@ -137,20 +155,18 @@ export default function Productos() {
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
-      cancelButtonText: "Cancelar",
     });
     if (!result.isConfirmed) return;
     try {
       await deleteProducto(row.id_producto);
-      Swal.fire("🗑️ Eliminado", "Producto eliminado con éxito", "success");
+      Swal.fire("🗑️ Eliminado", "Producto eliminado", "success");
       await load();
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No pude eliminar el producto", "error");
+      Swal.fire("Error", "No pude eliminar", "error");
     }
   };
 
-  // 🧱 Render
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
       <div className="flex items-center justify-between">
@@ -174,7 +190,7 @@ export default function Productos() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre o descripción…"
+          placeholder="Buscar por nombre..."
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -207,80 +223,36 @@ export default function Productos() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead style={{ background: "#f9fafb", color: "#555" }}>
             <tr>
-              <th style={{ padding: "10px", width: "50px" }}>ID</th>
-              <th style={{ padding: "10px", width: "200px" }}>Nombre</th>
-              <th style={{ padding: "10px", width: "350px" }}>Descripción</th>
+              <th style={{ padding: "10px" }}>ID</th>
+              <th style={{ padding: "10px" }}>Nombre</th>
+              <th style={{ padding: "10px" }}>Zona</th> {/* Nueva columna */}
               <th style={{ padding: "10px", textAlign: "right" }}>Precio</th>
-              <th style={{ padding: "10px", textAlign: "right" }}>Existencias</th>
+              <th style={{ padding: "10px", textAlign: "right" }}>Stock</th>
               <th style={{ padding: "10px", textAlign: "center" }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
-                  Cargando…
-                </td>
+                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>Cargando...</td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
-                  Sin resultados
-                </td>
+                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>Sin resultados</td>
               </tr>
             ) : (
               filtered.map((row) => (
                 <tr key={row.id_producto} style={{ borderTop: "1px solid #eee" }}>
                   <td style={{ padding: "10px" }}>{row.id_producto}</td>
                   <td style={{ padding: "10px" }}>{row.nombre_producto}</td>
-                  <td
-                    style={{
-                      padding: "10px",
-                      wordBreak: "break-word",
-                      maxWidth: "350px",
-                    }}
-                  >
-                    {row.descripcion}
+                  <td style={{ padding: "10px", color: "#666" }}>
+                    {row.nombre_zona ? `${row.nombre_zona} #${row.numero_zona}` : "Sin asignar"}
                   </td>
-                  <td style={{ padding: "10px", textAlign: "right" }}>
-                    ${Number(row.precio).toFixed(2)}
-                  </td>
-                  <td style={{ padding: "10px", textAlign: "right" }}>
-                    {row.existencias}
-                  </td>
+                  <td style={{ padding: "10px", textAlign: "right" }}>${Number(row.precio).toFixed(2)}</td>
+                  <td style={{ padding: "10px", textAlign: "right" }}>{row.existencias}</td>
                   <td style={{ padding: "10px", textAlign: "center" }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "8px",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <button
-                        onClick={() => openEdit(row)}
-                        style={{
-                          background: "#F59E0B",
-                          color: "white",
-                          padding: "5px 10px",
-                          borderRadius: "6px",
-                          border: "none",
-                        }}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => remove(row)}
-                        style={{
-                          background: "#DC2626",
-                          color: "white",
-                          padding: "5px 10px",
-                          borderRadius: "6px",
-                          border: "none",
-                        }}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
+                    <button onClick={() => openEdit(row)} style={{ background: "#F59E0B", color: "white", padding: "5px 10px", borderRadius: "6px", border: "none", marginRight: 5 }}>Editar</button>
+                    <button onClick={() => remove(row)} style={{ background: "#DC2626", color: "white", padding: "5px 10px", borderRadius: "6px", border: "none" }}>Eliminar</button>
                   </td>
                 </tr>
               ))
@@ -289,144 +261,80 @@ export default function Productos() {
         </table>
       </div>
 
-      {/* Modal moderno */}
+      {/* Modal */}
       {modalOpen && (
         <div className="agromat-modal-backdrop">
           <div className="agromat-modal-card">
             <div className="agromat-modal-header">
-              <div>
-                <h2>{editingId ? "Editar producto" : "Nuevo producto"}</h2>
-                <p>
-                  {editingId
-                    ? "Modifica los datos del producto."
-                    : "Completa los datos para agregarlo al inventario."}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="agromat-modal-close"
-                onClick={() => setModalOpen(false)}
-              >
-                ✕
-              </button>
+              <h2>{editingId ? "Editar producto" : "Nuevo producto"}</h2>
+              <button type="button" className="agromat-modal-close" onClick={() => setModalOpen(false)}>✕</button>
             </div>
 
             <form onSubmit={save} className="agromat-modal-body">
               <div className="agromat-form-grid">
-                {/* Código de barras / ID */}
                 <div className="agromat-form-field">
-                  <label>Código de Barras (ID)</label>
+                  <label>Código (ID)</label>
                   <input
                     type="text"
                     value={form.id_producto}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, id_producto: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, id_producto: e.target.value }))}
                     disabled={!!editingId}
                     required
                     className="agromat-input"
-                    placeholder="0000000001"
-                    style={{
-                      backgroundColor: editingId ? "#f3f4f6" : "white",
-                    }}
                   />
                 </div>
 
-                {/* Proveedor */}
                 <div className="agromat-form-field">
                   <label>Proveedor</label>
                   <select
                     value={form.id_proveedor}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, id_proveedor: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, id_proveedor: e.target.value }))}
                     required
                     className="agromat-select"
                   >
-                    <option value="">Selecciona un proveedor</option>
-                    {proveedores.map((prov) => (
-                      <option
-                        key={prov.id_proveedor}
-                        value={prov.id_proveedor}
-                      >
-                        {prov.nombre_proveedor}
+                    <option value="">Selecciona...</option>
+                    {proveedores.map((p) => (
+                      <option key={p.id_proveedor} value={p.id_proveedor}>{p.nombre_proveedor}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* SELECTOR DE ZONA NUEVO */}
+                <div className="agromat-form-field agromat-full-row">
+                  <label>Zona de Ubicación (Opcional)</label>
+                  <select
+                    value={form.zonaString}
+                    onChange={(e) => setForm((f) => ({ ...f, zonaString: e.target.value }))}
+                    className="agromat-select"
+                  >
+                    <option value="">-- Sin asignar --</option>
+                    {zonas.map((z) => (
+                      <option key={`${z.nombre}|${z.numero}`} value={`${z.nombre}|${z.numero}`}>
+                        {z.nombre} (Pasillo/Num: {z.numero}) - {z.descripcion}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Nombre */}
                 <div className="agromat-form-field agromat-full-row">
                   <label>Nombre</label>
-                  <input
-                    type="text"
-                    value={form.nombre_producto}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, nombre_producto: e.target.value }))
-                    }
-                    required
-                    className="agromat-input"
-                    placeholder="Ej. Incubadora modelo X"
-                  />
+                  <input type="text" value={form.nombre_producto} onChange={(e) => setForm((f) => ({ ...f, nombre_producto: e.target.value }))} required className="agromat-input" />
                 </div>
-
-                {/* Descripción */}
-                <div className="agromat-form-field agromat-full-row">
-                  <label>Descripción</label>
-                  <textarea
-                    value={form.descripcion}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, descripcion: e.target.value }))
-                    }
-                    className="agromat-textarea"
-                    rows={3}
-                    placeholder="Agrega una breve descripción del producto"
-                  />
-                </div>
-
-                {/* Precio */}
+                
                 <div className="agromat-form-field">
-                  <label>Precio</label>
-                  <input
-                    type="number"
-                    value={form.precio}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, precio: e.target.value }))
-                    }
-                    className="agromat-input"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                  />
+                   <label>Precio</label>
+                   <input type="number" value={form.precio} onChange={(e) => setForm((f) => ({ ...f, precio: e.target.value }))} className="agromat-input" />
                 </div>
 
-                {/* Existencias */}
                 <div className="agromat-form-field">
-                  <label>Existencias</label>
-                  <input
-                    type="number"
-                    value={form.existencias}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, existencias: e.target.value }))
-                    }
-                    className="agromat-input"
-                    min="0"
-                    placeholder="0"
-                  />
+                   <label>Stock</label>
+                   <input type="number" value={form.existencias} onChange={(e) => setForm((f) => ({ ...f, existencias: e.target.value }))} className="agromat-input" />
                 </div>
               </div>
 
               <div className="agromat-modal-footer">
-                <button
-                  type="button"
-                  className="agromat-btn-secondary"
-                  onClick={() => setModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="agromat-btn-primary">
-                  Guardar producto
-                </button>
+                <button type="button" className="agromat-btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="agromat-btn-primary">Guardar</button>
               </div>
             </form>
           </div>
