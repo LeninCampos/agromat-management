@@ -10,16 +10,11 @@ const SeUbica = sequelize.define(
       primaryKey: true,
       allowNull: false,
     },
-    nombre: {
-      type: DataTypes.STRING(100),
-      primaryKey: true,
-      allowNull: false,
-    },
-    numero: {
+    id_zona: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       allowNull: false,
-    }
+    },
   },
   {
     tableName: "seubica",

@@ -36,7 +36,7 @@ export default function Productos() {
 
   const fileInputRef = useRef(null);
 
-  // Filtro rápido
+  // 🔍 Filtro rápido
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return items;
@@ -47,7 +47,7 @@ export default function Productos() {
     );
   }, [q, items]);
 
-  // Cargar datos
+  // 📦 Cargar datos
   const load = async () => {
     setLoading(true);
     try {
@@ -61,6 +61,7 @@ export default function Productos() {
       setZonas(resZonas.data);
 
       const normalizados = resProductos.data.map((p) => {
+        // Tomamos solo la primera ubicación (si existe)
         const ubicacion = p.SeUbicas?.[0];
 
         const id_zona = ubicacion?.id_zona ?? null;
@@ -126,6 +127,7 @@ export default function Productos() {
     }
 
     try {
+      // Construimos el objeto zona { id_zona } o null
       let zonaObj = null;
       if (form.zonaId) {
         zonaObj = { id_zona: Number(form.zonaId) };
@@ -153,7 +155,7 @@ export default function Productos() {
       setModalOpen(false);
       setForm(emptyForm);
       setEditingId(null);
-      await load();
+      await load(); // recarga para ver la zona nueva
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No pude guardar el producto", "error");
@@ -179,7 +181,7 @@ export default function Productos() {
     }
   };
 
-  // subir imagen desde dispositivo
+  // 👉 subir imagen desde dispositivo
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -378,6 +380,7 @@ export default function Productos() {
         </table>
       </div>
 
+      {/* Modal */}
       {modalOpen && (
         <div className="agromat-modal-backdrop">
           <div className="agromat-modal-card">

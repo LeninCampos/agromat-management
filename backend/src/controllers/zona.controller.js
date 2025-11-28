@@ -1,30 +1,26 @@
 // backend/src/controllers/zona.controller.js
-import { Zona } from "../models/index.js";
+import { sequelize, Zona, SeUbica } from "../models/index.js";
 
-/**
- * GET /api/zonas
- * Lista todas las zonas
- */
+// =======================
+// GET: todas las zonas
+// =======================
 export const getAllZonas = async (req, res, next) => {
   try {
     const zonas = await Zona.findAll({
       order: [
-        ["rack", "ASC"],
-        ["modulo", "ASC"],
-        ["piso", "ASC"],
+        ["codigo", "ASC"],
+        ["id_zona", "ASC"],
       ],
     });
-
     res.json(zonas);
-  } catch (e) {
-    next(e);
+  } catch (err) {
+    next(err);
   }
 };
 
-/**
- * GET /api/zonas/:id
- * Obtiene una zona por id_zona
- */
+// =======================
+// GET: zona por ID
+// =======================
 export const getZonaById = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -35,103 +31,96 @@ export const getZonaById = async (req, res, next) => {
     }
 
     res.json(zona);
-  } catch (e) {
-    next(e);
+  } catch (err) {
+    next(err);
   }
 };
 
-/**
- * POST /api/zonas
- * Crea una nueva zona
- * body: { rack, modulo, piso, descripcion?, codigo? }
- * Si no mandas codigo, se genera como rack+modulo+piso (ej: A31).
- */
+// =======================
+// POST: crear zona
+// =======================
 export const createZona = async (req, res, next) => {
   try {
-    const { rack, modulo, piso, descripcion } = req.body;
-
-    // Si no viene código, lo generamos (A31, B42, etc.)
-    const codigo =
-      req.body.codigo ?? `${rack ?? ""}${modulo ?? ""}${piso ?? ""}`;
+    const { codigo, rack, modulo, piso, descripcion } = req.body;
 
     const nueva = await Zona.create({
+      codigo,
       rack,
       modulo,
       piso,
-      codigo,
-      descripcion,
+      descripcion: descripcion || null,
     });
 
     res.status(201).json(nueva);
-  } catch (e) {
-    next(e);
+  } catch (err) {
+    next(err);
   }
 };
 
-/**
- * PUT /api/zonas/:id
- * Actualiza una zona existente
- * body puede traer cualquiera de: { rack, modulo, piso, descripcion, codigo }
- * Si no mandas codigo pero cambias rack/modulo/piso, se regenera.
- */
+// =======================
+// PUT: actualizar zona
+// =======================
+// OJO: no cambiamos id_zona, solo los demás campos
 export const updateZona = async (req, res, next) => {
+  const t = await sequelize.transaction();
   try {
     const { id } = req.params;
-    const { rack, modulo, piso, descripcion, codigo } = req.body;
+    const { codigo, rack, modulo, piso, descripcion } = req.body;
 
-    const zona = await Zona.findByPk(id);
+    const zona = await Zona.findByPk(id, { transaction: t });
     if (!zona) {
+      await t.rollback();
       return res.status(404).json({ error: "Zona no encontrada" });
     }
 
-    // Preparamos los campos a actualizar
-    const updates = {};
+    await zona.update(
+      {
+        codigo,
+        rack,
+        modulo,
+        piso,
+        descripcion: descripcion || null,
+      },
+      { transaction: t }
+    );
 
-    if (rack !== undefined) updates.rack = rack;
-    if (modulo !== undefined) updates.modulo = modulo;
-    if (piso !== undefined) updates.piso = piso;
-    if (descripcion !== undefined) updates.descripcion = descripcion;
-
-    // Si mandaste codigo explícitamente, se usa tal cual
-    if (codigo !== undefined) {
-      updates.codigo = codigo;
-    } else if (
-      rack !== undefined ||
-      modulo !== undefined ||
-      piso !== undefined
-    ) {
-      // Si cambió rack/modulo/piso y NO mandaste codigo, lo regeneramos
-      const finalRack = updates.rack ?? zona.rack;
-      const finalModulo = updates.modulo ?? zona.modulo;
-      const finalPiso = updates.piso ?? zona.piso;
-      updates.codigo = `${finalRack}${finalModulo}${finalPiso}`;
-    }
-
-    await zona.update(updates);
-
+    await t.commit();
     res.json(zona);
-  } catch (e) {
-    next(e);
+  } catch (err) {
+    await t.rollback();
+    next(err);
   }
 };
 
-/**
- * DELETE /api/zonas/:id
- * Elimina una zona
- * (Ojo: puede fallar si está referenciada por seubica con FK RESTRICT)
- */
+// =======================
+// DELETE: eliminar zona
+// =======================
+// 1) Borramos las ubicaciones de seubica con esa id_zona
+// 2) Luego borramos la zona
 export const deleteZona = async (req, res, next) => {
+  const t = await sequelize.transaction();
   try {
     const { id } = req.params;
 
-    const zona = await Zona.findByPk(id);
+    const zona = await Zona.findByPk(id, { transaction: t });
     if (!zona) {
+      await t.rollback();
       return res.status(404).json({ error: "Zona no encontrada" });
     }
 
-    await zona.destroy();
+    // Paso 1: borrar ubicaciones que apuntan a esa zona
+    await SeUbica.destroy({
+      where: { id_zona: id },
+      transaction: t,
+    });
+
+    // Paso 2: borrar la zona
+    await zona.destroy({ transaction: t });
+
+    await t.commit();
     res.json({ ok: true });
-  } catch (e) {
-    next(e);
+  } catch (err) {
+    await t.rollback();
+    next(err);
   }
 };
