@@ -4,6 +4,8 @@ import Swal from "sweetalert2";
 import { getZonas, createZona, updateZona, deleteZona } from "../api/zonas";
 
 const emptyForm = {
+  id_zona: null,
+  codigo: "",
   rack: "",
   modulo: "",
   piso: "",
@@ -16,37 +18,35 @@ export default function Zonas() {
   const [q, setQ] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState(null); // id_zona
+  const [editingId, setEditingId] = useState(null);
 
-  // 🔍 Filtrado
+  // 🔍 filtro
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return items;
 
-    return items.filter((z) => {
-      const rackStr = z.rack?.toString().toLowerCase() ?? "";
-      const moduloStr = z.modulo?.toString().toLowerCase() ?? "";
-      const pisoStr = z.piso?.toString().toLowerCase() ?? "";
-      const codigoStr = z.codigo?.toString().toLowerCase() ?? "";
-      const descStr = z.descripcion?.toLowerCase() ?? "";
-
-      return (
-        rackStr.includes(query) ||
-        moduloStr.includes(query) ||
-        pisoStr.includes(query) ||
-        codigoStr.includes(query) ||
-        descStr.includes(query)
-      );
-    });
+    return items.filter(
+      (z) =>
+        z.codigo.toLowerCase().includes(query) ||
+        z.rack.toLowerCase().includes(query) ||
+        (z.descripcion || "").toLowerCase().includes(query)
+    );
   }, [q, items]);
 
-  // 📌 Cargar datos reales desde API
+  // 📥 cargar
   const load = async () => {
     setLoading(true);
     try {
       const { data } = await getZonas();
-      // el backend ya regresa: id_zona, rack, modulo, piso, codigo, descripcion
-      setItems(data);
+      const normalizados = data.map((z) => ({
+        id_zona: z.id_zona,
+        codigo: z.codigo,
+        rack: z.rack,
+        modulo: z.modulo,
+        piso: z.piso,
+        descripcion: z.descripcion || "",
+      }));
+      setItems(normalizados);
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No pude cargar las zonas", "error");
@@ -59,52 +59,47 @@ export default function Zonas() {
     load();
   }, []);
 
-  // ➕ Nueva
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
     setModalOpen(true);
   };
 
-  // ✏️ Editar
   const openEdit = (row) => {
     setEditingId(row.id_zona);
     setForm({
-      rack: row.rack ?? "",
-      modulo: row.modulo ?? "",
-      piso: row.piso ?? "",
-      descripcion: row.descripcion ?? "",
+      id_zona: row.id_zona,
+      codigo: row.codigo,
+      rack: row.rack,
+      modulo: String(row.modulo),
+      piso: String(row.piso),
+      descripcion: row.descripcion || "",
     });
     setModalOpen(true);
   };
 
-  // 💾 Guardar
   const save = async (e) => {
     e.preventDefault();
 
-    if (!form.rack || !form.modulo || !form.piso) {
-      Swal.fire(
-        "Datos incompletos",
-        "Selecciona rack, módulo y piso",
-        "warning"
-      );
-      return;
-    }
-
     try {
       const payload = {
-        rack: form.rack,
+        codigo: form.codigo.trim(),
+        rack: form.rack.trim(),
         modulo: Number(form.modulo),
         piso: Number(form.piso),
-        descripcion: form.descripcion || "",
-        // codigo no es necesario mandarlo; el backend puede generarlo
+        descripcion: form.descripcion.trim() || null,
       };
 
+      if (!payload.codigo || !payload.rack || !payload.modulo || !payload.piso) {
+        Swal.fire("Error", "Llena código, rack, módulo y piso", "warning");
+        return;
+      }
+
       if (editingId) {
-        await updateZona(form.id_zona, payload); // PUT /zonas/:id_zona
+        await updateZona(editingId, payload);
         Swal.fire("✔️ Listo", "Zona actualizada", "success");
       } else {
-        await createZona(payload); // POST /zonas
+        await createZona(payload);
         Swal.fire("✔️ Listo", "Zona creada", "success");
       }
 
@@ -118,11 +113,10 @@ export default function Zonas() {
     }
   };
 
-  // ❌ Eliminar
   const remove = async (row) => {
     const result = await Swal.fire({
       title: "¿Eliminar zona?",
-      text: `Rack ${row.rack} · Módulo ${row.modulo} · Piso ${row.piso}`,
+      text: `${row.codigo} (Rack ${row.rack}, módulo ${row.modulo}, piso ${row.piso})`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
@@ -131,18 +125,22 @@ export default function Zonas() {
     if (!result.isConfirmed) return;
 
     try {
-      await deleteZona(row.id_zona); // DELETE /zonas/:id_zona
+      await deleteZona(row.id_zona);
       Swal.fire("🗑️ Eliminado", "Zona eliminada", "success");
       load();
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No pude eliminar la zona", "error");
+      // si el backend manda 409 por productos asignados, aquí se muestra
+      if (e.response?.data?.error) {
+        Swal.fire("No se puede eliminar", e.response.data.error, "error");
+      } else {
+        Swal.fire("Error", "No pude eliminar la zona", "error");
+      }
     }
   };
 
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
-      {/* HEADER */}
       <div className="flex items-center justify-between">
         <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}>🗺️ Zonas</h2>
 
@@ -167,7 +165,7 @@ export default function Zonas() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por código, rack, módulo, piso o descripción…"
+          placeholder="Buscar por código, rack o descripción…"
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -246,26 +244,12 @@ export default function Zonas() {
               </tr>
             ) : (
               filtered.map((row) => (
-                <tr
-                  key={row.id_zona}
-                  style={{ borderTop: "1px solid #f3f4f6" }}
-                >
-                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
-                    {row.codigo}
-                  </td>
-                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
-                    {row.rack}
-                  </td>
-                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
-                    {row.modulo}
-                  </td>
-                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
-                    {row.piso}
-                  </td>
-                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
-                    {row.descripcion}
-                  </td>
-
+                <tr key={row.id_zona} style={{ borderTop: "1px solid #f3f4f6" }}>
+                  <td style={{ padding: "10px 16px" }}>{row.codigo}</td>
+                  <td style={{ padding: "10px 16px" }}>{row.rack}</td>
+                  <td style={{ padding: "10px 16px" }}>{row.modulo}</td>
+                  <td style={{ padding: "10px 16px" }}>{row.piso}</td>
+                  <td style={{ padding: "10px 16px" }}>{row.descripcion}</td>
                   <td style={{ padding: "10px 16px", textAlign: "center" }}>
                     <div
                       style={{
@@ -283,7 +267,6 @@ export default function Zonas() {
                           borderRadius: "999px",
                           border: "none",
                           fontSize: "0.8rem",
-                          cursor: "pointer",
                         }}
                       >
                         Editar
@@ -298,7 +281,6 @@ export default function Zonas() {
                           borderRadius: "999px",
                           border: "none",
                           fontSize: "0.8rem",
-                          cursor: "pointer",
                         }}
                       >
                         Eliminar
@@ -352,20 +334,28 @@ export default function Zonas() {
                 gap: "0.75rem",
               }}
             >
-              {/* Rack */}
               <div>
-                <label
+                <label> Código </label>
+                <input
+                  type="text"
+                  value={form.codigo}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, codigo: e.target.value }))
+                  }
+                  required
                   style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    color: "#6b7280",
-                    marginBottom: "0.25rem",
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                    border: "1px solid #e5e7eb",
                   }}
-                >
-                  Rack
-                </label>
-                <select
+                />
+              </div>
+
+              <div>
+                <label>Rack</label>
+                <input
+                  type="text"
                   value={form.rack}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, rack: e.target.value }))
@@ -376,30 +366,12 @@ export default function Zonas() {
                     padding: "8px 10px",
                     borderRadius: "10px",
                     border: "1px solid #e5e7eb",
-                    fontSize: "0.9rem",
                   }}
-                >
-                  <option value="">Selecciona un rack…</option>
-                  <option value="A">Rack A</option>
-                  <option value="B">Rack B</option>
-                  <option value="C">Rack C</option>
-                  <option value="D">Rack D</option>
-                </select>
+                />
               </div>
 
-              {/* Módulo */}
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    color: "#6b7280",
-                    marginBottom: "0.25rem",
-                  }}
-                >
-                  Módulo
-                </label>
+                <label>Módulo</label>
                 <input
                   type="number"
                   value={form.modulo}
@@ -407,30 +379,17 @@ export default function Zonas() {
                     setForm((f) => ({ ...f, modulo: e.target.value }))
                   }
                   required
-                  min="1"
                   style={{
                     width: "100%",
                     padding: "8px 10px",
                     borderRadius: "10px",
                     border: "1px solid #e5e7eb",
-                    fontSize: "0.9rem",
                   }}
                 />
               </div>
 
-              {/* Piso */}
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    color: "#6b7280",
-                    marginBottom: "0.25rem",
-                  }}
-                >
-                  Piso
-                </label>
+                <label>Piso</label>
                 <input
                   type="number"
                   value={form.piso}
@@ -438,51 +397,33 @@ export default function Zonas() {
                     setForm((f) => ({ ...f, piso: e.target.value }))
                   }
                   required
-                  min="1"
                   style={{
                     width: "100%",
                     padding: "8px 10px",
                     borderRadius: "10px",
                     border: "1px solid #e5e7eb",
-                    fontSize: "0.9rem",
                   }}
                 />
               </div>
 
-              {/* Descripción */}
               <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    color: "#6b7280",
-                    marginBottom: "0.25rem",
-                  }}
-                >
-                  Descripción
-                </label>
+                <label>Descripción</label>
                 <input
                   type="text"
                   value={form.descripcion}
                   onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      descripcion: e.target.value,
-                    }))
+                    setForm((f) => ({ ...f, descripcion: e.target.value }))
                   }
                   style={{
                     width: "100%",
                     padding: "8px 10px",
                     borderRadius: "10px",
                     border: "1px solid #e5e7eb",
-                    fontSize: "0.9rem",
                   }}
                 />
               </div>
             </div>
 
-            {/* BOTONES */}
             <div
               style={{
                 display: "flex",

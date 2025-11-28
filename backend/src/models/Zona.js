@@ -10,8 +10,12 @@ const Zona = sequelize.define(
       primaryKey: true,
       autoIncrement: true,
     },
+    codigo: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+    },
     rack: {
-      type: DataTypes.ENUM("A", "B", "C", "D"),
+      type: DataTypes.STRING(10),
       allowNull: false,
     },
     modulo: {
@@ -21,11 +25,6 @@ const Zona = sequelize.define(
     piso: {
       type: DataTypes.INTEGER,
       allowNull: false,
-    },
-    codigo: {
-      type: DataTypes.STRING(10),
-      allowNull: false,
-      unique: true,
     },
     descripcion: {
       type: DataTypes.STRING(255),

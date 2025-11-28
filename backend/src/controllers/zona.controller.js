@@ -1,16 +1,11 @@
 // backend/src/controllers/zona.controller.js
-import { sequelize, Zona, SeUbica } from "../models/index.js";
+import { Zona, SeUbica } from "../models/index.js";
 
-// =======================
-// GET: todas las zonas
-// =======================
+// GET /api/zonas
 export const getAllZonas = async (req, res, next) => {
   try {
     const zonas = await Zona.findAll({
-      order: [
-        ["codigo", "ASC"],
-        ["id_zona", "ASC"],
-      ],
+      order: [["codigo", "ASC"]],
     });
     res.json(zonas);
   } catch (err) {
@@ -18,36 +13,34 @@ export const getAllZonas = async (req, res, next) => {
   }
 };
 
-// =======================
-// GET: zona por ID
-// =======================
+// GET /api/zonas/:id
 export const getZonaById = async (req, res, next) => {
   try {
     const { id } = req.params;
-
     const zona = await Zona.findByPk(id);
-    if (!zona) {
-      return res.status(404).json({ error: "Zona no encontrada" });
-    }
-
+    if (!zona) return res.status(404).json({ error: "Zona no encontrada" });
     res.json(zona);
   } catch (err) {
     next(err);
   }
 };
 
-// =======================
-// POST: crear zona
-// =======================
+// POST /api/zonas
 export const createZona = async (req, res, next) => {
   try {
     const { codigo, rack, modulo, piso, descripcion } = req.body;
 
+    if (!codigo || !rack || modulo == null || piso == null) {
+      return res
+        .status(400)
+        .json({ error: "codigo, rack, modulo y piso son obligatorios" });
+    }
+
     const nueva = await Zona.create({
-      codigo,
-      rack,
-      modulo,
-      piso,
+      codigo: codigo.trim(),
+      rack: rack.trim(),
+      modulo: Number(modulo),
+      piso: Number(piso),
       descripcion: descripcion || null,
     });
 
@@ -57,70 +50,49 @@ export const createZona = async (req, res, next) => {
   }
 };
 
-// =======================
-// PUT: actualizar zona
-// =======================
-// OJO: no cambiamos id_zona, solo los demás campos
+// PUT /api/zonas/:id
 export const updateZona = async (req, res, next) => {
-  const t = await sequelize.transaction();
   try {
     const { id } = req.params;
     const { codigo, rack, modulo, piso, descripcion } = req.body;
 
-    const zona = await Zona.findByPk(id, { transaction: t });
-    if (!zona) {
-      await t.rollback();
-      return res.status(404).json({ error: "Zona no encontrada" });
-    }
+    const zona = await Zona.findByPk(id);
+    if (!zona) return res.status(404).json({ error: "Zona no encontrada" });
 
-    await zona.update(
-      {
-        codigo,
-        rack,
-        modulo,
-        piso,
-        descripcion: descripcion || null,
-      },
-      { transaction: t }
-    );
+    await zona.update({
+      ...(codigo !== undefined && { codigo: codigo.trim() }),
+      ...(rack !== undefined && { rack: rack.trim() }),
+      ...(modulo !== undefined && { modulo: Number(modulo) }),
+      ...(piso !== undefined && { piso: Number(piso) }),
+      ...(descripcion !== undefined && { descripcion: descripcion || null }),
+    });
 
-    await t.commit();
     res.json(zona);
   } catch (err) {
-    await t.rollback();
     next(err);
   }
 };
 
-// =======================
-// DELETE: eliminar zona
-// =======================
-// 1) Borramos las ubicaciones de seubica con esa id_zona
-// 2) Luego borramos la zona
+// DELETE /api/zonas/:id
 export const deleteZona = async (req, res, next) => {
-  const t = await sequelize.transaction();
   try {
     const { id } = req.params;
 
-    const zona = await Zona.findByPk(id, { transaction: t });
-    if (!zona) {
-      await t.rollback();
-      return res.status(404).json({ error: "Zona no encontrada" });
+    // ¿Tiene productos ubicados?
+    const countUbicaciones = await SeUbica.count({ where: { id_zona: id } });
+    if (countUbicaciones > 0) {
+      return res.status(409).json({
+        error:
+          "No se puede eliminar la zona porque tiene productos asignados. Mueve o elimina esos productos primero.",
+      });
     }
 
-    // Paso 1: borrar ubicaciones que apuntan a esa zona
-    await SeUbica.destroy({
-      where: { id_zona: id },
-      transaction: t,
-    });
+    const zona = await Zona.findByPk(id);
+    if (!zona) return res.status(404).json({ error: "Zona no encontrada" });
 
-    // Paso 2: borrar la zona
-    await zona.destroy({ transaction: t });
-
-    await t.commit();
+    await zona.destroy();
     res.json({ ok: true });
   } catch (err) {
-    await t.rollback();
     next(err);
   }
 };
