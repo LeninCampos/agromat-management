@@ -1,4 +1,4 @@
-// src/api/zonas.js
+// frontend/src/api/zonas.js
 import axios from "axios";
 
 const API_URL = "http://localhost:4000/api/zonas";
@@ -8,9 +8,23 @@ function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// GET todas las zonas
 export const getZonas = () => axios.get(API_URL);
 
-export const createZona = (data) => 
-    axios.post(API_URL, data, {headers: getAuthHeaders() });
-export const updateZona = (id, data) => axios.put(`${API_URL}/${id}`, data, { headers: getAuthHeaders()});
-export const deleteZona = (id) => axios.delete(`${API_URL}/${id}`, {headers: getAuthHeaders()});
+// Crear zona
+export const createZona = (data) =>
+  axios.post(API_URL, data, {
+    headers: getAuthHeaders(),
+  });
+
+// Editar zona — ahora usa id_zona real
+export const updateZona = (id_zona, data) =>
+  axios.put(`${API_URL}/${id_zona}`, data, {
+    headers: getAuthHeaders(),
+  });
+
+// Eliminar zona
+export const deleteZona = (id_zona) =>
+  axios.delete(`${API_URL}/${id_zona}`, {
+    headers: getAuthHeaders(),
+  });

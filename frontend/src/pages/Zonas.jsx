@@ -1,11 +1,12 @@
-// src/pages/Zonas.jsx
+// frontend/src/pages/Zonas.jsx
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { getZonas, createZona, updateZona, deleteZona } from "../api/zonas";
 
 const emptyForm = {
-  nombre: "",
-  numero: "",
+  rack: "",
+  modulo: "",
+  piso: "",
   descripcion: "",
 };
 
@@ -15,35 +16,37 @@ export default function Zonas() {
   const [q, setQ] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [editingKey, setEditingKey] = useState(null);
+  const [editingId, setEditingId] = useState(null); // id_zona
 
-  // 🔍 Filtrar
+  // 🔍 Filtrado
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return items;
 
-    return items.filter(
-      (z) =>
-        z.nombre.toLowerCase().includes(query) ||
-        z.descripcion.toLowerCase().includes(query)
-    );
+    return items.filter((z) => {
+      const rackStr = z.rack?.toString().toLowerCase() ?? "";
+      const moduloStr = z.modulo?.toString().toLowerCase() ?? "";
+      const pisoStr = z.piso?.toString().toLowerCase() ?? "";
+      const codigoStr = z.codigo?.toString().toLowerCase() ?? "";
+      const descStr = z.descripcion?.toLowerCase() ?? "";
+
+      return (
+        rackStr.includes(query) ||
+        moduloStr.includes(query) ||
+        pisoStr.includes(query) ||
+        codigoStr.includes(query) ||
+        descStr.includes(query)
+      );
+    });
   }, [q, items]);
 
-  // 📌 Cargar datos REAL API
+  // 📌 Cargar datos reales desde API
   const load = async () => {
     setLoading(true);
     try {
       const { data } = await getZonas();
-
-      // Normalizamos usando key interno, porque NO hay id real
-      const normalizados = data.map((z, index) => ({
-        key: index + 1,
-        nombre: z.nombre,
-        numero: z.numero,
-        descripcion: z.descripcion,
-      }));
-
-      setItems(normalizados);
+      // el backend ya regresa: id_zona, rack, modulo, piso, codigo, descripcion
+      setItems(data);
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No pude cargar las zonas", "error");
@@ -58,18 +61,19 @@ export default function Zonas() {
 
   // ➕ Nueva
   const openCreate = () => {
-    setEditingKey(null);
+    setEditingId(null);
     setForm(emptyForm);
     setModalOpen(true);
   };
 
   // ✏️ Editar
   const openEdit = (row) => {
-    setEditingKey(row.key);
+    setEditingId(row.id_zona);
     setForm({
-      nombre: row.nombre,
-      numero: row.numero,
-      descripcion: row.descripcion,
+      rack: row.rack ?? "",
+      modulo: row.modulo ?? "",
+      piso: row.piso ?? "",
+      descripcion: row.descripcion ?? "",
     });
     setModalOpen(true);
   };
@@ -78,24 +82,35 @@ export default function Zonas() {
   const save = async (e) => {
     e.preventDefault();
 
+    if (!form.rack || !form.modulo || !form.piso) {
+      Swal.fire(
+        "Datos incompletos",
+        "Selecciona rack, módulo y piso",
+        "warning"
+      );
+      return;
+    }
+
     try {
       const payload = {
-        nombre: form.nombre,
-        numero: Number(form.numero),
-        descripcion: form.descripcion,
+        rack: form.rack,
+        modulo: Number(form.modulo),
+        piso: Number(form.piso),
+        descripcion: form.descripcion || "",
+        // codigo no es necesario mandarlo; el backend puede generarlo
       };
 
-      if (editingKey) {
-        await updateZona(editingKey, payload);
+      if (editingId) {
+        await updateZona(form.id_zona, payload); // PUT /zonas/:id_zona
         Swal.fire("✔️ Listo", "Zona actualizada", "success");
       } else {
-        await createZona(payload);
+        await createZona(payload); // POST /zonas
         Swal.fire("✔️ Listo", "Zona creada", "success");
       }
 
       setModalOpen(false);
       setForm(emptyForm);
-      setEditingKey(null);
+      setEditingId(null);
       load();
     } catch (e) {
       console.error(e);
@@ -107,7 +122,7 @@ export default function Zonas() {
   const remove = async (row) => {
     const result = await Swal.fire({
       title: "¿Eliminar zona?",
-      text: `${row.nombre} (#${row.numero})`,
+      text: `Rack ${row.rack} · Módulo ${row.modulo} · Piso ${row.piso}`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
@@ -116,7 +131,7 @@ export default function Zonas() {
     if (!result.isConfirmed) return;
 
     try {
-      await deleteZona(row.key); // por ahora usamos key
+      await deleteZona(row.id_zona); // DELETE /zonas/:id_zona
       Swal.fire("🗑️ Eliminado", "Zona eliminada", "success");
       load();
     } catch (e) {
@@ -152,7 +167,7 @@ export default function Zonas() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar zonas…"
+          placeholder="Buscar por código, rack, módulo, piso o descripción…"
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -190,10 +205,16 @@ export default function Zonas() {
           <thead>
             <tr style={{ background: "#f9fafb", color: "#6b7280" }}>
               <th style={{ padding: "12px 16px", fontSize: "0.8rem" }}>
-                Número
+                Código
               </th>
               <th style={{ padding: "12px 16px", fontSize: "0.8rem" }}>
-                Nombre
+                Rack
+              </th>
+              <th style={{ padding: "12px 16px", fontSize: "0.8rem" }}>
+                Módulo
+              </th>
+              <th style={{ padding: "12px 16px", fontSize: "0.8rem" }}>
+                Piso
               </th>
               <th style={{ padding: "12px 16px", fontSize: "0.8rem" }}>
                 Descripción
@@ -213,24 +234,33 @@ export default function Zonas() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={4} style={{ textAlign: "center", padding: "20px" }}>
+                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
                   Cargando…
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={4} style={{ textAlign: "center", padding: "20px" }}>
+                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
                   Sin resultados
                 </td>
               </tr>
             ) : (
               filtered.map((row) => (
-                <tr key={row.key} style={{ borderTop: "1px solid #f3f4f6" }}>
+                <tr
+                  key={row.id_zona}
+                  style={{ borderTop: "1px solid #f3f4f6" }}
+                >
                   <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
-                    {row.numero}
+                    {row.codigo}
                   </td>
                   <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
-                    {row.nombre}
+                    {row.rack}
+                  </td>
+                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
+                    {row.modulo}
+                  </td>
+                  <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
+                    {row.piso}
                   </td>
                   <td style={{ padding: "10px 16px", fontSize: "0.9rem" }}>
                     {row.descripcion}
@@ -253,6 +283,7 @@ export default function Zonas() {
                           borderRadius: "999px",
                           border: "none",
                           fontSize: "0.8rem",
+                          cursor: "pointer",
                         }}
                       >
                         Editar
@@ -267,6 +298,7 @@ export default function Zonas() {
                           borderRadius: "999px",
                           border: "none",
                           fontSize: "0.8rem",
+                          cursor: "pointer",
                         }}
                       >
                         Eliminar
@@ -310,7 +342,7 @@ export default function Zonas() {
                 marginBottom: "1rem",
               }}
             >
-              {editingKey ? "Editar zona" : "Nueva zona"}
+              {editingId ? "Editar zona" : "Nueva zona"}
             </h3>
 
             <div
@@ -320,6 +352,7 @@ export default function Zonas() {
                 gap: "0.75rem",
               }}
             >
+              {/* Rack */}
               <div>
                 <label
                   style={{
@@ -330,13 +363,12 @@ export default function Zonas() {
                     marginBottom: "0.25rem",
                   }}
                 >
-                  Nombre de la zona
+                  Rack
                 </label>
-                <input
-                  type="text"
-                  value={form.nombre}
+                <select
+                  value={form.rack}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, nombre: e.target.value }))
+                    setForm((f) => ({ ...f, rack: e.target.value }))
                   }
                   required
                   style={{
@@ -346,9 +378,16 @@ export default function Zonas() {
                     border: "1px solid #e5e7eb",
                     fontSize: "0.9rem",
                   }}
-                />
+                >
+                  <option value="">Selecciona un rack…</option>
+                  <option value="A">Rack A</option>
+                  <option value="B">Rack B</option>
+                  <option value="C">Rack C</option>
+                  <option value="D">Rack D</option>
+                </select>
               </div>
 
+              {/* Módulo */}
               <div>
                 <label
                   style={{
@@ -359,15 +398,16 @@ export default function Zonas() {
                     marginBottom: "0.25rem",
                   }}
                 >
-                  Número de zona
+                  Módulo
                 </label>
                 <input
                   type="number"
-                  value={form.numero}
+                  value={form.modulo}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, numero: e.target.value }))
+                    setForm((f) => ({ ...f, modulo: e.target.value }))
                   }
                   required
+                  min="1"
                   style={{
                     width: "100%",
                     padding: "8px 10px",
@@ -378,6 +418,38 @@ export default function Zonas() {
                 />
               </div>
 
+              {/* Piso */}
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    color: "#6b7280",
+                    marginBottom: "0.25rem",
+                  }}
+                >
+                  Piso
+                </label>
+                <input
+                  type="number"
+                  value={form.piso}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, piso: e.target.value }))
+                  }
+                  required
+                  min="1"
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                    border: "1px solid #e5e7eb",
+                    fontSize: "0.9rem",
+                  }}
+                />
+              </div>
+
+              {/* Descripción */}
               <div>
                 <label
                   style={{
@@ -394,7 +466,10 @@ export default function Zonas() {
                   type="text"
                   value={form.descripcion}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, descripcion: e.target.value }))
+                    setForm((f) => ({
+                      ...f,
+                      descripcion: e.target.value,
+                    }))
                   }
                   style={{
                     width: "100%",

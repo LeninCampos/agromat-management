@@ -1,3 +1,4 @@
+// frontend/src/pages/Pedidos.jsx
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import {
@@ -10,10 +11,12 @@ import { getProductos } from "../api/productos";
 import { getClientes } from "../api/clientes";
 import { getEmpleados } from "../api/empleados";
 
+const BACKEND_URL = "http://localhost:4000";
+
 const emptyForm = {
   fecha_pedido: "",
   hora_pedido: "",
-  status: "Pendiente",         // 👈 por defecto
+  status: "Pendiente",
   id_empleado: "",
   id_cliente: "",
   descuento_total: 0,
@@ -59,7 +62,7 @@ export default function Pedidos() {
           getEmpleados(),
         ]);
 
-      // Convertimos el formato del Backend al del Formulario
+      // pedidos en formato amigable al form
       const pedidosFormateados = resPedidos.data.map((pedido) => ({
         ...pedido,
         items: (pedido.Productos || []).map((prod) => ({
@@ -70,8 +73,20 @@ export default function Pedidos() {
         })),
       }));
 
+      // productos con imagen normalizada
+      const productosFormateados = resProductos.data.map((p) => {
+        let imagenUrl = p.imagen_url ?? "";
+        if (imagenUrl && imagenUrl.startsWith("/")) {
+          imagenUrl = `${BACKEND_URL}${imagenUrl}`;
+        }
+        return {
+          ...p,
+          imagen_url: imagenUrl,
+        };
+      });
+
       setItems(pedidosFormateados);
-      setProductos(resProductos.data);
+      setProductos(productosFormateados);
       setClientes(resClientes.data);
       setEmpleados(resEmpleados.data);
     } catch (e) {
@@ -88,7 +103,7 @@ export default function Pedidos() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({ ...emptyForm, status: "Pendiente" }); // 👈 aseguramos valor inicial
+    setForm({ ...emptyForm, status: "Pendiente" });
     setModalOpen(true);
   };
 
@@ -123,7 +138,6 @@ export default function Pedidos() {
 
       await updatePedido(row.id_pedido, payload);
 
-      // Actualizamos en memoria
       setItems((prev) =>
         prev.map((p) =>
           p.id_pedido === row.id_pedido ? { ...p, status: nuevoStatus } : p
@@ -199,12 +213,14 @@ export default function Pedidos() {
   };
 
   // Calcular total en tiempo real
-  const totalCalculado = useMemo(() => {
-    return form.items.reduce(
-      (acc, it) => acc + it.cantidad * it.precio_unitario,
-      0
-    );
-  }, [form.items]);
+  const totalCalculado = useMemo(
+    () =>
+      form.items.reduce(
+        (acc, it) => acc + it.cantidad * it.precio_unitario,
+        0
+      ),
+    [form.items]
+  );
 
   // --- Guardar ---
 
@@ -318,7 +334,7 @@ export default function Pedidos() {
         style={{
           background: "white",
           borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
           overflowX: "auto",
         }}
       >
@@ -338,33 +354,24 @@ export default function Pedidos() {
           <tbody>
             {loading ? (
               <tr>
-                <td
-                  colSpan={8}
-                  style={{ textAlign: "center", padding: "20px" }}
-                >
+                <td colSpan={8} style={{ textAlign: "center", padding: "20px" }}>
                   Cargando...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td
-                  colSpan={8}
-                  style={{ textAlign: "center", padding: "20px" }}
-                >
+                <td colSpan={8} style={{ textAlign: "center", padding: "20px" }}>
                   Sin resultados
                 </td>
               </tr>
             ) : (
               filtered.map((row) => (
-                <tr
-                  key={row.id_pedido}
-                  style={{ borderTop: "1px solid #eee" }}
-                >
+                <tr key={row.id_pedido} style={{ borderTop: "1px solid #eee" }}>
                   <td style={{ padding: "10px" }}>{row.id_pedido}</td>
                   <td style={{ padding: "10px" }}>{row.fecha_pedido}</td>
                   <td style={{ padding: "10px" }}>{row.hora_pedido}</td>
 
-                  {/* 👇 SELECT DE STATUS EN LA TABLA */}
+                  {/* SELECT DE STATUS EN LA TABLA */}
                   <td style={{ padding: "10px" }}>
                     <select
                       value={row.status}
@@ -499,10 +506,8 @@ export default function Pedidos() {
               </div>
             </div>
 
-            {/* 👇 SELECT DE STATUS EN EL MODAL */}
-            <label
-              style={{ display: "block", marginTop: "10px" }}
-            >
+            {/* SELECT DE STATUS EN EL MODAL */}
+            <label style={{ display: "block", marginTop: "10px" }}>
               Status:
             </label>
             <select
@@ -571,10 +576,7 @@ export default function Pedidos() {
                 >
                   <option value="">-- Selecciona --</option>
                   {empleados.map((em) => (
-                    <option
-                      key={em.id_empleado}
-                      value={em.id_empleado}
-                    >
+                    <option key={em.id_empleado} value={em.id_empleado}>
                       {em.nombre_empleado}
                     </option>
                   ))}
@@ -620,12 +622,8 @@ export default function Pedidos() {
                 >
                   <option value="">Buscar...</option>
                   {productos.map((p) => (
-                    <option
-                      key={p.id_producto}
-                      value={p.id_producto}
-                    >
-                      {p.nombre_producto} ($
-                      {Number(p.precio).toFixed(2)})
+                    <option key={p.id_producto} value={p.id_producto}>
+                      {p.nombre_producto} (${Number(p.precio).toFixed(2)})
                     </option>
                   ))}
                 </select>
@@ -675,21 +673,14 @@ export default function Pedidos() {
                 borderRadius: "8px",
               }}
             >
-              <table
-                style={{ width: "100%", fontSize: "0.9rem" }}
-              >
+              <table style={{ width: "100%", fontSize: "0.9rem" }}>
                 <thead>
-                  <tr
-                    style={{
-                      borderBottom: "1px solid #ddd",
-                    }}
-                  >
+                  <tr style={{ borderBottom: "1px solid #ddd" }}>
+                    <th style={{ textAlign: "left" }}>Foto</th>
                     <th style={{ textAlign: "left" }}>Producto</th>
                     <th style={{ width: "80px" }}>Cant.</th>
                     <th style={{ textAlign: "right" }}>Precio</th>
-                    <th style={{ textAlign: "right" }}>
-                      Subtotal
-                    </th>
+                    <th style={{ textAlign: "right" }}>Subtotal</th>
                     <th style={{ width: "40px" }}></th>
                   </tr>
                 </thead>
@@ -697,7 +688,7 @@ export default function Pedidos() {
                   {form.items.length === 0 && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         style={{
                           textAlign: "center",
                           padding: "10px",
@@ -715,17 +706,45 @@ export default function Pedidos() {
                     const nombreMostrar = prodInfo
                       ? prodInfo.nombre_producto
                       : it.nombre_producto || it.id_producto;
+                    const imagenUrl = prodInfo?.imagen_url || "";
 
                     return (
                       <tr
                         key={it.id_producto}
-                        style={{
-                          borderBottom: "1px solid #eee",
-                        }}
+                        style={{ borderBottom: "1px solid #eee" }}
                       >
                         <td style={{ padding: "8px 0" }}>
-                          {nombreMostrar}
+                          {imagenUrl ? (
+                            <img
+                              src={imagenUrl}
+                              alt={nombreMostrar}
+                              style={{
+                                width: "40px",
+                                height: "40px",
+                                borderRadius: "8px",
+                                objectFit: "cover",
+                                border: "1px solid #ddd",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: "40px",
+                                height: "40px",
+                                borderRadius: "8px",
+                                background: "#e5e7eb",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "0.7rem",
+                                color: "#6b7280",
+                              }}
+                            >
+                              Sin foto
+                            </div>
+                          )}
                         </td>
+                        <td style={{ padding: "8px 0" }}>{nombreMostrar}</td>
                         <td>
                           <input
                             type="number"
@@ -746,26 +765,17 @@ export default function Pedidos() {
                           />
                         </td>
                         <td style={{ textAlign: "right" }}>
-                          $
-                          {Number(
-                            it.precio_unitario
-                          ).toFixed(2)}
+                          ${Number(it.precio_unitario).toFixed(2)}
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <strong>
-                            $
-                            {(
-                              it.cantidad *
-                              it.precio_unitario
-                            ).toFixed(2)}
+                            ${(it.cantidad * it.precio_unitario).toFixed(2)}
                           </strong>
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <button
                             type="button"
-                            onClick={() =>
-                              eliminarItem(it.id_producto)
-                            }
+                            onClick={() => eliminarItem(it.id_producto)}
                             style={{
                               color: "#DC2626",
                               background: "none",
@@ -790,9 +800,7 @@ export default function Pedidos() {
                 }}
               >
                 Total estimado:{" "}
-                <strong>
-                  ${totalCalculado.toFixed(2)}
-                </strong>
+                <strong>${totalCalculado.toFixed(2)}</strong>
               </div>
             </div>
 
