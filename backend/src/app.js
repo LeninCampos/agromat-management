@@ -19,6 +19,10 @@ import suministroRouter from "./routes/suministro.js";
 import suministraRouter from "./routes/suministra.js";
 import contieneRouter from "./routes/contiene.js";
 import authRouter from "./routes/auth.js";
+import uploadRouter from "./routes/upload.js"; // 👈 NUEVO
+
+
+
 
 const app = express();
 
@@ -78,6 +82,7 @@ app.use("/api/seubica", seubicaRouter);
 app.use("/api/suministro", suministroRouter);
 app.use("/api/suministra", suministraRouter);
 app.use("/api/contiene", contieneRouter);
+app.use("/api/upload", uploadRouter); 
 
 /* ==========================
    404 y manejo de errores

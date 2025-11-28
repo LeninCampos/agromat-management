@@ -1,14 +1,41 @@
-// src/models/Zona.js
+// backend/src/models/Zona.js
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
-const Zona = sequelize.define("Zona", {
-  nombre: { type: DataTypes.STRING(100), primaryKey: true },
-  numero: { type: DataTypes.INTEGER, primaryKey: true },
-  descripcion: { type: DataTypes.STRING(255) },
-}, {
-  tableName: "zonas",
-  timestamps: false,
-});
+const Zona = sequelize.define(
+  "Zona",
+  {
+    id_zona: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    rack: {
+      type: DataTypes.ENUM("A", "B", "C", "D"),
+      allowNull: false,
+    },
+    modulo: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    piso: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    codigo: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      unique: true,
+    },
+    descripcion: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+  },
+  {
+    tableName: "zonas",
+    timestamps: false,
+  }
+);
 
 export default Zona;

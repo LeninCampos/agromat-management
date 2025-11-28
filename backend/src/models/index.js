@@ -1,4 +1,4 @@
-// src/models/index.js
+// backend/src/models/index.js
 import sequelize from "../config/db.js";
 
 import Cliente from "./Cliente.js";
@@ -13,7 +13,7 @@ import SeUbica from "./SeUbica.js";
 import Suministro from "./Suministro.js";
 import Suministra from "./Suministra.js";
 
-// ---- Relaciones Productos / Proveedor
+// ---- Productos / Proveedor
 Producto.belongsTo(Proveedor, { foreignKey: "id_proveedor" });
 Proveedor.hasMany(Producto, { foreignKey: "id_proveedor" });
 
@@ -24,7 +24,7 @@ Cliente.hasMany(Pedido, { foreignKey: "id_cliente" });
 Pedido.belongsTo(Empleado, { foreignKey: "id_empleado" });
 Empleado.hasMany(Pedido, { foreignKey: "id_empleado" });
 
-// ---- Lineas de pedido (Contiene) N:M
+// ---- Líneas de pedido (Contiene) N:M
 Producto.belongsToMany(Pedido, {
   through: Contiene,
   foreignKey: "id_producto",
@@ -40,13 +40,30 @@ Pedido.belongsToMany(Producto, {
 Envio.belongsTo(Pedido, { foreignKey: "id_pedido" });
 Pedido.hasMany(Envio, { foreignKey: "id_pedido" });
 
-Envio.belongsTo(Empleado, { as: "responsable", foreignKey: "id_empleado_responsable" });
-Empleado.hasMany(Envio, { as: "enviosAsignados", foreignKey: "id_empleado_responsable" });
+Envio.belongsTo(Empleado, {
+  as: "responsable",
+  foreignKey: "id_empleado_responsable",
+});
+Empleado.hasMany(Envio, {
+  as: "enviosAsignados",
+  foreignKey: "id_empleado_responsable",
+});
 
-SeUbica.belongsTo(Producto, { foreignKey: "id_producto" });
-Producto.hasMany(SeUbica, { foreignKey: "id_producto" });
+// ---- Ubicación de productos (SeUbica)
+// Un producto puede tener varias ubicaciones (SeUbicas)
+// Usamos alias "SeUbicas" porque así lo incluimos en el controlador
+Producto.hasMany(SeUbica, {
+  foreignKey: "id_producto",
+  as: "SeUbicas",
+});
 
-SeUbica.belongsTo(Zona, { foreignKey: "nombre", targetKey: "nombre", constraints: false });
+SeUbica.belongsTo(Producto, {
+  foreignKey: "id_producto",
+  as: "Producto",
+});
+
+// NOTA: por ahora NO ligamos SeUbica -> Zona con FK,
+// usamos directamente los campos nombre / numero que ya trae SeUbica.
 
 // ---- Suministros (entradas)
 Suministro.belongsTo(Proveedor, { foreignKey: "id_proveedor" });

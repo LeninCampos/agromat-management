@@ -1,20 +1,29 @@
+// backend/src/routes/zonas.js
 import express from "express";
-import { validateZonaCreate, validateZonaUpdate, validateZonaDelete } from "../middleware/validateZona.js";
 import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   getAllZonas,
-  findZona,
+  getZonaById,
   createZona,
   updateZona,
-  deleteZona
+  deleteZona,
 } from "../controllers/zona.controller.js";
 
 const router = express.Router();
 
+// GET /api/zonas
 router.get("/", getAllZonas);
-router.get("/buscar", findZona);
-router.post("/", verificarAuth, validateZonaCreate, createZona);
-router.put("/", verificarAuth, validateZonaUpdate, updateZona);
-router.delete("/", verificarAuth, validateZonaDelete, deleteZona);
+
+// GET /api/zonas/:id
+router.get("/:id", getZonaById);
+
+// POST /api/zonas
+router.post("/", verificarAuth, createZona);
+
+// PUT /api/zonas/:id
+router.put("/:id", verificarAuth, updateZona);
+
+// DELETE /api/zonas/:id
+router.delete("/:id", verificarAuth, deleteZona);
 
 export default router;

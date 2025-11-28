@@ -1,37 +1,55 @@
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+// backend/src/middleware/upload.js
+import multer from "multer";
+import fs from "fs";
 
-// 1. Dónde guardar los archivos
-const storage = multer.diskStorage({
+/* === Storage ENVÍOS (lo que ya tenías) === */
+const storageEnvios = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = 'public/uploads/envios';
-    
-    // Asegurarse de que el directorio exista
-    if (!fs.existsSync(dir)){
+    const dir = "public/uploads/envios";
+    if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     cb(null, dir);
   },
   filename: (req, file, cb) => {
-    // 2. Renombrar el archivo para evitar colisiones
-    // Será: 1678886512345-mi-imagen.png
-    const nombreUnico = Date.now() + '-' + file.originalname;
+    const nombreUnico = Date.now() + "-" + file.originalname;
     cb(null, nombreUnico);
-  }
+  },
 });
 
-// 3. Filtrar para aceptar solo imágenes
+/* === Storage PRODUCTOS (nuevo) === */
+const storageProductos = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = "public/uploads/productos";
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const nombreUnico = Date.now() + "-" + file.originalname;
+    cb(null, nombreUnico);
+  },
+});
+
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') {
-    cb(null, true); // Aceptar el archivo
+  if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
+    cb(null, true);
   } else {
-    cb(new Error('Formato de imagen no válido (solo .jpg o .png)'), false);
+    cb(new Error("Formato de imagen no válido (solo .jpg o .png)"), false);
   }
 };
 
-export const upload = multer({ 
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: { fileSize: 1024 * 1024 * 5 } // Límite de 5MB
+// para envíos
+export const upload = multer({
+  storage: storageEnvios,
+  fileFilter,
+  limits: { fileSize: 1024 * 1024 * 5 },
+});
+
+// para productos
+export const uploadProducto = multer({
+  storage: storageProductos,
+  fileFilter,
+  limits: { fileSize: 1024 * 1024 * 5 },
 });
