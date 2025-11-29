@@ -1,25 +1,28 @@
-import express from "express";
-import { validatePedidoCreate, validatePedidoUpdate, validatePedidoItems } from "../middleware/validatePedido.js";
-import { verificarAuth } from "../middleware/verificarAuth.js";
+// backend/src/routes/pedidos.js
+import { Router } from "express";
 import {
   getAllPedidos,
   getPedidoById,
   createPedido,
-  addPedidoItem,
-  deletePedidoItem,
   updatePedido,
-  deletePedido
+  deletePedido,
 } from "../controllers/pedido.controller.js";
 
-const router = express.Router();
+const router = Router();
 
+// Obtener todos
 router.get("/", getAllPedidos);
-router.get("/:id", getPedidoById);
-router.post("/", verificarAuth, validatePedidoCreate, createPedido);
-router.put("/:id", verificarAuth, validatePedidoUpdate, updatePedido);
-router.delete("/:id", verificarAuth, deletePedido);
 
-router.post("/:id/items", validatePedidoItems, addPedidoItem);
-router.delete("/:id/items/:id_producto", deletePedidoItem);
+// Obtener uno
+router.get("/:id", getPedidoById);
+
+// Crear
+router.post("/", createPedido);
+
+// Actualizar
+router.put("/:id", updatePedido);
+
+// Eliminar
+router.delete("/:id", deletePedido);
 
 export default router;

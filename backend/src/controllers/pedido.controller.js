@@ -10,7 +10,9 @@ import {
 } from "../models/index.js";
 import { Op } from "sequelize";
 
-// --- Helpers ---
+// =============================
+// Helpers
+// =============================
 function calcSubtotalLine(cantidad, precio_unitario) {
   if (cantidad == null || precio_unitario == null) return null;
   return (Number(cantidad) * Number(precio_unitario)).toFixed(2);
@@ -46,8 +48,14 @@ export const getAllPedidos = async (req, res, next) => {
   try {
     const rows = await Pedido.findAll({
       include: [
-        { model: Cliente, attributes: ["id_cliente", "nombre_cliente"] },
-        { model: Empleado, attributes: ["id_empleado", "nombre_empleado"] },
+        {
+          model: Cliente,
+          attributes: ["id_cliente", "nombre_cliente", "direccion"],
+        },
+        {
+          model: Empleado,
+          attributes: ["id_empleado", "nombre_empleado"],
+        },
         {
           model: Producto,
           through: {
@@ -72,8 +80,14 @@ export const getPedidoById = async (req, res, next) => {
   try {
     const row = await Pedido.findByPk(req.params.id, {
       include: [
-        { model: Cliente, attributes: ["id_cliente", "nombre_cliente"] },
-        { model: Empleado, attributes: ["id_empleado", "nombre_empleado"] },
+        {
+          model: Cliente,
+          attributes: ["id_cliente", "nombre_cliente", "direccion"],
+        },
+        {
+          model: Empleado,
+          attributes: ["id_empleado", "nombre_empleado"],
+        },
         {
           model: Producto,
           through: {
@@ -84,7 +98,10 @@ export const getPedidoById = async (req, res, next) => {
       ],
     });
 
-    if (!row) return res.status(404).json({ error: "Pedido no encontrado" });
+    if (!row) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
     res.json(row);
   } catch (err) {
     next(err);
@@ -103,7 +120,7 @@ export const createPedido = async (req, res, next) => {
       status,
       id_empleado,
       id_cliente,
-      direccion_envio,          // 👈 NUEVO
+      direccion_envio, // 👈 NUEVO
       descuento_total = 0,
       impuesto_total = 0,
       items = [],
@@ -116,7 +133,7 @@ export const createPedido = async (req, res, next) => {
         status,
         id_empleado,
         id_cliente,
-        direccion_envio,             // 👈 NUEVO
+        direccion_envio, // 👈 NUEVO
         subtotal: 0,
         descuento_total,
         impuesto_total,
@@ -134,7 +151,9 @@ export const createPedido = async (req, res, next) => {
       subtotal_linea: calcSubtotalLine(i.cantidad, i.precio_unitario),
     }));
 
-    await Contiene.bulkCreate(lineas, { transaction: t });
+    if (lineas.length > 0) {
+      await Contiene.bulkCreate(lineas, { transaction: t });
+    }
 
     const tot = await recalcTotales(
       pedido.id_pedido,
@@ -154,13 +173,11 @@ export const createPedido = async (req, res, next) => {
 // =============================
 // PUT /api/pedidos/:id
 // =============================
-// backend/src/controllers/pedido.controller.js
-
 export const updatePedido = async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
     const { id } = req.params;
-    const { items, ...headerData } = req.body; // 👈 aquí viene direccion_envio también
+    const { items, ...headerData } = req.body; // aquí viene direccion_envio también
 
     const pedido = await Pedido.findByPk(id, { transaction: t });
     if (!pedido) {
@@ -188,7 +205,7 @@ export const updatePedido = async (req, res, next) => {
     // 1️⃣ Actualizar cabecera (incluye direccion_envio)
     await pedido.update(
       {
-        ...headerData,      // 👈 aquí va direccion_envio, fecha, hora, etc.
+        ...headerData, // fecha, hora, status, direccion_envio, desc, imp, etc.
         last_change: lastChangeText,
       },
       { transaction: t }
@@ -206,7 +223,9 @@ export const updatePedido = async (req, res, next) => {
         subtotal_linea: calcSubtotalLine(i.cantidad, i.precio_unitario),
       }));
 
-      await Contiene.bulkCreate(lineas, { transaction: t });
+      if (lineas.length > 0) {
+        await Contiene.bulkCreate(lineas, { transaction: t });
+      }
     }
 
     // 3️⃣ Recalcular totales
@@ -225,10 +244,9 @@ export const updatePedido = async (req, res, next) => {
   }
 };
 
-
 // =============================
 // DELETE /api/pedidos/:id
-// (borra cabecera + líneas + envíos asociados)
+// Borra cabecera + líneas + envíos asociados
 // =============================
 export const deletePedido = async (req, res, next) => {
   const t = await sequelize.transaction();
@@ -241,11 +259,13 @@ export const deletePedido = async (req, res, next) => {
       return res.status(404).json({ error: "Pedido no encontrado" });
     }
 
+    // borrar líneas del pedido
     await Contiene.destroy({
       where: { id_pedido: pedido.id_pedido },
       transaction: t,
     });
 
+    // borrar envíos ligados al pedido
     const envios = await Envio.findAll({
       where: { id_pedido: pedido.id_pedido },
       attributes: ["id_envio"],
@@ -260,6 +280,7 @@ export const deletePedido = async (req, res, next) => {
       });
     }
 
+    // borrar cabecera
     await pedido.destroy({ transaction: t });
 
     await t.commit();
@@ -273,10 +294,20 @@ export const deletePedido = async (req, res, next) => {
   }
 };
 
-// (Opcionales)
+// =============================
+// (Opcionales) manejo de items sueltos
+// =============================
 export const addPedidoItem = async (req, res, next) => {
-  // ...
+  // si después quieres, aquí podemos implementar agregar un item
+  // sin rehacer todo el pedido.
+  return res
+    .status(501)
+    .json({ error: "addPedidoItem aún no está implementado" });
 };
+
 export const deletePedidoItem = async (req, res, next) => {
-  // ...
+  // igual que arriba, por ahora lo dejamos como no implementado.
+  return res
+    .status(501)
+    .json({ error: "deletePedidoItem aún no está implementado" });
 };
