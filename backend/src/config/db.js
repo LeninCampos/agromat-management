@@ -8,7 +8,7 @@ const DB_PASSWORD = process.env.DB_PASSWORD || process.env.DB_PASS || "";
 const DB_HOST = process.env.DB_HOST || "127.0.0.1";
 const DB_PORT = Number(process.env.DB_PORT || 3306);
 
-// Solo para debug
+// Log de debug (puedes comentarlo en producción)
 console.log("[DB] Conectando a:", {
   DB_NAME,
   DB_USER,
