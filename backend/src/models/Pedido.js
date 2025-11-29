@@ -1,10 +1,9 @@
 // backend/src/models/Pedido.js
-import { DataTypes, Model } from "sequelize";
+import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
-class Pedido extends Model {}
-
-Pedido.init(
+const Pedido = sequelize.define(
+  "Pedido",
   {
     id_pedido: {
       type: DataTypes.INTEGER,
@@ -32,7 +31,7 @@ Pedido.init(
       allowNull: false,
     },
 
-    // 👉 Campo nuevo para guardar la dirección específica del pedido
+    // dirección de envío del pedido
     direccion_envio: {
       type: DataTypes.STRING(255),
       allowNull: true,
@@ -65,11 +64,10 @@ Pedido.init(
   },
   {
     sequelize,
-    tableName: "pedidos", // nombre real de la tabla en la BD
-    modelName: "Pedido",
+    tableName: "pedidos",
     timestamps: true,
-    createdAt: false,
-    updatedAt: "updated_at",
+    createdAt: false,        // NO buscará created_at
+    updatedAt: "updated_at", // usará updated_at de la tabla
   }
 );
 

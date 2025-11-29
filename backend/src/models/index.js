@@ -56,7 +56,7 @@ Pedido.belongsToMany(Producto, {
 });
 
 // ===============================
-// Envíos
+// Envíos / Despachos
 // ===============================
 Envio.belongsTo(Pedido, {
   foreignKey: "id_pedido",
@@ -77,10 +77,6 @@ Empleado.hasMany(Envio, {
 // ===============================
 // Ubicación de productos (SeUbica)
 // ===============================
-
-// Un producto puede tener varias ubicaciones
-// Alias DEBE ser "SeUbicas" porque así lo usas en el include del controlador
-// Producto -> SeUbica
 Producto.hasMany(SeUbica, {
   foreignKey: "id_producto",
   as: "SeUbicas",
@@ -90,7 +86,6 @@ SeUbica.belongsTo(Producto, {
   foreignKey: "id_producto",
 });
 
-// Zona -> SeUbica
 Zona.hasMany(SeUbica, {
   foreignKey: "id_zona",
   as: "SeUbicasZona",
@@ -100,7 +95,6 @@ SeUbica.belongsTo(Zona, {
   foreignKey: "id_zona",
   as: "Zona",
 });
-
 
 // ===============================
 // Suministros (entradas)

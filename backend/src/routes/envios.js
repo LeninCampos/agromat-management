@@ -1,28 +1,33 @@
-import express from "express";
-import { validateEnvioCreate, validateEnvioUpdate } from "../middleware/validateEnvio.js";
-import { validateEnvioDetalleCreate } from "../middleware/validateDetalles.js";
-import { verificarAuth } from "../middleware/verificarAuth.js";
-import { upload } from "../middleware/upload.js";
+// backend/src/routes/envios.js
+import { Router } from "express";
 import {
   getAllEnvios,
   getEnvioById,
   createEnvio,
-  addEnvioDetalle,
   updateEnvio,
+  deleteEnvio,
   uploadFotoEnvio,
-  deleteEnvio
 } from "../controllers/envio.controller.js";
 
-const router = express.Router();
+const router = Router();
 
+// Listar
 router.get("/", getAllEnvios);
+
+// Obtener uno
 router.get("/:id", getEnvioById);
-router.post("/", verificarAuth, validateEnvioCreate, createEnvio);
-router.put("/:id", verificarAuth, validateEnvioUpdate, updateEnvio);
 
-router.delete("/:id", verificarAuth, deleteEnvio);
+// Crear
+router.post("/", createEnvio);
 
-router.post("/:id/detalles", verificarAuth, validateEnvioDetalleCreate, addEnvioDetalle);
-router.post("/:id/foto", verificarAuth, upload.single('imagen'), uploadFotoEnvio);
+// Actualizar
+router.put("/:id", updateEnvio);
+
+// Eliminar
+router.delete("/:id", deleteEnvio);
+
+// Subir foto (opcional, si más adelante quieres usarlo)
+// import upload from "../middleware/upload.js";
+// router.post("/:id/foto", upload.single("imagen"), uploadFotoEnvio);
 
 export default router;
