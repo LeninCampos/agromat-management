@@ -338,7 +338,7 @@ export default function Proveedores() {
 
                 {/* RFC */}
                 <div className="agromat-form-field">
-                  <label>RFC</label>
+                  <label>CUIT</label>
                   <input
                     type="text"
                     value={form.rfc}

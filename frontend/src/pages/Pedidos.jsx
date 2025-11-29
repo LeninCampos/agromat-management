@@ -13,16 +13,34 @@ import { getEmpleados } from "../api/empleados";
 
 const BACKEND_URL = "http://localhost:4000";
 
+// ✅ SOLO ESTOS STATUS
+const STATUS_OPTIONS = ["Pendiente", "En proceso", "Completado", "Cancelado"];
+
 const emptyForm = {
   fecha_pedido: "",
   hora_pedido: "",
   status: "Pendiente",
   id_empleado: "",
   id_cliente: "",
+  direccion_envio: "", // 👈 NUEVO
   descuento_total: 0,
   impuesto_total: 0,
   items: [],
 };
+
+// Helpers para fecha/hora actual
+function formatDate(d) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatTime(d) {
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
 
 export default function Pedidos() {
   const [items, setItems] = useState([]);
@@ -37,7 +55,7 @@ export default function Pedidos() {
   const [clientes, setClientes] = useState([]);
   const [empleados, setEmpleados] = useState([]);
 
-  // Estado para el "mini formulario" de agregar item
+  // Mini-form de item
   const [nuevoItem, setNuevoItem] = useState({
     id_producto: "",
     cantidad: 1,
@@ -47,10 +65,10 @@ export default function Pedidos() {
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return items;
-    return items.filter((x) => x.status.toLowerCase().includes(query));
+    return items.filter((x) => x.status?.toLowerCase().includes(query));
   }, [q, items]);
 
-  // 📥 CARGA DE DATOS CON TRANSFORMACIÓN
+  // CARGA
   const load = async () => {
     setLoading(true);
     try {
@@ -62,9 +80,10 @@ export default function Pedidos() {
           getEmpleados(),
         ]);
 
-      // pedidos en formato amigable al form
       const pedidosFormateados = resPedidos.data.map((pedido) => ({
         ...pedido,
+        direccion_envio: pedido.direccion_envio || "", // 👈
+        // items desde la relación Productos + Contiene
         items: (pedido.Productos || []).map((prod) => ({
           id_producto: prod.id_producto,
           nombre_producto: prod.nombre_producto,
@@ -73,16 +92,12 @@ export default function Pedidos() {
         })),
       }));
 
-      // productos con imagen normalizada
       const productosFormateados = resProductos.data.map((p) => {
         let imagenUrl = p.imagen_url ?? "";
         if (imagenUrl && imagenUrl.startsWith("/")) {
           imagenUrl = `${BACKEND_URL}${imagenUrl}`;
         }
-        return {
-          ...p,
-          imagen_url: imagenUrl,
-        };
+        return { ...p, imagen_url: imagenUrl };
       });
 
       setItems(pedidosFormateados);
@@ -101,9 +116,16 @@ export default function Pedidos() {
     load();
   }, []);
 
+  // ✅ Nuevo pedido: fecha/hora automáticas de la compu
   const openCreate = () => {
+    const now = new Date();
     setEditingId(null);
-    setForm({ ...emptyForm, status: "Pendiente" });
+    setForm({
+      ...emptyForm,
+      fecha_pedido: formatDate(now),
+      hora_pedido: formatTime(now),
+      status: "Pendiente",
+    });
     setModalOpen(true);
   };
 
@@ -115,6 +137,7 @@ export default function Pedidos() {
       status: row.status,
       id_empleado: row.id_empleado,
       id_cliente: row.id_cliente,
+      direccion_envio: row.direccion_envio || "", // 👈
       descuento_total: row.descuento_total,
       impuesto_total: row.impuesto_total,
       items: row.items ?? [],
@@ -122,7 +145,7 @@ export default function Pedidos() {
     setModalOpen(true);
   };
 
-  // ✅ Actualizar SOLO el status desde la tabla
+  // Cambiar status solo desde tabla
   const updateStatus = async (row, nuevoStatus) => {
     try {
       const payload = {
@@ -131,6 +154,7 @@ export default function Pedidos() {
         status: nuevoStatus,
         id_empleado: Number(row.id_empleado),
         id_cliente: Number(row.id_cliente),
+        direccion_envio: row.direccion_envio || "", // 👈 mantener
         descuento_total: Number(row.descuento_total ?? 0),
         impuesto_total: Number(row.impuesto_total ?? 0),
         items: row.items ?? [],
@@ -149,8 +173,7 @@ export default function Pedidos() {
     }
   };
 
-  // --- Lógica de Items (Agregar / Editar Cantidad / Eliminar) ---
-
+  // --- Items ----
   const agregarItem = () => {
     if (!nuevoItem.id_producto) {
       Swal.fire("Error", "Selecciona un producto", "error");
@@ -212,7 +235,6 @@ export default function Pedidos() {
     }));
   };
 
-  // Calcular total en tiempo real
   const totalCalculado = useMemo(
     () =>
       form.items.reduce(
@@ -223,7 +245,6 @@ export default function Pedidos() {
   );
 
   // --- Guardar ---
-
   const save = async (e) => {
     e.preventDefault();
 
@@ -243,6 +264,7 @@ export default function Pedidos() {
         status: form.status,
         id_empleado: Number(form.id_empleado),
         id_cliente: Number(form.id_cliente),
+        direccion_envio: form.direccion_envio?.trim() || "", // 👈
         descuento_total: Number(form.descuento_total),
         impuesto_total: Number(form.impuesto_total),
         items: form.items,
@@ -285,6 +307,7 @@ export default function Pedidos() {
     }
   };
 
+  // --- render ---
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
       <div className="flex items-center justify-between">
@@ -329,7 +352,7 @@ export default function Pedidos() {
         </button>
       </div>
 
-      {/* TABLA PRINCIPAL */}
+      {/* TABLA */}
       <div
         style={{
           background: "white",
@@ -346,21 +369,23 @@ export default function Pedidos() {
               <th style={{ padding: "10px" }}>Hora</th>
               <th style={{ padding: "10px" }}>Status</th>
               <th style={{ padding: "10px" }}>Cliente</th>
+              <th style={{ padding: "10px" }}>Dirección env.</th>{/* 👈 */}
               <th style={{ padding: "10px" }}>Empleado</th>
               <th style={{ padding: "10px" }}>Total</th>
+              <th style={{ padding: "10px" }}>Última modif.</th>
               <th style={{ padding: "10px" }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: "20px" }}>
+                <td colSpan={10} style={{ textAlign: "center", padding: "20px" }}>
                   Cargando...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: "20px" }}>
+                <td colSpan={10} style={{ textAlign: "center", padding: "20px" }}>
                   Sin resultados
                 </td>
               </tr>
@@ -371,7 +396,6 @@ export default function Pedidos() {
                   <td style={{ padding: "10px" }}>{row.fecha_pedido}</td>
                   <td style={{ padding: "10px" }}>{row.hora_pedido}</td>
 
-                  {/* SELECT DE STATUS EN LA TABLA */}
                   <td style={{ padding: "10px" }}>
                     <select
                       value={row.status}
@@ -383,21 +407,62 @@ export default function Pedidos() {
                         background: "#f9fafb",
                       }}
                     >
-                      <option value="Pendiente">Pendiente</option>
-                      <option value="En proceso">En proceso</option>
-                      <option value="Entregado">Entregado</option>
+                      {STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
                     </select>
                   </td>
 
                   <td style={{ padding: "10px" }}>
                     {row.Cliente?.nombre_cliente || `#${row.id_cliente}`}
                   </td>
+
+                  <td
+                    style={{
+                      padding: "10px",
+                      maxWidth: "220px",
+                      fontSize: "0.8rem",
+                      color: "#4b5563",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                    title={row.direccion_envio || ""} // tooltip con la dirección completa
+                  >
+                    {row.direccion_envio || "-"}
+                  </td>
+
                   <td style={{ padding: "10px" }}>
                     {row.Empleado?.nombre_empleado || `#${row.id_empleado}`}
                   </td>
                   <td style={{ padding: "10px" }}>
                     ${Number(row.total ?? 0).toFixed(2)}
                   </td>
+
+                  {/* Última modificación */}
+                  <td
+                    style={{
+                      padding: "10px",
+                      fontSize: "0.8rem",
+                      color: "#6b7280",
+                    }}
+                  >
+                    {row.updated_at
+                      ? `${new Date(row.updated_at).toLocaleDateString()} ${new Date(
+                          row.updated_at
+                        ).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`
+                      : "-"}
+                    <br />
+                    <span style={{ fontSize: "0.75rem" }}>
+                      {row.last_change || "Sin detalles"}
+                    </span>
+                  </td>
+
                   <td style={{ padding: "10px" }}>
                     <button
                       onClick={() => openEdit(row)}
@@ -440,9 +505,10 @@ export default function Pedidos() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.3)",
-            display: "grid",
-            placeItems: "center",
+            background: "rgba(15,23,42,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             zIndex: 1000,
           }}
         >
@@ -450,366 +516,662 @@ export default function Pedidos() {
             onSubmit={save}
             style={{
               background: "white",
-              padding: "1.5rem",
-              borderRadius: "10px",
+              padding: "1.75rem 1.75rem 1.5rem",
+              borderRadius: "18px",
               width: "100%",
-              maxWidth: "650px",
+              maxWidth: "720px",
               maxHeight: "90vh",
               overflowY: "auto",
-              boxShadow: "0 5px 20px rgba(0,0,0,0.15)",
+              boxShadow:
+                "0 18px 45px rgba(15,23,42,0.28), 0 0 0 1px rgba(148,163,184,0.18)",
             }}
           >
-            <h3 style={{ fontSize: "1.2rem", marginBottom: "1rem" }}>
-              {editingId ? "Editar pedido" : "Nuevo pedido"}
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "10px",
-              }}
-            >
-              <div>
-                <label>Fecha:</label>
-                <input
-                  type="date"
-                  value={form.fecha_pedido}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, fecha_pedido: e.target.value }))
-                  }
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "8px",
-                    border: "1px solid #ddd",
-                    borderRadius: "4px",
-                  }}
-                />
-              </div>
-              <div>
-                <label>Hora:</label>
-                <input
-                  type="time"
-                  value={form.hora_pedido}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, hora_pedido: e.target.value }))
-                  }
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "8px",
-                    border: "1px solid #ddd",
-                    borderRadius: "4px",
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* SELECT DE STATUS EN EL MODAL */}
-            <label style={{ display: "block", marginTop: "10px" }}>
-              Status:
-            </label>
-            <select
-              value={form.status}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, status: e.target.value }))
-              }
-              required
-              style={{
-                width: "100%",
-                padding: "8px",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-              }}
-            >
-              <option value="Pendiente">Pendiente</option>
-              <option value="En Proceso">En proceso</option>
-              <option value="Entregado">Entregado</option>
-            </select>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "10px",
-                marginTop: "10px",
-              }}
-            >
-              <div>
-                <label>Cliente:</label>
-                <select
-                  value={form.id_cliente}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, id_cliente: e.target.value }))
-                  }
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "8px",
-                    border: "1px solid #ddd",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <option value="">-- Selecciona --</option>
-                  {clientes.map((c) => (
-                    <option key={c.id_cliente} value={c.id_cliente}>
-                      {c.nombre_cliente}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label>Empleado:</label>
-                <select
-                  value={form.id_empleado}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, id_empleado: e.target.value }))
-                  }
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "8px",
-                    border: "1px solid #ddd",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <option value="">-- Selecciona --</option>
-                  {empleados.map((em) => (
-                    <option key={em.id_empleado} value={em.id_empleado}>
-                      {em.nombre_empleado}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <hr
-              style={{
-                margin: "20px 0",
-                border: "0",
-                borderTop: "1px solid #eee",
-              }}
-            />
-
-            {/* AGREGAR PRODUCTO */}
-            <h4 style={{ marginBottom: "10px", fontWeight: 600 }}>
-              Productos en el pedido
-            </h4>
+            {/* HEADER DEL MODAL */}
             <div
               style={{
                 display: "flex",
-                gap: "5px",
-                alignItems: "flex-end",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1rem",
               }}
             >
-              <div style={{ flex: 2 }}>
-                <label style={{ fontSize: "0.85em" }}>Producto</label>
-                <select
-                  value={nuevoItem.id_producto}
-                  onChange={(e) =>
-                    setNuevoItem((i) => ({
-                      ...i,
-                      id_producto: e.target.value,
-                    }))
-                  }
+              <div>
+                <h3
                   style={{
-                    width: "100%",
-                    padding: "8px",
-                    border: "1px solid #ddd",
-                    borderRadius: "4px",
+                    fontSize: "1.25rem",
+                    fontWeight: 600,
+                    letterSpacing: "0.01em",
                   }}
                 >
-                  <option value="">Buscar...</option>
-                  {productos.map((p) => (
-                    <option key={p.id_producto} value={p.id_producto}>
-                      {p.nombre_producto} (${Number(p.precio).toFixed(2)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: "0.85em" }}>Cant</label>
-                <input
-                  type="number"
-                  value={nuevoItem.cantidad}
-                  min="1"
-                  onChange={(e) =>
-                    setNuevoItem((i) => ({
-                      ...i,
-                      cantidad: e.target.value,
-                    }))
-                  }
+                  {editingId ? "Editar pedido" : "Nuevo pedido"}
+                </h3>
+                <p
                   style={{
-                    width: "100%",
-                    padding: "8px",
-                    border: "1px solid #ddd",
-                    borderRadius: "4px",
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                    marginTop: "0.15rem",
                   }}
-                />
+                >
+                  Completa la información del pedido y los productos.
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={agregarItem}
+              <span
                 style={{
-                  background: "#4F46E5",
-                  color: "white",
-                  padding: "9px 12px",
-                  borderRadius: "4px",
-                  border: "none",
-                  cursor: "pointer",
+                  fontSize: "0.75rem",
+                  padding: "4px 10px",
+                  borderRadius: "999px",
+                  background: "#eef2ff",
+                  color: "#4338ca",
+                  fontWeight: 500,
                 }}
               >
-                Agregar
-              </button>
+                {form.status || "Pendiente"}
+              </span>
             </div>
 
-            {/* TABLA RESUMEN DE ITEMS */}
+            {/* BLOQUE 1: FECHA / HORA / STATUS */}
             <div
               style={{
-                marginTop: "15px",
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
+                padding: "12px 12px 10px",
+                marginBottom: "12px",
                 background: "#f9fafb",
-                padding: "10px",
-                borderRadius: "8px",
               }}
             >
-              <table style={{ width: "100%", fontSize: "0.9rem" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid #ddd" }}>
-                    <th style={{ textAlign: "left" }}>Foto</th>
-                    <th style={{ textAlign: "left" }}>Producto</th>
-                    <th style={{ width: "80px" }}>Cant.</th>
-                    <th style={{ textAlign: "right" }}>Precio</th>
-                    <th style={{ textAlign: "right" }}>Subtotal</th>
-                    <th style={{ width: "40px" }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.items.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        style={{
-                          textAlign: "center",
-                          padding: "10px",
-                          color: "#888",
-                        }}
-                      >
-                        Carrito vacío
-                      </td>
-                    </tr>
-                  )}
-                  {form.items.map((it) => {
-                    const prodInfo = productos.find(
-                      (p) => p.id_producto == it.id_producto
-                    );
-                    const nombreMostrar = prodInfo
-                      ? prodInfo.nombre_producto
-                      : it.nombre_producto || it.id_producto;
-                    const imagenUrl = prodInfo?.imagen_url || "";
-
-                    return (
-                      <tr
-                        key={it.id_producto}
-                        style={{ borderBottom: "1px solid #eee" }}
-                      >
-                        <td style={{ padding: "8px 0" }}>
-                          {imagenUrl ? (
-                            <img
-                              src={imagenUrl}
-                              alt={nombreMostrar}
-                              style={{
-                                width: "40px",
-                                height: "40px",
-                                borderRadius: "8px",
-                                objectFit: "cover",
-                                border: "1px solid #ddd",
-                              }}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                width: "40px",
-                                height: "40px",
-                                borderRadius: "8px",
-                                background: "#e5e7eb",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "0.7rem",
-                                color: "#6b7280",
-                              }}
-                            >
-                              Sin foto
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ padding: "8px 0" }}>{nombreMostrar}</td>
-                        <td>
-                          <input
-                            type="number"
-                            value={it.cantidad}
-                            min="1"
-                            onChange={(e) =>
-                              actualizarCantidadItem(
-                                it.id_producto,
-                                e.target.value
-                              )
-                            }
-                            style={{
-                              width: "60px",
-                              padding: "4px",
-                              borderRadius: "4px",
-                              border: "1px solid #ddd",
-                            }}
-                          />
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          ${Number(it.precio_unitario).toFixed(2)}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          <strong>
-                            ${(it.cantidad * it.precio_unitario).toFixed(2)}
-                          </strong>
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          <button
-                            type="button"
-                            onClick={() => eliminarItem(it.id_producto)}
-                            style={{
-                              color: "#DC2626",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              fontWeight: "bold",
-                            }}
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
               <div
                 style={{
-                  textAlign: "right",
-                  marginTop: "10px",
-                  fontSize: "1.1rem",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "10px",
                 }}
               >
-                Total estimado:{" "}
-                <strong>${totalCalculado.toFixed(2)}</strong>
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    color: "#4b5563",
+                  }}
+                >
+                  Detalles generales
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: "10px",
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginBottom: "3px",
+                    }}
+                  >
+                    Fecha
+                  </label>
+                  <input
+                    type="date"
+                    value={form.fecha_pedido}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, fecha_pedido: e.target.value }))
+                    }
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginBottom: "3px",
+                    }}
+                  >
+                    Hora
+                  </label>
+                  <input
+                    type="time"
+                    value={form.hora_pedido}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, hora_pedido: e.target.value }))
+                    }
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginBottom: "3px",
+                    }}
+                  >
+                    Status
+                  </label>
+                  <select
+                    value={form.status}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, status: e.target.value }))
+                    }
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "999px",
+                      fontSize: "0.85rem",
+                      background: "white",
+                    }}
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
+            {/* BLOQUE 2: CLIENTE / EMPLEADO */}
+            <div
+              style={{
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
+                padding: "12px 12px 10px",
+                marginBottom: "14px",
+                background: "white",
+              }}
+            >
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  color: "#4b5563",
+                  marginBottom: "8px",
+                }}
+              >
+                Cliente y responsable
+              </span>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginBottom: "3px",
+                    }}
+                  >
+                    Cliente
+                  </label>
+                  <select
+                    value={form.id_cliente}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setForm((f) => {
+                        const selectedCli = clientes.find(
+                          (c) =>
+                            String(c.id_cliente) === String(value)
+                        );
+                        const direccionCliente =
+                          selectedCli?.direccion_envio ||
+                          selectedCli?.direccion ||
+                          selectedCli?.direccion_cliente ||
+                          "";
+
+                        // solo autollenar si no había nada escrito
+                        const nuevaDireccion =
+                          f.direccion_envio?.trim()
+                            ? f.direccion_envio
+                            : direccionCliente;
+
+                        return {
+                          ...f,
+                          id_cliente: value,
+                          direccion_envio: nuevaDireccion,
+                        };
+                      });
+                    }}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    <option value="">-- Selecciona --</option>
+                    {clientes.map((c) => (
+                      <option key={c.id_cliente} value={c.id_cliente}>
+                        {c.nombre_cliente}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginBottom: "3px",
+                    }}
+                  >
+                    Empleado
+                  </label>
+                  <select
+                    value={form.id_empleado}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, id_empleado: e.target.value }))
+                    }
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    <option value="">-- Selecciona --</option>
+                    {empleados.map((em) => (
+                      <option key={em.id_empleado} value={em.id_empleado}>
+                        {em.nombre_empleado}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* BLOQUE 2.5: DIRECCIÓN ENVÍO */}
+            <div
+              style={{
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
+                padding: "12px 12px 10px",
+                marginBottom: "14px",
+                background: "white",
+              }}
+            >
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  color: "#4b5563",
+                  marginBottom: "4px",
+                }}
+              >
+                Dirección de envío
+              </span>
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#9ca3af",
+                  marginTop: 0,
+                  marginBottom: "6px",
+                }}
+              >
+                Por defecto se usa la dirección del cliente. Puedes modificarla si
+                este pedido va a otro domicilio.
+              </p>
+              <textarea
+                rows={3}
+                value={form.direccion_envio}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    direccion_envio: e.target.value,
+                  }))
+                }
+                placeholder="Calle, número, colonia, ciudad, CP..."
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "10px",
+                  fontSize: "0.85rem",
+                  resize: "vertical",
+                }}
+              />
+            </div>
+
+            {/* BLOQUE 3: PRODUCTOS */}
+            <div
+              style={{
+                borderRadius: "12px",
+                border: "1px solid #e5e7eb",
+                padding: "12px 12px 10px",
+                background: "white",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    color: "#4b5563",
+                  }}
+                >
+                  Productos en el pedido
+                </span>
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#6b7280",
+                  }}
+                >
+                  Total estimado: <strong>${totalCalculado.toFixed(2)}</strong>
+                </span>
+              </div>
+
+              {/* AGREGAR PRODUCTO */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "6px",
+                  alignItems: "flex-end",
+                  marginBottom: "10px",
+                }}
+              >
+                <div style={{ flex: 2 }}>
+                  <label
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginBottom: "3px",
+                      display: "block",
+                    }}
+                  >
+                    Producto
+                  </label>
+                  <select
+                    value={nuevoItem.id_producto}
+                    onChange={(e) =>
+                      setNuevoItem((i) => ({
+                        ...i,
+                        id_producto: e.target.value,
+                      }))
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    <option value="">Buscar...</option>
+                    {productos.map((p) => (
+                      <option key={p.id_producto} value={p.id_producto}>
+                        {p.nombre_producto} (${Number(p.precio).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ width: "100px" }}>
+                  <label
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginBottom: "3px",
+                      display: "block",
+                    }}
+                  >
+                    Cant
+                  </label>
+                  <input
+                    type="number"
+                    value={nuevoItem.cantidad}
+                    min="1"
+                    onChange={(e) =>
+                      setNuevoItem((i) => ({
+                        ...i,
+                        cantidad: e.target.value,
+                      }))
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={agregarItem}
+                  style={{
+                    background: "#4F46E5",
+                    color: "white",
+                    padding: "9px 16px",
+                    borderRadius: "999px",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    fontWeight: 500,
+                    boxShadow: "0 8px 18px rgba(79,70,229,0.25)",
+                  }}
+                >
+                  Agregar
+                </button>
+              </div>
+
+              {/* TABLA DE ITEMS */}
+              <div
+                style={{
+                  marginTop: "5px",
+                  background: "#f9fafb",
+                  padding: "8px",
+                  borderRadius: "10px",
+                }}
+              >
+                <table style={{ width: "100%", fontSize: "0.85rem" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+                      <th style={{ textAlign: "left", padding: "6px 4px" }}>
+                        Foto
+                      </th>
+                      <th style={{ textAlign: "left", padding: "6px 4px" }}>
+                        Producto
+                      </th>
+                      <th style={{ width: "80px", padding: "6px 4px" }}>
+                        Cant.
+                      </th>
+                      <th
+                        style={{ textAlign: "right", padding: "6px 4px" }}
+                      >
+                        Precio
+                      </th>
+                      <th
+                        style={{ textAlign: "right", padding: "6px 4px" }}
+                      >
+                        Subtotal
+                      </th>
+                      <th style={{ width: "40px" }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.items.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          style={{
+                            textAlign: "center",
+                            padding: "10px",
+                            color: "#9ca3af",
+                          }}
+                        >
+                          Carrito vacío
+                        </td>
+                      </tr>
+                    )}
+                    {form.items.map((it) => {
+                      const prodInfo = productos.find(
+                        (p) => p.id_producto == it.id_producto
+                      );
+                      const nombreMostrar = prodInfo
+                        ? prodInfo.nombre_producto
+                        : it.nombre_producto || it.id_producto;
+                      const imagenUrl = prodInfo?.imagen_url || "";
+
+                      return (
+                        <tr
+                          key={it.id_producto}
+                          style={{ borderBottom: "1px solid #eef2f7" }}
+                        >
+                          <td style={{ padding: "6px 4px" }}>
+                            {imagenUrl ? (
+                              <img
+                                src={imagenUrl}
+                                alt={nombreMostrar}
+                                style={{
+                                  width: "40px",
+                                  height: "40px",
+                                  borderRadius: "10px",
+                                  objectFit: "cover",
+                                  border: "1px solid #e5e7eb",
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  width: "40px",
+                                  height: "40px",
+                                  borderRadius: "10px",
+                                  background: "#e5e7eb",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "0.7rem",
+                                  color: "#6b7280",
+                                }}
+                              >
+                                Sin foto
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: "6px 4px" }}>
+                            {nombreMostrar}
+                          </td>
+                          <td style={{ padding: "6px 4px" }}>
+                            <input
+                              type="number"
+                              value={it.cantidad}
+                              min="1"
+                              onChange={(e) =>
+                                actualizarCantidadItem(
+                                  it.id_producto,
+                                  e.target.value
+                                )
+                              }
+                              style={{
+                                width: "60px",
+                                padding: "4px",
+                                borderRadius: "6px",
+                                border: "1px solid #d1d5db",
+                                fontSize: "0.8rem",
+                              }}
+                            />
+                          </td>
+                          <td
+                            style={{
+                              textAlign: "right",
+                              padding: "6px 4px",
+                            }}
+                          >
+                            ${Number(it.precio_unitario).toFixed(2)}
+                          </td>
+                          <td
+                            style={{
+                              textAlign: "right",
+                              padding: "6px 4px",
+                            }}
+                          >
+                            <strong>
+                              {(it.cantidad * it.precio_unitario).toFixed(2)}
+                            </strong>
+                          </td>
+                          <td
+                            style={{
+                              textAlign: "right",
+                              padding: "6px 4px",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => eliminarItem(it.id_producto)}
+                              style={{
+                                color: "#DC2626",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                fontSize: "0.9rem",
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* FOOTER BOTONES */}
             <div
               style={{
                 display: "flex",
                 justifyContent: "flex-end",
                 gap: "10px",
-                marginTop: "20px",
+                marginTop: "18px",
               }}
             >
               <button
@@ -817,10 +1179,11 @@ export default function Pedidos() {
                 onClick={() => setModalOpen(false)}
                 style={{
                   background: "#e5e7eb",
-                  padding: "8px 14px",
-                  borderRadius: "6px",
+                  padding: "8px 16px",
+                  borderRadius: "999px",
                   border: "none",
                   cursor: "pointer",
+                  fontSize: "0.85rem",
                 }}
               >
                 Cancelar
@@ -830,10 +1193,12 @@ export default function Pedidos() {
                 style={{
                   background: "#4F46E5",
                   color: "white",
-                  padding: "8px 14px",
-                  borderRadius: "6px",
+                  padding: "8px 18px",
+                  borderRadius: "999px",
                   border: "none",
                   cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: 500,
                 }}
               >
                 Guardar Pedido

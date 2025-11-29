@@ -1,58 +1,97 @@
 // frontend/src/layout/Topbar.jsx
-import { useNavigate } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+
+function getInitials(name = "") {
+  const parts = name.trim().split(" ").filter(Boolean);
+  if (parts.length === 0) return "US";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function getPageTitle(pathname) {
+  if (pathname.startsWith("/app/productos")) return "Productos";
+  if (pathname.startsWith("/app/clientes")) return "Clientes";
+  if (pathname.startsWith("/app/proveedores")) return "Proveedores";
+  if (pathname.startsWith("/app/pedidos")) return "Pedidos";
+  if (pathname.startsWith("/app/envios")) return "Despachos";
+  if (pathname.startsWith("/app/empleados")) return "Empleados";
+  if (pathname.startsWith("/app/zonas")) return "Zonas";
+  if (pathname.startsWith("/app/suministros")) return "Entradas";
+  return "Dashboard general";
+}
 
 export default function Topbar() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Intento leer datos si algún día los guardan, si no, uso defaults
-  const userName = localStorage.getItem("userName") || "Admin Nuevo";
-  const userRole = localStorage.getItem("userRole") || "admin";
+  const { name, role } = useMemo(() => {
+    const raw = localStorage.getItem("user");
+    if (!raw) {
+      return { name: "Admin", role: "ADMIN" };
+    }
+    try {
+      const u = JSON.parse(raw);
+
+      const displayName =
+        u.nombre_empleado ||
+        u.nombre ||
+        u.nombre_usuario ||
+        u.username ||
+        "Admin";
+
+      const displayRole =
+        u.rol || u.role || (u.es_admin ? "ADMIN" : "USUARIO");
+
+      return { name: displayName, role: (displayRole || "").toUpperCase() };
+    } catch {
+      return { name: "Admin", role: "ADMIN" };
+    }
+  }, []);
+
+  const initials = getInitials(name);
+  const pageTitle = getPageTitle(location.pathname);
 
   const handleLogout = () => {
-    // Limpia lo típico de auth
     localStorage.removeItem("token");
-    localStorage.removeItem("userName");
-    localStorage.removeItem("userRole");
-
-    navigate("/login");
+    localStorage.removeItem("user");
+    navigate("/login", { replace: true });
   };
 
   return (
     <header
       style={{
-        height: "64px",
-        background: "#f9fafb",
+        height: "56px",
         borderBottom: "1px solid #e5e7eb",
+        background: "#ffffff",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 1.75rem",
-        position: "sticky",
-        top: 0,
-        zIndex: 40,
+        padding: "0 1.5rem",
       }}
     >
-      {/* Lado izquierdo: título / espacio para breadcrumbs si luego quieres */}
-      <div
-        style={{
-          fontSize: "0.9rem",
-          color: "#6b7280",
-        }}
-      >
-        Bienvenido,
-        <span
+      {/* IZQUIERDA: saludo y ruta actual */}
+      <div>
+        <div
           style={{
-            fontWeight: 600,
-            color: "#111827",
-            marginLeft: "0.35rem",
+            fontSize: "0.9rem",
+            color: "#6b7280",
+            marginBottom: "0.15rem",
           }}
         >
-          {userName}
-        </span>
+          Bienvenido, <span style={{ color: "#111827", fontWeight: 600 }}>{name}</span>
+        </div>
+        <div
+          style={{
+            fontSize: "0.8rem",
+            color: "#9ca3af",
+          }}
+        >
+          {pageTitle}
+        </div>
       </div>
 
-      {/* Lado derecho: usuario + logout */}
+      {/* DERECHA: perfil + logout */}
       <div
         style={{
           display: "flex",
@@ -60,86 +99,79 @@ export default function Topbar() {
           gap: "0.75rem",
         }}
       >
-        {/* Avatar simple con iniciales */}
+        {/* Badge rol */}
+        <span
+          style={{
+            fontSize: "0.7rem",
+            padding: "2px 10px",
+            borderRadius: "999px",
+            background: "#ecfdf3",
+            color: "#16a34a",
+            border: "1px solid #bbf7d0",
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+          }}
+        >
+          {role}
+        </span>
+
+        {/* Nombre + iniciales */}
         <div
           style={{
-            width: "34px",
-            height: "34px",
-            borderRadius: "999px",
-            background:
-              "linear-gradient(135deg, rgba(79,70,229,1), rgba(34,197,94,1))",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontSize: "0.85rem",
-            fontWeight: 600,
-            boxShadow: "0 4px 10px rgba(15,23,42,0.25)",
+            gap: "0.6rem",
           }}
         >
-          {userName
-            .split(" ")
-            .map((p) => p[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase()}
-        </div>
-
-        {/* Nombre + rol */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: "2px",
-          }}
-        >
+          <div
+            style={{
+              width: "34px",
+              height: "34px",
+              borderRadius: "999px",
+              background:
+                "linear-gradient(135deg, #2563eb, #4f46e5, #22c55e)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#f9fafb",
+              fontWeight: 600,
+              fontSize: "0.8rem",
+              boxShadow: "0 0 0 2px #e5e7eb",
+            }}
+          >
+            {initials}
+          </div>
           <span
             style={{
               fontSize: "0.85rem",
-              fontWeight: 500,
               color: "#111827",
+              fontWeight: 500,
             }}
           >
-            {userName}
-          </span>
-          <span
-            style={{
-              fontSize: "0.7rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.09em",
-              padding: "2px 8px",
-              borderRadius: "999px",
-              background: "rgba(22,163,74,0.08)",
-              color: "#16a34a",
-              border: "1px solid rgba(34,197,94,0.35)",
-            }}
-          >
-            {userRole}
+            {name}
           </span>
         </div>
 
         {/* Botón logout */}
         <button
-          type="button"
           onClick={handleLogout}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.4rem",
-            padding: "7px 11px",
+            marginLeft: "0.75rem",
+            padding: "6px 14px",
             borderRadius: "999px",
-            border: "1px solid rgba(239,68,68,0.3)",
+            border: "1px solid #fecaca",
             background: "#fef2f2",
             color: "#b91c1c",
             fontSize: "0.8rem",
             fontWeight: 500,
             cursor: "pointer",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.35rem",
           }}
         >
-          <LogOut size={14} />
-          <span>Cerrar sesión</span>
+          <span>⟶</span>
+          Cerrar sesión
         </button>
       </div>
     </header>

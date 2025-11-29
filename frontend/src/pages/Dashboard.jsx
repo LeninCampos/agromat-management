@@ -1,5 +1,6 @@
 // src/pages/Dashboard.jsx
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getProductos } from "../api/productos";
 import { getClientes } from "../api/clientes";
 import { getPedidos } from "../api/pedidos";
@@ -20,6 +21,8 @@ export default function Dashboard() {
 
   const [ultimosPedidos, setUltimosPedidos] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const navigate = useNavigate();
 
   const loadData = async () => {
     try {
@@ -81,7 +84,7 @@ export default function Dashboard() {
       style={{
         padding: "1.5rem 1.75rem",
         minHeight: "calc(100vh - 80px)",
-        backgroundColor: "#ffffff", // fondo blanco para que combine con el layout
+        backgroundColor: "#ffffff",
       }}
     >
       {/* HEADER */}
@@ -111,7 +114,7 @@ export default function Dashboard() {
               color: "#6b7280",
             }}
           >
-            Resumen rápido del inventario, clientes y operaciones de Agromat.
+            Vista General del inventario, clientes y operaciones de Agromat
           </p>
         </div>
 
@@ -150,14 +153,12 @@ export default function Dashboard() {
             }
           }}
         >
-          <span style={{ fontSize: "0.95rem" }}>
-            {loading ? "⏳" : "⟳"}
-          </span>
+          <span style={{ fontSize: "0.95rem" }}>{loading ? "⏳" : "⟳"}</span>
           {loading ? "Actualizando..." : "Actualizar datos"}
         </button>
       </header>
 
-      {/* KPI CARDS */}
+      {/* KPI CARDS (ahora clicables) */}
       <section
         style={{
           display: "grid",
@@ -167,11 +168,12 @@ export default function Dashboard() {
         }}
       >
         <StatCard
-          title="PRODUCTOS"
+          title="Inventario"
           value={stats.productos}
           icon="📦"
           tag="Registrados en inventario"
           color="#2563eb"
+          onClick={() => navigate("/app/productos")}
         />
         <StatCard
           title="CLIENTES"
@@ -179,20 +181,23 @@ export default function Dashboard() {
           icon="👥"
           tag="Cuentas activas"
           color="#22c55e"
+          onClick={() => navigate("/app/clientes")}
         />
         <StatCard
           title="PEDIDOS"
           value={stats.pedidos}
           icon="🧾"
-          tag="Histórico de ventas"
+          tag="Histórial de ventas"
           color="#0EA5E9"
+          onClick={() => navigate("/app/pedidos")}
         />
         <StatCard
-          title="ENVÍOS"
+          title="DESPACHOS"
           value={stats.envios}
           icon="🚚"
-          tag="Movimientos despachados"
+          tag="Órdenes despachadas"
           color="#F59E0B"
+          onClick={() => navigate("/app/envios")} // la ruta sigue siendo /envios
         />
       </section>
 
@@ -388,7 +393,7 @@ export default function Dashboard() {
               <li style={{ marginBottom: "0.4rem" }}>
                 • {stats.pedidos} pedidos registrados en el histórico.
               </li>
-              <li>• {stats.envios} envíos registrados hasta ahora.</li>
+              <li>• {stats.envios} despachos registrados hasta ahora.</li>
             </ul>
           </div>
 
@@ -432,7 +437,8 @@ export default function Dashboard() {
                 • {pedidosRetrasados.length} pedido(s) marcado(s) como retrasado.
               </li>
               <li>
-                • {enviosPendientes.length} envío(s) pendiente(s) de confirmación.
+                • {enviosPendientes.length} despacho(s) pendiente(s) de
+                confirmación.
               </li>
             </ul>
 
@@ -444,7 +450,7 @@ export default function Dashboard() {
               }}
             >
               *Las alertas se actualizan cada vez que presionas "Actualizar datos"
-              usando la información real de productos, pedidos y envíos.
+              usando la información real de productos, pedidos y despachos.
             </p>
           </div>
         </div>
@@ -454,9 +460,10 @@ export default function Dashboard() {
 }
 
 /* COMPONENTE KPI CARD */
-function StatCard({ title, value, icon, tag, color }) {
+function StatCard({ title, value, icon, tag, color, onClick }) {
   return (
     <div
+      onClick={onClick}
       style={{
         backgroundColor: "#ffffff",
         borderRadius: "14px",
@@ -466,6 +473,22 @@ function StatCard({ title, value, icon, tag, color }) {
         gap: "0.9rem",
         boxShadow: "0 2px 10px rgba(15,23,42,0.06)",
         border: "1px solid #e5e7eb",
+        cursor: onClick ? "pointer" : "default",
+        transition: "transform 0.08s ease, box-shadow 0.08s ease",
+      }}
+      onMouseEnter={(e) => {
+        if (onClick) {
+          e.currentTarget.style.transform = "translateY(-1px)";
+          e.currentTarget.style.boxShadow =
+            "0 4px 14px rgba(15,23,42,0.12)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (onClick) {
+          e.currentTarget.style.transform = "translateY(0)";
+          e.currentTarget.style.boxShadow =
+            "0 2px 10px rgba(15,23,42,0.06)";
+        }
       }}
     >
       <div
