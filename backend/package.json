@@ -20,7 +20,8 @@
     "jsonwebtoken": "^9.0.2",
     "mariadb": "^3.4.5",
     "multer": "^2.0.2",
-    "sequelize": "^6.37.7"
+    "sequelize": "^6.37.7",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "cross-env": "^10.1.0"

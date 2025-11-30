@@ -17,6 +17,19 @@ const storageEnvios = multer.diskStorage({
   },
 });
 
+const fileFilterExcel = (req, file, cb) => {
+  if (file.mimetype.includes("spreadsheet") || file.mimetype.includes("excel") || file.originalname.endsWith(".xlsx")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Solo se permiten archivos Excel (.xlsx)"), false);
+  }
+};
+
+export const uploadExcel = multer({
+  storage: storageEnvios, 
+  fileFilter: fileFilterExcel,
+});
+
 /* === Storage PRODUCTOS (nuevo) === */
 const storageProductos = multer.diskStorage({
   destination: (req, file, cb) => {

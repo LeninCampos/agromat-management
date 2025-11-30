@@ -110,8 +110,6 @@ const PORT = process.env.PORT || 4000;
     await sequelize.authenticate();
     console.log("Conectado a MariaDB");
 
-    // await sequelize.sync({ alter: false }); // si algún día lo necesitan
-
     app.listen(PORT, () => {
       console.log(`Servidor escuchando en http://localhost:${PORT}`);
     });

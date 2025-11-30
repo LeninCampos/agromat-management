@@ -1,12 +1,15 @@
 import { sequelize, Suministro, Proveedor, Suministra, Producto } from "../models/index.js";
 
+
 export const getAllSuministros = async (req, res, next) => {
   try {
     const rows = await Suministro.findAll({
       include: [
         { model: Proveedor, attributes: ["id_proveedor", "nombre_proveedor"] },
-        // Opcional: incluir detalles si quieres verlos en la lista
-        { model: Suministra, include: [Producto] }
+        { 
+          model: Suministra, 
+          include: [{ model: Producto, attributes: ["id_producto", "nombre_producto"] }] 
+        }
       ],
       order: [["id_suministro", "DESC"]],
     });
@@ -84,10 +87,42 @@ export const updateSuministro = async (req, res, next) => {
 };
 
 export const deleteSuministro = async (req, res, next) => {
+  const t = await sequelize.transaction();
   try {
-    const row = await Suministro.findByPk(req.params.id);
-    if (!row) return res.status(404).json({ error: "Suministro no encontrado" });
-    await row.destroy();
-    res.json({ ok: true });
-  } catch (e) { next(e); }
+    const { id } = req.params;
+
+    // 1. Buscar el suministro con sus detalles para saber qué revertir
+    const suministro = await Suministro.findByPk(id, {
+      include: [{ model: Suministra }],
+      transaction: t
+    });
+
+    if (!suministro) {
+      await t.rollback();
+      return res.status(404).json({ error: "Suministro no encontrado" });
+    }
+
+    // 2. (Opcional pero recomendado) Revertir el stock: Restar lo que se había sumado
+    // Si solo quieres borrar el registro sin tocar stock, puedes comentar este bloque 'for'.
+    for (const item of suministro.Suministras) {
+      const producto = await Producto.findByPk(item.id_producto, { transaction: t });
+      if (producto) {
+        // decrementamos el stock porque estamos deshaciendo una entrada
+        await producto.decrement('stock', { by: item.cantidad, transaction: t });
+      }
+    }
+
+    // 3. Borrar los detalles primero (Soluciona el error ForeignKey)
+    await Suministra.destroy({ where: { id_suministro: id }, transaction: t });
+
+    // 4. Borrar la cabecera
+    await suministro.destroy({ transaction: t });
+
+    await t.commit();
+    res.json({ ok: true, message: "Suministro eliminado y stock revertido" });
+
+  } catch (e) {
+    await t.rollback();
+    next(e);
+  }
 };
