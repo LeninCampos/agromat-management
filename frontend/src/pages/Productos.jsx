@@ -221,7 +221,7 @@ export default function Productos() {
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
       <div className="flex items-center justify-between">
-        <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}>🧺 Productos</h2>
+        <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}> Inventario </h2>
         <button
           onClick={openCreate}
           style={{

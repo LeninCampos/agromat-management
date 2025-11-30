@@ -228,6 +228,8 @@ export default function Suministros() {
                 + Registrar Manual
              </button>
         </div>
+        <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}>📥 Entradas</h2>
+        <button onClick={() => setModalOpen(true)} className="btn-primary" style={{ padding: "8px 14px", borderRadius: "6px" }}>+ Registrar Entrada</button>
       </div>
 
       {/* --- TABLA PRINCIPAL --- */}
