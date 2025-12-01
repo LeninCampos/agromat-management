@@ -1,6 +1,6 @@
-// frontend/src/layout/Topbar.jsx
 import { useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { Menu } from "lucide-react"; 
 
 function getInitials(name = "") {
   const parts = name.trim().split(" ").filter(Boolean);
@@ -21,7 +21,7 @@ function getPageTitle(pathname) {
   return "Dashboard general";
 }
 
-export default function Topbar() {
+export default function Topbar({ onToggleSidebar }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,17 +32,8 @@ export default function Topbar() {
     }
     try {
       const u = JSON.parse(raw);
-
-      const displayName =
-        u.nombre_empleado ||
-        u.nombre ||
-        u.nombre_usuario ||
-        u.username ||
-        "Admin";
-
-      const displayRole =
-        u.rol || u.role || (u.es_admin ? "ADMIN" : "USUARIO");
-
+      const displayName = u.nombre_empleado || u.nombre || u.nombre_usuario || u.username || "Admin";
+      const displayRole = u.rol || u.role || (u.es_admin ? "ADMIN" : "USUARIO");
       return { name: displayName, role: (displayRole || "").toUpperCase() };
     } catch {
       return { name: "Admin", role: "ADMIN" };
@@ -67,97 +58,49 @@ export default function Topbar() {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 1.5rem",
+        padding: "0 1rem",
       }}
     >
-      {/* IZQUIERDA: saludo y ruta actual */}
-      <div>
-        <div
-          style={{
-            fontSize: "0.9rem",
-            color: "#6b7280",
-            marginBottom: "0.15rem",
-          }}
-        >
-          Bienvenido, <span style={{ color: "#111827", fontWeight: 600 }}>{name}</span>
-        </div>
-        <div
-          style={{
-            fontSize: "0.8rem",
-            color: "#9ca3af",
-          }}
-        >
-          {pageTitle}
+      <div style={{ display: "flex", alignItems: "center" }}>
+        {/* BOTÓN HAMBURGUESA */}
+        <button className="mobile-menu-btn" onClick={onToggleSidebar}>
+          <Menu size={24} />
+        </button>
+
+        <div>
+          <div style={{ fontSize: "0.9rem", color: "#6b7280" }}>
+            <span style={{ display: "none", "@media (min-width: 640px)": { display: "inline" } }}>
+              Bienvenido, 
+            </span> 
+            <span style={{ color: "#111827", fontWeight: 600 }}> {name}</span>
+          </div>
+          <div style={{ fontSize: "0.8rem", color: "#9ca3af" }}>
+            {pageTitle}
+          </div>
         </div>
       </div>
 
-      {/* DERECHA: perfil + logout */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
-        }}
-      >
-        {/* Badge rol */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
         <span
           style={{
             fontSize: "0.7rem",
-            padding: "2px 10px",
+            padding: "2px 8px",
             borderRadius: "999px",
             background: "#ecfdf3",
             color: "#16a34a",
             border: "1px solid #bbf7d0",
             fontWeight: 600,
-            letterSpacing: "0.06em",
+            display: "inline-block"
           }}
         >
           {role}
         </span>
 
-        {/* Nombre + iniciales */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.6rem",
-          }}
-        >
-          <div
-            style={{
-              width: "34px",
-              height: "34px",
-              borderRadius: "999px",
-              background:
-                "linear-gradient(135deg, #2563eb, #4f46e5, #22c55e)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#f9fafb",
-              fontWeight: 600,
-              fontSize: "0.8rem",
-              boxShadow: "0 0 0 2px #e5e7eb",
-            }}
-          >
-            {initials}
-          </div>
-          <span
-            style={{
-              fontSize: "0.85rem",
-              color: "#111827",
-              fontWeight: 500,
-            }}
-          >
-            {name}
-          </span>
-        </div>
-
-        {/* Botón logout */}
         <button
           onClick={handleLogout}
           style={{
-            marginLeft: "0.75rem",
-            padding: "6px 14px",
+            marginLeft: "0.5rem",
+            padding: "6px 10px",
             borderRadius: "999px",
             border: "1px solid #fecaca",
             background: "#fef2f2",
@@ -165,13 +108,9 @@ export default function Topbar() {
             fontSize: "0.8rem",
             fontWeight: 500,
             cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.35rem",
           }}
         >
-          <span>⟶</span>
-          Cerrar sesión
+          Salir
         </button>
       </div>
     </header>

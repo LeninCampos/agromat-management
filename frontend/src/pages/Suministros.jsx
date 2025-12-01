@@ -280,7 +280,6 @@ export default function Suministros() {
         </table>
       </div>
 
-      // ...todo el código que ya tienes arriba se queda igual...
 
 {/* --- MODAL DETALLES DE SUMINISTRO --- */}
 {detailsOpen && selectedSuministro && (
