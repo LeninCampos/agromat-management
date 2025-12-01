@@ -1,15 +1,16 @@
+// backend/src/routes/suministra.js
 import express from "express";
 import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   validateSuministraCreate,
   validateSuministraUpdate,
-  validateSuministraDelete
+  validateSuministraDelete,
 } from "../middleware/validateDetalles.js";
 import {
   getAllSuministra,
   createSuministra,
   updateSuministra,
-  deleteSuministra
+  deleteSuministra,
 } from "../controllers/suministra.controller.js";
 
 const router = express.Router();

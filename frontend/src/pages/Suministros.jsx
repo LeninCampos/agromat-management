@@ -280,67 +280,145 @@ export default function Suministros() {
         </table>
       </div>
 
-      {/* --- MODAL DETALLES DE SUMINISTRO --- */}
-      {detailsOpen && selectedSuministro && (
-        <div className="agromat-modal-backdrop">
-            <div className="agromat-modal-card" style={{ maxWidth: "650px" }}>
-                <div className="agromat-modal-header">
-                    <div>
-                        <h2>Detalles Suministro #{selectedSuministro.id_suministro}</h2>
-                        <p style={{marginTop: "4px"}}>
-                            <strong>Proveedor:</strong> {selectedSuministro.Proveedor?.nombre_proveedor} <br/>
-                            <span style={{fontSize:"0.85rem", color:"#666"}}>
-                                {selectedSuministro.fecha_llegada} a las {selectedSuministro.hora_llegada}
-                            </span>
-                        </p>
-                    </div>
-                    <button onClick={() => setDetailsOpen(false)} className="agromat-modal-close">✕</button>
-                </div>
+      // ...todo el código que ya tienes arriba se queda igual...
 
-                <div className="agromat-modal-body" style={{ marginTop: "15px" }}>
-                    <div style={{ maxHeight: "300px", overflowY: "auto", border: "1px solid #eee", borderRadius: "8px" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
-                            <thead style={{ background: "#f3f4f6", position: "sticky", top: 0 }}>
-                                <tr>
-                                    <th style={{ padding: "8px", textAlign: "left" }}>ID Prod.</th>
-                                    <th style={{ padding: "8px", textAlign: "left" }}>Producto</th>
-                                    <th style={{ padding: "8px", textAlign: "right" }}>Cantidad</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {/* La relación en el modelo Suministro -> Suministra (items) */}
-                                {selectedSuministro.Suministras && selectedSuministro.Suministras.length > 0 ? (
-                                    selectedSuministro.Suministras.map((item, idx) => (
-                                        <tr key={idx} style={{ borderBottom: "1px solid #f9f9f9" }}>
-                                            <td style={{ padding: "8px" }}>{item.id_producto}</td>
-                                            <td style={{ padding: "8px" }}>
-                                                {item.Producto?.nombre_producto || "Producto no encontrado"}
-                                            </td>
-                                            <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>
-                                                {item.cantidad}
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={3} style={{ padding: "15px", textAlign: "center", color: "#888" }}>
-                                            No hay detalles disponibles para este suministro.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div className="agromat-modal-footer">
-                    <button type="button" className="agromat-btn-secondary" onClick={() => setDetailsOpen(false)}>
-                        Cerrar
-                    </button>
-                </div>
-            </div>
+{/* --- MODAL DETALLES DE SUMINISTRO --- */}
+{detailsOpen && selectedSuministro && (
+  <div className="agromat-modal-backdrop">
+    <div className="agromat-modal-card" style={{ maxWidth: "650px" }}>
+      <div className="agromat-modal-header">
+        <div>
+          <h2>Detalles Suministro #{selectedSuministro.id_suministro}</h2>
+          <p style={{ marginTop: "4px" }}>
+            <strong>Proveedor:</strong>{" "}
+            {selectedSuministro.Proveedor?.nombre_proveedor} <br />
+            <span style={{ fontSize: "0.85rem", color: "#666" }}>
+              {selectedSuministro.fecha_llegada} a las{" "}
+              {selectedSuministro.hora_llegada}
+            </span>
+          </p>
         </div>
-      )}
+        <button
+          onClick={() => setDetailsOpen(false)}
+          className="agromat-modal-close"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="agromat-modal-body" style={{ marginTop: "15px" }}>
+        <div
+          style={{
+            maxHeight: "300px",
+            overflowY: "auto",
+            border: "1px solid #eee",
+            borderRadius: "8px",
+          }}
+        >
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: "0.9rem",
+            }}
+          >
+            <thead
+              style={{ background: "#f3f4f6", position: "sticky", top: 0 }}
+            >
+              <tr>
+                {/* 👇 NUEVA COLUMNA FOTO */}
+                <th style={{ padding: "8px", textAlign: "left" }}>
+                  Foto
+                </th>
+                <th style={{ padding: "8px", textAlign: "left" }}>
+                  ID Prod.
+                </th>
+                <th style={{ padding: "8px", textAlign: "left" }}>
+                  Producto
+                </th>
+                <th style={{ padding: "8px", textAlign: "right" }}>
+                  Cantidad
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedSuministro.Suministras &&
+              selectedSuministro.Suministras.length > 0 ? (
+                selectedSuministro.Suministras.map((item, idx) => (
+                  <tr
+                    key={idx}
+                    style={{ borderBottom: "1px solid #f9f9f9" }}
+                  >
+                    {/* 👇 CELDA DE FOTO */}
+                    <td style={{ padding: "8px" }}>
+                      {item.Producto?.imagen_url ? (
+                        <img
+                          src={item.Producto.imagen_url}
+                          alt={item.Producto.nombre_producto}
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            objectFit: "cover",
+                            borderRadius: "6px",
+                            background: "#f3f4f6",
+                          }}
+                        />
+                      ) : (
+                        <span style={{ color: "#999", fontSize: "0.8rem" }}>
+                          Sin foto
+                        </span>
+                      )}
+                    </td>
+
+                    <td style={{ padding: "8px" }}>{item.id_producto}</td>
+                    <td style={{ padding: "8px" }}>
+                      {item.Producto?.nombre_producto ||
+                        "Producto no encontrado"}
+                    </td>
+                    <td
+                      style={{
+                        padding: "8px",
+                        textAlign: "right",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {item.cantidad}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={4}
+                    style={{
+                      padding: "15px",
+                      textAlign: "center",
+                      color: "#888",
+                    }}
+                  >
+                    No hay detalles disponibles para este suministro.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="agromat-modal-footer">
+        <button
+          type="button"
+          className="agromat-btn-secondary"
+          onClick={() => setDetailsOpen(false)}
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* --- MODAL REGISTRO MANUAL ... (resto igual) */}
 
       {/* --- MODAL REGISTRO MANUAL (Sin cambios mayores) --- */}
       {modalOpen && (

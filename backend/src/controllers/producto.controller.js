@@ -5,7 +5,42 @@ import {
   Proveedor,
   SeUbica,
   Zona,
+  Contiene,
+  Suministra,
 } from "../models/index.js";
+
+/* =======================
+   HELPER: borrar producto por id usando una transacción
+   (borra ubicaciones, líneas de pedido y suministros)
+======================= */
+async function deleteProductoById(id, t) {
+  const producto = await Producto.findByPk(id, { transaction: t });
+  if (!producto) {
+    // Si no existe, no hacemos nada (evitamos tronar el bulk)
+    return;
+  }
+
+  // 1️⃣ Borrar ubicaciones del producto
+  await SeUbica.destroy({
+    where: { id_producto: id },
+    transaction: t,
+  });
+
+  // 2️⃣ Borrar líneas de pedido (contiene)
+  await Contiene.destroy({
+    where: { id_producto: id },
+    transaction: t,
+  });
+
+  // 3️⃣ Borrar registros de suministros (suministra)
+  await Suministra.destroy({
+    where: { id_producto: id },
+    transaction: t,
+  });
+
+  // 4️⃣ Borrar el producto
+  await producto.destroy({ transaction: t });
+}
 
 // =======================
 // GET: todos los productos
@@ -121,7 +156,6 @@ export const createProducto = async (req, res, next) => {
     }
 
     // 2) Manejar la ubicación en seubica
-    //    El frontend SIEMPRE manda el campo zona (null o { id_zona })
     if (zona !== undefined) {
       // Borro cualquier ubicación previa de ese producto
       await SeUbica.destroy({
@@ -208,6 +242,7 @@ export const updateProducto = async (req, res, next) => {
 
 // =======================
 // DELETE /api/productos/:id
+// Borra producto + ubicaciones + movimientos relacionados
 // =======================
 export const deleteProducto = async (req, res, next) => {
   const t = await sequelize.transaction();
@@ -215,24 +250,56 @@ export const deleteProducto = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const producto = await Producto.findByPk(id, { transaction: t });
-    if (!producto) {
-      await t.rollback();
-      return res.status(404).json({ error: "Producto no encontrado" });
-    }
+    await deleteProductoById(id, t);
 
-    // Borrar ubicaciones primero
-    await SeUbica.destroy({
-      where: { id_producto: id },
-      transaction: t,
-    });
-
-    await producto.destroy({ transaction: t });
     await t.commit();
 
-    res.json({ ok: true });
+    return res.json({
+      ok: true,
+      message:
+        "Producto eliminado correctamente (incluyendo movimientos relacionados).",
+    });
   } catch (err) {
+    console.error("ERROR EN deleteProducto:", err);
     await t.rollback();
-    next(err);
+    return res
+      .status(500)
+      .json({ error: "No se pudo eliminar el producto (ver servidor)." });
+  }
+};
+
+// =======================
+// DELETE /api/productos  (borrado masivo)
+// Body: { ids: ["03000577","12312311", ...] }
+// =======================
+export const bulkDeleteProductos = async (req, res, next) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      await t.rollback();
+      return res
+        .status(400)
+        .json({ error: "Debes enviar un arreglo de ids" });
+    }
+
+    for (const id of ids) {
+      await deleteProductoById(id, t);
+    }
+
+    await t.commit();
+
+    return res.json({
+      ok: true,
+      message: `Se eliminaron ${ids.length} productos (incluyendo movimientos relacionados).`,
+    });
+  } catch (err) {
+    console.error("ERROR EN bulkDeleteProductos:", err);
+    await t.rollback();
+    return res
+      .status(500)
+      .json({ error: "No se pudo eliminar en bloque (ver servidor)." });
   }
 };

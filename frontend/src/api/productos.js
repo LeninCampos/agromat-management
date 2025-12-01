@@ -19,6 +19,14 @@ export const createProducto = (data) =>
 export const updateProducto = (id, data) =>
   axios.put(`${API_URL}/${id}`, data, { headers: getAuthHeaders() });
 
-// DELETE eliminar producto
+// DELETE eliminar producto (uno)
 export const deleteProducto = (id) =>
   axios.delete(`${API_URL}/${id}`, { headers: getAuthHeaders() });
+
+// DELETE eliminar productos múltiples
+// Body: { ids: [...] }
+export const bulkDeleteProductos = (ids) =>
+  axios.delete(API_URL, {
+    headers: getAuthHeaders(),
+    data: { ids },
+  });

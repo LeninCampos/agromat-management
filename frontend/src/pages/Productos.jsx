@@ -8,6 +8,7 @@ import {
   createProducto,
   updateProducto,
   deleteProducto,
+  bulkDeleteProductos, // 👈 nuevo
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
 
@@ -33,6 +34,10 @@ export default function Productos() {
   const [editingId, setEditingId] = useState(null);
   const [proveedores, setProveedores] = useState([]);
   const [zonas, setZonas] = useState([]);
+
+  // 👉 selección múltiple
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const fileInputRef = useRef(null);
 
@@ -86,6 +91,9 @@ export default function Productos() {
       });
 
       setItems(normalizados);
+      // al recargar, limpiamos selección
+      setSelectedIds([]);
+      setSelectionMode(false);
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No pude cargar los datos", "error");
@@ -162,6 +170,32 @@ export default function Productos() {
     }
   };
 
+  // 🔁 selección de una fila
+  const toggleSelect = (id_producto) => {
+    setSelectedIds((prev) =>
+      prev.includes(id_producto)
+        ? prev.filter((id) => id !== id_producto)
+        : [...prev, id_producto]
+    );
+  };
+
+  // seleccionar/deseleccionar todos los filtrados
+  const toggleSelectAllVisible = () => {
+    const visibleIds = filtered.map((p) => p.id_producto);
+    const allSelected = visibleIds.every((id) => selectedIds.includes(id));
+
+    if (allSelected) {
+      // quitar todos los visibles
+      setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+    } else {
+      // agregar los que falten
+      setSelectedIds((prev) => [
+        ...prev,
+        ...visibleIds.filter((id) => !prev.includes(id)),
+      ]);
+    }
+  };
+
   const remove = async (row) => {
     const result = await Swal.fire({
       title: "¿Eliminar producto?",
@@ -178,6 +212,41 @@ export default function Productos() {
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No pude eliminar", "error");
+    }
+  };
+
+  // 🗑️ borrado masivo
+  const removeSelected = async () => {
+    if (selectedIds.length === 0) {
+      return Swal.fire(
+        "Nada seleccionado",
+        "Selecciona al menos un producto",
+        "info"
+      );
+    }
+
+    const result = await Swal.fire({
+      title: `¿Eliminar ${selectedIds.length} productos?`,
+      text: "Se eliminarán también sus movimientos relacionados.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await bulkDeleteProductos(selectedIds);
+      Swal.fire("Eliminados", "Productos eliminados correctamente", "success");
+      await load();
+    } catch (e) {
+      console.error(e);
+      Swal.fire(
+        "Error",
+        "No pude eliminar los productos seleccionados",
+        "error"
+      );
     }
   };
 
@@ -220,23 +289,61 @@ export default function Productos() {
 
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
+      {/* HEADER */}
       <div className="flex items-center justify-between">
         <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}> Inventario </h2>
-        <button
-          onClick={openCreate}
-          style={{
-            background: "#4F46E5",
-            color: "white",
-            padding: "8px 14px",
-            borderRadius: "6px",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          + Nuevo
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            onClick={() => setSelectionMode((v) => !v)}
+            style={{
+              background: selectionMode ? "#e5e7eb" : "#f3f4f6",
+              color: "#111827",
+              padding: "8px 12px",
+              borderRadius: "6px",
+              border: "1px solid #d1d5db",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+            }}
+          >
+            {selectionMode ? "Salir de selección" : "Seleccionar múltiples"}
+          </button>
+
+          {selectionMode && (
+            <button
+              onClick={removeSelected}
+              disabled={selectedIds.length === 0}
+              style={{
+                background:
+                  selectedIds.length === 0 ? "#fecaca" : "#DC2626",
+                color: "white",
+                padding: "8px 14px",
+                borderRadius: "6px",
+                border: "none",
+                cursor: selectedIds.length === 0 ? "not-allowed" : "pointer",
+                fontSize: "0.85rem",
+              }}
+            >
+              Eliminar seleccionados ({selectedIds.length})
+            </button>
+          )}
+
+          <button
+            onClick={openCreate}
+            style={{
+              background: "#4F46E5",
+              color: "white",
+              padding: "8px 14px",
+              borderRadius: "6px",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            + Nuevo
+          </button>
+        </div>
       </div>
 
+      {/* BUSCADOR + RECARGAR */}
       <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
         <input
           value={q}
@@ -263,6 +370,7 @@ export default function Productos() {
         </button>
       </div>
 
+      {/* TABLA */}
       <div
         style={{
           background: "white",
@@ -274,6 +382,20 @@ export default function Productos() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead style={{ background: "#f9fafb", color: "#555" }}>
             <tr>
+              {selectionMode && (
+                <th style={{ padding: "10px", textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    onChange={toggleSelectAllVisible}
+                    checked={
+                      filtered.length > 0 &&
+                      filtered.every((p) =>
+                        selectedIds.includes(p.id_producto)
+                      )
+                    }
+                  />
+                </th>
+              )}
               <th style={{ padding: "10px" }}>Foto</th>
               <th style={{ padding: "10px" }}>ID</th>
               <th style={{ padding: "10px" }}>Nombre</th>
@@ -286,13 +408,19 @@ export default function Productos() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>
+                <td
+                  colSpan={selectionMode ? 8 : 7}
+                  style={{ textAlign: "center", padding: "20px" }}
+                >
                   Cargando...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>
+                <td
+                  colSpan={selectionMode ? 8 : 7}
+                  style={{ textAlign: "center", padding: "20px" }}
+                >
                   Sin resultados
                 </td>
               </tr>
@@ -302,6 +430,20 @@ export default function Productos() {
                   key={row.id_producto}
                   style={{ borderTop: "1px solid #eee" }}
                 >
+                  {selectionMode && (
+                    <td
+                      style={{
+                        padding: "10px",
+                        textAlign: "center",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(row.id_producto)}
+                        onChange={() => toggleSelect(row.id_producto)}
+                      />
+                    </td>
+                  )}
                   <td style={{ padding: "10px" }}>
                     {row.imagen_url ? (
                       <img
