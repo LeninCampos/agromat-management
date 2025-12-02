@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/empleados";
+const API_URL = "https://agromatgranjas.com/api/empleados";
 
 // 👇 1. Función para obtener el token
 function getAuthHeaders() {

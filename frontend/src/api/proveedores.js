@@ -1,7 +1,7 @@
 // src/api/proveedores.js
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/proveedores";
+const API_URL = "https://agromatgranjas.com/api/proveedores";
 
 // Obtiene el token del login (si lo necesitas después)
 function getAuthHeaders() {

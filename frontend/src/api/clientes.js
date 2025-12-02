@@ -1,7 +1,7 @@
 // src/api/clientes.js
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/clientes";
+const API_URL = "https://agromatgranjas.com/api/clientes";
 
 function getAuthHeaders() {
   const token = localStorage.getItem("token");

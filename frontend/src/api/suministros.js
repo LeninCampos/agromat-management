@@ -1,7 +1,7 @@
 // frontend/src/api/suministros.js
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/suministro"; // Ojo: en tu router es 'suministro' (singular)
+const API_URL = "https://agromatgranjas.com/api/suministro";
 
 function getAuthHeaders() {
   const token = localStorage.getItem("token");

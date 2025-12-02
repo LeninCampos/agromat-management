@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/productos";
+const API_URL = "https://agromatgranjas.com/api/productos";
 
 // 🧩 obtener token desde localStorage (o el contexto de login)
 function getAuthHeaders() {

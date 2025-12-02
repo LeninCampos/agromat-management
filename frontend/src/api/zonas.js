@@ -1,7 +1,7 @@
 // frontend/src/api/zonas.js
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/zonas";
+const API_URL = "https://agromatgranjas.com/api/zonas";
 
 function getAuthHeaders() {
   const token = localStorage.getItem("token");
