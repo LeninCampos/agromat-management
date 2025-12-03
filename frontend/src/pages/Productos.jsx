@@ -10,7 +10,7 @@ import {
   deleteProducto,
   bulkDeleteProductos, // 👈 nuevo
 } from "../api/productos";
-import { uploadProductoImagen } from "../api/upload.js";
+import { uploadProductoImagen } from "./api/upload.js";
 
 const BACKEND_URL = "https://agromatgranjas.com";
 
