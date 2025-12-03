@@ -3,29 +3,33 @@
 # -----------------------
 node_modules/
 .DS_Store
+**/.DS_Store
 Thumbs.db
 
 # -----------------------
 # SEGURIDAD (CRÍTICO)
 # -----------------------
-# Ignora archivos de variables de entorno en front y back
+# Archivos de entorno
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
 
 # -----------------------
 # FRONTEND (React/Vite)
 # -----------------------
 dist/
 dist-ssr/
+build/
+.cache/
 coverage/
 
 # -----------------------
 # LOGS (General)
 # -----------------------
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -38,7 +42,7 @@ lerna-debug.log*
 # -----------------------
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 *.suo
 *.ntvs*
 *.njsproj

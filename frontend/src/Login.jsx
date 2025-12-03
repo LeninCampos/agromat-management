@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 
 // 👈 usamos el axios configurado
-import api from "../api/axios";
+import api from "./api/axios";
 
 // si así te funcionaba antes, déjalo igual
 import agromatLogo from "./assets/agromat-logo.png";

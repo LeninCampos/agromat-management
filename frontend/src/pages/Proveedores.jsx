@@ -204,7 +204,7 @@ export default function Proveedores() {
               <th style={{ padding: "10px" }}>Nombre</th>
               <th style={{ padding: "10px" }}>Correo</th>
               <th style={{ padding: "10px" }}>Teléfono</th>
-              <th style={{ padding: "10px" }}>RFC</th>
+              <th style={{ padding: "10px" }}>CUIT</th>
               <th style={{ padding: "10px" }}>Acciones</th>
             </tr>
           </thead>

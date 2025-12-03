@@ -1,13 +1,7 @@
+// src/layout/Topbar.jsx
 import { useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Menu } from "lucide-react"; 
-
-function getInitials(name = "") {
-  const parts = name.trim().split(" ").filter(Boolean);
-  if (parts.length === 0) return "US";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}
+import { Menu } from "lucide-react";
 
 function getPageTitle(pathname) {
   if (pathname.startsWith("/app/productos")) return "Productos";
@@ -21,26 +15,29 @@ function getPageTitle(pathname) {
   return "Dashboard general";
 }
 
-export default function Topbar({ onToggleSidebar }) {
+export default function Topbar({ onToggleSidebar = () => {} }) {
   const navigate = useNavigate();
   const location = useLocation();
 
   const { name, role } = useMemo(() => {
     const raw = localStorage.getItem("user");
-    if (!raw) {
-      return { name: "Admin", role: "ADMIN" };
-    }
+    if (!raw) return { name: "Admin", role: "ADMIN" };
+
     try {
       const u = JSON.parse(raw);
-      const displayName = u.nombre_empleado || u.nombre || u.nombre_usuario || u.username || "Admin";
-      const displayRole = u.rol || u.role || (u.es_admin ? "ADMIN" : "USUARIO");
-      return { name: displayName, role: (displayRole || "").toUpperCase() };
+      return {
+        name:
+          u.nombre_empleado ||
+          u.nombre ||
+          u.nombre_usuario ||
+          "Admin",
+        role: (u.rol || "ADMIN").toUpperCase(),
+      };
     } catch {
       return { name: "Admin", role: "ADMIN" };
     }
   }, []);
 
-  const initials = getInitials(name);
   const pageTitle = getPageTitle(location.pathname);
 
   const handleLogout = () => {
@@ -52,45 +49,54 @@ export default function Topbar({ onToggleSidebar }) {
   return (
     <header
       style={{
-        height: "56px",
+        height: "60px",
+        minHeight: "60px",
         borderBottom: "1px solid #e5e7eb",
         background: "#ffffff",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 1rem",
+        padding: "0 1.5rem",
+        boxShadow: "0 1px 3px rgba(15,23,42,0.04)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center" }}>
-        {/* BOTÓN HAMBURGUESA */}
-        <button className="mobile-menu-btn" onClick={onToggleSidebar}>
-          <Menu size={24} />
+      {/* IZQUIERDA: Hamburguesa + texto */}
+      <div style={{ display: "flex", alignItems: "center", gap: "1rem", minWidth: 0, flex: 1 }}>
+        <button
+          className="mobile-menu-btn"
+          type="button"
+          aria-label="Abrir menú de navegación"
+          onClick={onToggleSidebar}
+        >
+          <Menu size={22} />
         </button>
 
-        <div>
-          <div style={{ fontSize: "0.9rem", color: "#6b7280" }}>
-            <span style={{ display: "none", "@media (min-width: 640px)": { display: "inline" } }}>
-              Bienvenido, 
-            </span> 
-            <span style={{ color: "#111827", fontWeight: 600 }}> {name}</span>
+        <div style={{ overflow: "hidden" }}>
+          <div style={{ fontSize: "0.9rem", color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            Bienvenido,
+            <span style={{ color: "#111827", fontWeight: 600 }}>
+              {" "}
+              {name}
+            </span>
           </div>
-          <div style={{ fontSize: "0.8rem", color: "#9ca3af" }}>
+          <div style={{ fontSize: "0.8rem", color: "#9ca3af", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {pageTitle}
           </div>
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+      {/* DERECHA: rol + botón salir */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
         <span
           style={{
             fontSize: "0.7rem",
-            padding: "2px 8px",
+            padding: "4px 10px",
             borderRadius: "999px",
             background: "#ecfdf3",
             color: "#16a34a",
             border: "1px solid #bbf7d0",
             fontWeight: 600,
-            display: "inline-block"
+            whiteSpace: "nowrap",
           }}
         >
           {role}
@@ -99,8 +105,7 @@ export default function Topbar({ onToggleSidebar }) {
         <button
           onClick={handleLogout}
           style={{
-            marginLeft: "0.5rem",
-            padding: "6px 10px",
+            padding: "6px 12px",
             borderRadius: "999px",
             border: "1px solid #fecaca",
             background: "#fef2f2",
@@ -108,6 +113,14 @@ export default function Topbar({ onToggleSidebar }) {
             fontSize: "0.8rem",
             fontWeight: 500,
             cursor: "pointer",
+            transition: "all 0.15s ease",
+            whiteSpace: "nowrap",
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.background = "#fee2e2";
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.background = "#fef2f2";
           }}
         >
           Salir

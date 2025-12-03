@@ -1,10 +1,19 @@
+// src/layout/Sidebar.jsx
 import { NavLink } from "react-router-dom";
 import {
-  Package, Users, ShoppingBag, Truck, Building2, UserCog, MapPin, LayoutDashboard, Archive
+  Package,
+  Users,
+  ShoppingBag,
+  Truck,
+  Building2,
+  UserCog,
+  MapPin,
+  LayoutDashboard,
+  Archive,
 } from "lucide-react";
 import agromatLogo from "../assets/agromat-logo.png";
 
-export default function Sidebar({ onClose }) {
+export default function Sidebar({ isCollapsed = false }) {
   const links = [
     { name: "Dashboard", icon: <LayoutDashboard size={18} />, to: "/app/dashboard" },
     { name: "Proveedores", icon: <Building2 size={18} />, to: "/app/proveedores" },
@@ -22,49 +31,157 @@ export default function Sidebar({ onClose }) {
       style={{
         width: "100%",
         height: "100%",
-        background: "radial-gradient(circle at top left, #1d2438 0, #020617 55%, #020617 100%)",
+        background:
+          "radial-gradient(circle at top left, #1d2438 0, #020617 55%, #020617 100%)",
         color: "#e5e7eb",
         borderRight: "1px solid rgba(15,23,42,0.9)",
         display: "flex",
         flexDirection: "column",
-        padding: "1.25rem 1rem 1.5rem",
-        overflowY: "auto"
+        padding: isCollapsed ? "1.5rem 0.75rem" : "1.5rem",
+        overflowY: "auto",
+        overflowX: "hidden",
+        transition: "padding 0.3s ease",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.75rem", padding: "0.25rem 0.5rem" }}>
-        <div style={{ width: "40px", height: "40px", borderRadius: "999px", background: "rgba(15,23,42,0.85)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", boxShadow: "0 0 0 1px rgba(148,163,184,0.25)" }}>
-          <img src={agromatLogo} alt="Agromat" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      {/* Logo y título */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          marginBottom: "2rem",
+          justifyContent: isCollapsed ? "center" : "flex-start",
+        }}
+      >
+        <div
+          style={{
+            width: "40px",
+            height: "40px",
+            minWidth: "40px",
+            borderRadius: "50%",
+            background: "rgba(15,23,42,0.85)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            boxShadow: "0 0 0 1px rgba(148,163,184,0.25)",
+          }}
+        >
+          <img
+            src={agromatLogo}
+            alt="Agromat"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         </div>
-        <div>
-          <div style={{ fontSize: "0.95rem", fontWeight: 600, letterSpacing: "0.03em" }}>Agromat</div>
-          <div style={{ fontSize: "0.75rem", color: "#9ca3af" }}>Panel administrativo</div>
-        </div>
+        {!isCollapsed && (
+          <div style={{ overflow: "hidden" }}>
+            <div
+              style={{
+                fontSize: "1rem",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              Agromat
+            </div>
+            <div
+              style={{
+                fontSize: "0.8rem",
+                color: "#9ca3af",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              Panel administrativo
+            </div>
+          </div>
+        )}
       </div>
 
-      <div style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "#6b7280", marginBottom: "0.75rem", paddingLeft: "0.4rem" }}>
-        Navegación
-      </div>
+      {/* Título de sección */}
+      {!isCollapsed && (
+        <div
+          style={{
+            fontSize: "0.75rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.16em",
+            color: "#6b7280",
+            marginBottom: "0.85rem",
+            fontWeight: 600,
+          }}
+        >
+          Navegación
+        </div>
+      )}
 
-      <nav style={{ display: "flex", flexDirection: "column", gap: "0.35rem", flex: 1 }}>
+      {/* Links de navegación */}
+      <nav
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.4rem",
+          flex: 1,
+        }}
+      >
         {links.map((link) => (
           <NavLink
             key={link.name}
             to={link.to}
-            onClick={onClose}
-            className={({ isActive }) => "sidebar-link" + (isActive ? " sidebar-link-active" : "")}
+            className={({ isActive }) =>
+              "sidebar-link" + (isActive ? " sidebar-link-active" : "")
+            }
+            style={{
+              justifyContent: isCollapsed ? "center" : "flex-start",
+              padding: isCollapsed ? "0.55rem" : "0.55rem 0.9rem",
+            }}
+            title={isCollapsed ? link.name : ""}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "22px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "22px",
+                minWidth: "22px",
+              }}
+            >
               {link.icon}
             </div>
-            <span>{link.name}</span>
+            {!isCollapsed && (
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {link.name}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      <div style={{ marginTop: "1.75rem", paddingTop: "0.75rem", borderTop: "1px dashed rgba(51,65,85,0.9)", fontSize: "0.7rem", color: "#6b7280" }}>
-        <div style={{ marginBottom: "0.15rem" }}>© {new Date().getFullYear()} Agromat</div>
-        <div>Inventario inteligente</div>
-      </div>
+      {/* Footer */}
+      {!isCollapsed && (
+        <div
+          style={{
+            marginTop: "auto",
+            paddingTop: "1rem",
+            borderTop: "1px dashed rgba(51,65,85,0.9)",
+            fontSize: "0.7rem",
+            color: "#6b7280",
+          }}
+        >
+          <div style={{ marginBottom: "0.25rem" }}>
+            © {new Date().getFullYear()} Agromat
+          </div>
+          <div>Inventario inteligente</div>
+        </div>
+      )}
     </aside>
   );
 }
