@@ -11,7 +11,7 @@ import { getProductos } from "../api/productos";
 import { getClientes } from "../api/clientes";
 import { getEmpleados } from "../api/empleados";
 
-const BACKEND_URL = "http://localhost:4000";
+const BACKEND_URL = "https://agromatgranjas.com";
 
 // ✅ SOLO ESTOS STATUS
 const STATUS_OPTIONS = ["Pendiente", "En proceso", "Completado", "Cancelado"];

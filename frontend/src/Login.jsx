@@ -1,11 +1,13 @@
-// frontend/src/Login.jsx
+// frontend/src/pages/Login.jsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import Swal from "sweetalert2";
-import agromatLogo from "./assets/agromat-logo.png";
 
-const BACKEND_URL = "http://localhost:4000";
+// 👈 usamos el axios configurado
+import api from "../api/axios";
+
+// si así te funcionaba antes, déjalo igual
+import agromatLogo from "./assets/agromat-logo.png";
 
 export default function Login() {
   const [correo, setCorreo] = useState("");
@@ -20,7 +22,8 @@ export default function Login() {
     try {
       setLoading(true);
 
-      const { data } = await axios.post(`${BACKEND_URL}/api/auth/login`, {
+      // 👇 YA NO localhost, solo la ruta relativa
+      const { data } = await api.post("/auth/login", {
         correo,
         password,
       });
@@ -128,7 +131,6 @@ export default function Login() {
             marginBottom: "1.4rem",
           }}
         >
-          {/* LOGO HORIZONTAL GRANDE */}
           <div
             style={{
               width: "180px",
@@ -222,7 +224,7 @@ export default function Login() {
               fontWeight: 500,
             }}
           >
-            Productos Agronomos 
+            Productos Agronomos
           </span>
         </div>
 

@@ -12,7 +12,7 @@ import {
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
 
-const BACKEND_URL = "http://localhost:4000";
+const BACKEND_URL = "https://agromatgranjas.com";
 
 const emptyForm = {
   id_producto: "",
