@@ -2,7 +2,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "https://agromatgranjas.com/api", // 👈 NADA de localhost aquí
+  baseURL: "/api",
 });
 
 // Adjuntar token automáticamente
