@@ -2,10 +2,10 @@
 import express from "express";
 import { verificarAuth } from "../middleware/verificarAuth.js";
 import { uploadProducto } from "../middleware/upload.js";
+const API_URL = "https://agromatgranjas.com/api/upload";
 
 const router = express.Router();
 
-// Ruta de prueba: http://localhost:4000/api/upload/ping
 router.get("/ping", (req, res) => {
   res.json({ ok: true, msg: "upload router vivo" });
 });
