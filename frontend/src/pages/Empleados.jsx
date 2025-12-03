@@ -13,6 +13,7 @@ const emptyForm = {
   correo: "",
   fecha_alta: "",
   password: "",
+  rol: "empleado",
 };
 
 export default function Empleados() {
@@ -69,6 +70,7 @@ export default function Empleados() {
       numero_empleado: row.numero_empleado ?? "",
       correo: row.correo ?? "",
       fecha_alta: row.fecha_alta ?? "",
+      rol: row.rol ?? "empleado",
     });
     setModalOpen(true);
   };
@@ -83,6 +85,7 @@ export default function Empleados() {
         numero_empleado: form.numero_empleado,
         correo: form.correo,
         fecha_alta: form.fecha_alta,
+        rol: form.rol,
         ...(form.password ? { password: form.password } : {}),
       };
 
@@ -187,6 +190,7 @@ export default function Empleados() {
               <th style={{ padding: "10px" }}>Nombre</th>
               <th style={{ padding: "10px" }}>Número</th>
               <th style={{ padding: "10px" }}>Correo</th>
+              <th style={{ padding: "10px" }}>Rol</th>
               <th style={{ padding: "10px" }}>Fecha Alta</th>
               <th style={{ padding: "10px", textAlign: "center" }}>Acciones</th>
             </tr>
@@ -195,13 +199,13 @@ export default function Empleados() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
+                <td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>
                   Cargando…
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
+                <td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>
                   Sin resultados
                 </td>
               </tr>
@@ -212,6 +216,18 @@ export default function Empleados() {
                   <td style={{ padding: "10px" }}>{row.nombre_empleado}</td>
                   <td style={{ padding: "10px" }}>{row.numero_empleado}</td>
                   <td style={{ padding: "10px" }}>{row.correo}</td>
+                  <td style={{ padding: "10px" }}>
+                    <span style={{
+                      background: row.rol === 'admin' ? '#10B981' : '#6B7280',
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      textTransform: 'uppercase'
+                    }}>
+                      {row.rol}
+                    </span>
+                  </td>
                   <td style={{ padding: "10px" }}>{row.fecha_alta}</td>
 
                   <td style={{ padding: "10px", textAlign: "center" }}>
@@ -285,7 +301,7 @@ export default function Empleados() {
                 setForm((f) => ({ ...f, nombre_empleado: e.target.value }))
               }
               required
-              style={{ width: "100%", marginBottom: "10px" }}
+              style={{ width: "100%", marginBottom: "10px", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
             />
 
             <label>Número empleado:</label>
@@ -295,7 +311,7 @@ export default function Empleados() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, numero_empleado: e.target.value }))
               }
-              style={{ width: "100%", marginBottom: "10px" }}
+              style={{ width: "100%", marginBottom: "10px", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
             />
 
             <label>Correo:</label>
@@ -305,8 +321,9 @@ export default function Empleados() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, correo: e.target.value }))
               }
-              style={{ width: "100%", marginBottom: "10px" }}
+              style={{ width: "100%", marginBottom: "10px", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
             />
+
             <label>Contraseña:</label>
             <input
               type="password"
@@ -314,8 +331,26 @@ export default function Empleados() {
               onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
               placeholder={editingId ? "Dejar en blanco para no cambiar" : "Mínimo 6 caracteres"}
               required={!editingId}
-              style={{ width: "100%", marginBottom: "10px" }}
+              style={{ width: "100%", marginBottom: "10px", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
             />
+
+            <label>Rol:</label>
+            <select
+              value={form.rol}
+              onChange={(e) => setForm((f) => ({ ...f, rol: e.target.value }))}
+              required
+              style={{ 
+                width: "100%", 
+                marginBottom: "10px",
+                padding: "8px",
+                borderRadius: "6px",
+                border: "1px solid #ddd"
+              }}
+            >
+              <option value="empleado">Empleado</option>
+              <option value="admin">Administrador</option>
+            </select>
+
             <label>Fecha alta:</label>
             <input
               type="date"
@@ -323,7 +358,7 @@ export default function Empleados() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, fecha_alta: e.target.value }))
               }
-              style={{ width: "100%", marginBottom: "10px" }}
+              style={{ width: "100%", marginBottom: "10px", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
             />
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
