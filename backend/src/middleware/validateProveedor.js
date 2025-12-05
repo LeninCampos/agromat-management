@@ -19,7 +19,7 @@ const commonValidations = [
     .isLength({ max: 20 }).withMessage("Máximo 20 caracteres"),
 
   body("cuit")
-    .optional().trim()
+    .optional({ values: "falsy" }).trim()
     .matches(/^[0-9\-]+$/).withMessage("El CUIT solo debe contener números y guiones"),
 
   body("nombre_contacto")

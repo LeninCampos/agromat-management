@@ -29,7 +29,7 @@ export default function Productos() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  
+
   // 🔽 NUEVOS ESTADOS PARA FILTROS Y ORDEN
   const [showNoStock, setShowNoStock] = useState(false);
   const [filterZona, setFilterZona] = useState("");
@@ -82,7 +82,7 @@ export default function Productos() {
         if (typeof valA === 'number' && typeof valB === 'number') {
           return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
         }
-        
+
         // Manejo de strings
         const strA = String(valA).toLowerCase();
         const strB = String(valB).toLowerCase();
@@ -356,7 +356,7 @@ export default function Productos() {
 
       {/* BARRA DE HERRAMIENTAS SUPERIOR */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginBottom: "1.5rem" }}>
-        
+
         {/* BUSCADOR */}
         <input
           value={q}
@@ -615,36 +615,39 @@ export default function Productos() {
                     {row.existencias}
                   </td>
                   <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                      {/* ✅ CAMBIO: Botón Editar estandarizado */}
                       <button
                         onClick={() => openEdit(row)}
                         style={{
-                          background: "#fef3c7",
-                          color: "#92400e",
-                          padding: "4px 10px",
-                          borderRadius: "6px",
+                          background: "#F59E0B",
+                          color: "white",
+                          padding: "5px 12px",
+                          borderRadius: "999px",
                           border: "none",
                           cursor: "pointer",
                           fontSize: "0.8rem",
                           fontWeight: 500,
                         }}
                       >
-                        ✏️
+                        Editar
                       </button>
+
+                      {/* ✅ CAMBIO: Botón Eliminar estandarizado */}
                       <button
                         onClick={() => remove(row)}
                         style={{
-                          background: "#fee2e2",
-                          color: "#991b1b",
-                          padding: "4px 10px",
-                          borderRadius: "6px",
+                          background: "#DC2626",
+                          color: "white",
+                          padding: "5px 12px",
+                          borderRadius: "999px",
                           border: "none",
                           cursor: "pointer",
                           fontSize: "0.8rem",
                           fontWeight: 500,
                         }}
                       >
-                        🗑️
+                        Eliminar
                       </button>
                     </div>
                   </td>
@@ -860,7 +863,7 @@ export default function Productos() {
                   <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
                     Imagen (Subir o URL)
                   </label>
-                  
+
                   <div style={{ display: "flex", gap: "10px", marginBottom: "8px" }}>
                     <button
                       type="button"

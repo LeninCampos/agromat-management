@@ -142,9 +142,9 @@ export default function Proveedores() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} style={{textAlign:"center", padding:"20px"}}>Cargando...</td></tr>
+              <tr><td colSpan={5} style={{ textAlign: "center", padding: "20px" }}>Cargando...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={5} style={{textAlign:"center", padding:"20px"}}>Sin resultados</td></tr>
+              <tr><td colSpan={5} style={{ textAlign: "center", padding: "20px" }}>Sin resultados</td></tr>
             ) : (
               filtered.map((row) => (
                 <tr key={row.id_proveedor} style={{ borderTop: "1px solid #eee" }}>
@@ -159,15 +159,46 @@ export default function Proveedores() {
                     <div>📞 {row.telefono || "-"}</div>
                     <div>✉️ {row.correo || "-"}</div>
                   </td>
-                  {/* ✅ 2.17 Dato estadístico */}
                   <td style={{ padding: "10px", textAlign: "center" }}>
-                    <span style={{background: "#dbeafe", color: "#1e40af", padding: "4px 8px", borderRadius: "10px", fontWeight: "bold"}}>
-                        {row.total_suministros || 0}
+                    <span style={{ background: "#dbeafe", color: "#1e40af", padding: "4px 8px", borderRadius: "10px", fontWeight: "bold" }}>
+                      {row.total_suministros || 0}
                     </span>
                   </td>
+
+                  {/* ✅ CAMBIO: Botones estandarizados */}
                   <td style={{ padding: "10px", textAlign: "center" }}>
-                    <button onClick={() => openEdit(row)} style={{ marginRight: 8, background:"none", border:"none", cursor:"pointer" }}>✏️</button>
-                    <button onClick={() => remove(row)} style={{ background:"none", border:"none", cursor:"pointer" }}>🗑️</button>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                      <button
+                        onClick={() => openEdit(row)}
+                        style={{
+                          background: "#F59E0B",
+                          color: "white",
+                          padding: "5px 12px",
+                          borderRadius: "999px",
+                          border: "none",
+                          fontSize: "0.8rem",
+                          cursor: "pointer",
+                          fontWeight: 500
+                        }}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => remove(row)}
+                        style={{
+                          background: "#DC2626",
+                          color: "white",
+                          padding: "5px 12px",
+                          borderRadius: "999px",
+                          border: "none",
+                          fontSize: "0.8rem",
+                          cursor: "pointer",
+                          fontWeight: 500
+                        }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -188,34 +219,34 @@ export default function Proveedores() {
               <div className="agromat-form-grid">
                 <div className="agromat-form-field agromat-full-row">
                   <label>Razón Social *</label>
-                  <input className="agromat-input" required value={form.nombre_proveedor} onChange={e => setForm({...form, nombre_proveedor: e.target.value})} />
+                  <input className="agromat-input" required value={form.nombre_proveedor} onChange={e => setForm({ ...form, nombre_proveedor: e.target.value })} />
                 </div>
                 {/* ✅ 2.12 */}
                 <div className="agromat-form-field">
                   <label>Nombre Contacto</label>
-                  <input className="agromat-input" value={form.nombre_contacto} onChange={e => setForm({...form, nombre_contacto: e.target.value})} />
+                  <input className="agromat-input" value={form.nombre_contacto} onChange={e => setForm({ ...form, nombre_contacto: e.target.value })} />
                 </div>
                 {/* ✅ 2.14 CUIT */}
                 <div className="agromat-form-field">
                   <label>CUIT</label>
-                  <input className="agromat-input" placeholder="20-12345678-9" value={form.cuit} onChange={e => setForm({...form, cuit: e.target.value})} />
+                  <input className="agromat-input" placeholder="20-12345678-9" value={form.cuit} onChange={e => setForm({ ...form, cuit: e.target.value })} />
                 </div>
                 <div className="agromat-form-field">
                   <label>Teléfono</label>
-                  <input className="agromat-input" value={form.telefono} onChange={e => setForm({...form, telefono: e.target.value})} />
+                  <input className="agromat-input" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} />
                 </div>
                 <div className="agromat-form-field">
                   <label>Correo</label>
-                  <input type="email" className="agromat-input" value={form.correo} onChange={e => setForm({...form, correo: e.target.value})} />
+                  <input type="email" className="agromat-input" value={form.correo} onChange={e => setForm({ ...form, correo: e.target.value })} />
                 </div>
                 <div className="agromat-form-field agromat-full-row">
                   <label>Dirección</label>
-                  <input className="agromat-input" value={form.direccion} onChange={e => setForm({...form, direccion: e.target.value})} />
+                  <input className="agromat-input" value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} />
                 </div>
                 {/* ✅ 2.13 Comentarios */}
                 <div className="agromat-form-field agromat-full-row">
                   <label>Comentarios</label>
-                  <textarea className="agromat-textarea" rows="2" value={form.comentarios} onChange={e => setForm({...form, comentarios: e.target.value})} />
+                  <textarea className="agromat-textarea" rows="2" value={form.comentarios} onChange={e => setForm({ ...form, comentarios: e.target.value })} />
                 </div>
               </div>
               <div className="agromat-modal-footer">
