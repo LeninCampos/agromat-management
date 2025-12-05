@@ -1,4 +1,3 @@
-// src/pages/Proveedores.jsx
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import {
@@ -10,33 +9,33 @@ import {
 
 const emptyForm = {
   nombre_proveedor: "",
+  nombre_contacto: "", // ✅ 2.12
+  cuit: "",            // ✅ 2.14, 2.16
   telefono: "",
   correo: "",
   direccion: "",
-  rfc: "",
+  comentarios: "",     // ✅ 2.13
 };
 
 export default function Proveedores() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false); // ✅ 2.10, 2.11
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
 
-  // 🔍 FILTRO
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return items;
-
     return items.filter(
       (x) =>
         x.nombre_proveedor?.toLowerCase().includes(query) ||
-        x.correo?.toLowerCase().includes(query)
+        x.nombre_contacto?.toLowerCase().includes(query) ||
+        x.cuit?.includes(query)
     );
   }, [q, items]);
 
-  // 📦 CARGAR PROVEEDORES
   const load = async () => {
     setLoading(true);
     try {
@@ -50,75 +49,48 @@ export default function Proveedores() {
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  // ➕ NUEVO
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
     setModalOpen(true);
   };
 
-  // ✏️ EDITAR
   const openEdit = (row) => {
     setEditingId(row.id_proveedor);
     setForm({
       nombre_proveedor: row.nombre_proveedor ?? "",
+      nombre_contacto: row.nombre_contacto ?? "",
+      cuit: row.cuit ?? "",
       telefono: row.telefono ?? "",
       correo: row.correo ?? "",
       direccion: row.direccion ?? "",
-      rfc: row.rfc ?? "",
+      comentarios: row.comentarios ?? "",
     });
     setModalOpen(true);
   };
 
-  // 💾 GUARDAR
   const save = async (e) => {
     e.preventDefault();
-
-    const payload = {
-      nombre_proveedor: form.nombre_proveedor,
-      telefono: form.telefono || null,
-      correo: form.correo || null,
-      direccion: form.direccion || null,
-      rfc: form.rfc || null,
-    };
-
     try {
       if (editingId) {
-        await updateProveedor(editingId, payload);
+        await updateProveedor(editingId, form);
         Swal.fire("✔️ Listo", "Proveedor actualizado", "success");
       } else {
-        await createProveedor(payload);
+        await createProveedor(form);
         Swal.fire("✔️ Listo", "Proveedor creado", "success");
       }
-
       setModalOpen(false);
-      setEditingId(null);
       setForm(emptyForm);
       load();
     } catch (e) {
       console.error(e);
-
-      if (e.response?.status === 400 && e.response.data?.errors) {
-        const mensajes = e.response.data.errors
-          .map((err) => `• ${err.mensaje}`)
-          .join("<br>");
-
-        Swal.fire({
-          icon: "error",
-          title: "Datos incorrectos",
-          html: mensajes,
-        });
-      } else {
-        Swal.fire("Error", "No pude guardar el proveedor", "error");
-      }
+      const msg = e.response?.data?.errors?.[0]?.mensaje || "Error al guardar";
+      Swal.fire("Error", msg, "error");
     }
   };
 
-  // ❌ ELIMINAR
   const remove = async (row) => {
     const result = await Swal.fire({
       title: "¿Eliminar proveedor?",
@@ -126,138 +98,76 @@ export default function Proveedores() {
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
-      cancelButtonText: "Cancelar",
     });
-
     if (!result.isConfirmed) return;
-
     try {
       await deleteProveedor(row.id_proveedor);
       Swal.fire("🗑️ Eliminado", "Proveedor eliminado", "success");
       load();
     } catch (e) {
-      console.error(e);
       Swal.fire("Error", "No pude eliminar", "error");
     }
   };
 
-  // 🧱 UI
+  // ✅ Este es el return actualizado que pedías
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
       <div className="flex items-center justify-between">
         <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}>🏭 Proveedores</h2>
-
-        <button
-          onClick={openCreate}
-          style={{
-            background: "#4F46E5",
-            color: "white",
-            padding: "8px 14px",
-            borderRadius: "6px",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          + Nuevo
-        </button>
+        <button onClick={openCreate} className="agromat-btn-primary">+ Nuevo</button>
       </div>
 
-      {/* BUSCADOR */}
       <div style={{ display: "flex", gap: "10px" }}>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre o correo…"
-          style={{
-            flex: 1,
-            padding: "8px 12px",
-            borderRadius: "6px",
-            border: "1px solid #ddd",
-          }}
+          placeholder="Buscar por nombre, contacto o CUIT..."
+          className="agromat-input"
+          style={{ flex: 1 }}
         />
-        <button
-          onClick={load}
-          style={{
-            padding: "8px 14px",
-            background: "#f3f4f6",
-            borderRadius: "6px",
-            border: "1px solid #ddd",
-          }}
-        >
-          Recargar
-        </button>
+        <button onClick={load} className="agromat-btn-secondary">Recargar</button>
       </div>
 
-      {/* TABLA */}
-      <div
-        style={{
-          background: "white",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          overflowX: "auto",
-        }}
-      >
+      <div style={{ background: "white", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead style={{ background: "#f9fafb", color: "#555" }}>
             <tr>
-              <th style={{ padding: "10px" }}>ID</th>
-              <th style={{ padding: "10px" }}>Nombre</th>
-              <th style={{ padding: "10px" }}>Correo</th>
-              <th style={{ padding: "10px" }}>Teléfono</th>
-              <th style={{ padding: "10px" }}>CUIT</th>
-              <th style={{ padding: "10px" }}>Acciones</th>
+              <th style={{ padding: "10px", textAlign: "left" }}>Proveedor / CUIT</th>
+              <th style={{ padding: "10px", textAlign: "left" }}>Contacto</th>
+              <th style={{ padding: "10px", textAlign: "left" }}>Info</th>
+              {/* ✅ 2.17 Stats en grilla */}
+              <th style={{ padding: "10px", textAlign: "center" }}>Entradas Hist.</th>
+              <th style={{ padding: "10px", textAlign: "center" }}>Acciones</th>
             </tr>
           </thead>
-
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
-                  Cargando…
-                </td>
-              </tr>
+              <tr><td colSpan={5} style={{textAlign:"center", padding:"20px"}}>Cargando...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
-                  Sin resultados
-                </td>
-              </tr>
+              <tr><td colSpan={5} style={{textAlign:"center", padding:"20px"}}>Sin resultados</td></tr>
             ) : (
               filtered.map((row) => (
                 <tr key={row.id_proveedor} style={{ borderTop: "1px solid #eee" }}>
-                  <td style={{ padding: "10px" }}>{row.id_proveedor}</td>
-                  <td style={{ padding: "10px" }}>{row.nombre_proveedor}</td>
-                  <td style={{ padding: "10px" }}>{row.correo}</td>
-                  <td style={{ padding: "10px" }}>{row.telefono}</td>
-                  <td style={{ padding: "10px" }}>{row.rfc}</td>
-
                   <td style={{ padding: "10px" }}>
-                    <button
-                      onClick={() => openEdit(row)}
-                      style={{
-                        background: "#F59E0B",
-                        color: "white",
-                        padding: "5px 10px",
-                        borderRadius: "6px",
-                        border: "none",
-                        marginRight: "8px",
-                      }}
-                    >
-                      Editar
-                    </button>
-
-                    <button
-                      onClick={() => remove(row)}
-                      style={{
-                        background: "#DC2626",
-                        color: "white",
-                        padding: "5px 10px",
-                        borderRadius: "6px",
-                        border: "none",
-                      }}
-                    >
-                      Eliminar
-                    </button>
+                    <strong>{row.nombre_proveedor}</strong>
+                    <div style={{ fontSize: "0.85em", color: "#666" }}>{row.cuit || "Sin CUIT"}</div>
+                  </td>
+                  <td style={{ padding: "10px" }}>
+                    {row.nombre_contacto || "-"}
+                  </td>
+                  <td style={{ padding: "10px", fontSize: "0.9em" }}>
+                    <div>📞 {row.telefono || "-"}</div>
+                    <div>✉️ {row.correo || "-"}</div>
+                  </td>
+                  {/* ✅ 2.17 Dato estadístico */}
+                  <td style={{ padding: "10px", textAlign: "center" }}>
+                    <span style={{background: "#dbeafe", color: "#1e40af", padding: "4px 8px", borderRadius: "10px", fontWeight: "bold"}}>
+                        {row.total_suministros || 0}
+                    </span>
+                  </td>
+                  <td style={{ padding: "10px", textAlign: "center" }}>
+                    <button onClick={() => openEdit(row)} style={{ marginRight: 8, background:"none", border:"none", cursor:"pointer" }}>✏️</button>
+                    <button onClick={() => remove(row)} style={{ background:"none", border:"none", cursor:"pointer" }}>🗑️</button>
                   </td>
                 </tr>
               ))
@@ -266,116 +176,51 @@ export default function Proveedores() {
         </table>
       </div>
 
-      {/* MODAL moderno */}
+      {/* MODAL POPUP */}
       {modalOpen && (
         <div className="agromat-modal-backdrop">
           <div className="agromat-modal-card">
             <div className="agromat-modal-header">
-              <div>
-                <h2>{editingId ? "Editar proveedor" : "Nuevo proveedor"}</h2>
-                <p>
-                  {editingId
-                    ? "Modifica los datos del proveedor."
-                    : "Completa los datos para agregar un nuevo proveedor."}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="agromat-modal-close"
-                onClick={() => setModalOpen(false)}
-              >
-                ✕
-              </button>
+              <h2>{editingId ? "Editar Proveedor" : "Nuevo Proveedor"}</h2>
+              <button onClick={() => setModalOpen(false)} className="agromat-modal-close">✕</button>
             </div>
-
             <form onSubmit={save} className="agromat-modal-body">
               <div className="agromat-form-grid">
-                {/* Nombre */}
                 <div className="agromat-form-field agromat-full-row">
-                  <label>Nombre</label>
-                  <input
-                    type="text"
-                    value={form.nombre_proveedor}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        nombre_proveedor: e.target.value,
-                      }))
-                    }
-                    required
-                    className="agromat-input"
-                    placeholder="Ej. Yamaha"
-                  />
+                  <label>Razón Social *</label>
+                  <input className="agromat-input" required value={form.nombre_proveedor} onChange={e => setForm({...form, nombre_proveedor: e.target.value})} />
                 </div>
-
-                {/* Correo */}
-                <div className="agromat-form-field agromat-full-row">
-                  <label>Correo</label>
-                  <input
-                    type="email"
-                    value={form.correo}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, correo: e.target.value }))
-                    }
-                    className="agromat-input"
-                    placeholder="proveedor@ejemplo.com"
-                  />
-                </div>
-
-                {/* Teléfono */}
+                {/* ✅ 2.12 */}
                 <div className="agromat-form-field">
-                  <label>Teléfono</label>
-                  <input
-                    type="text"
-                    value={form.telefono}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, telefono: e.target.value }))
-                    }
-                    className="agromat-input"
-                    placeholder="818 000 0000"
-                  />
+                  <label>Nombre Contacto</label>
+                  <input className="agromat-input" value={form.nombre_contacto} onChange={e => setForm({...form, nombre_contacto: e.target.value})} />
                 </div>
-
-                {/* RFC */}
+                {/* ✅ 2.14 CUIT */}
                 <div className="agromat-form-field">
                   <label>CUIT</label>
-                  <input
-                    type="text"
-                    value={form.rfc}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, rfc: e.target.value }))
-                    }
-                    className="agromat-input"
-                    placeholder="XAXX010101000"
-                  />
+                  <input className="agromat-input" placeholder="20-12345678-9" value={form.cuit} onChange={e => setForm({...form, cuit: e.target.value})} />
                 </div>
-
-                {/* Dirección */}
+                <div className="agromat-form-field">
+                  <label>Teléfono</label>
+                  <input className="agromat-input" value={form.telefono} onChange={e => setForm({...form, telefono: e.target.value})} />
+                </div>
+                <div className="agromat-form-field">
+                  <label>Correo</label>
+                  <input type="email" className="agromat-input" value={form.correo} onChange={e => setForm({...form, correo: e.target.value})} />
+                </div>
                 <div className="agromat-form-field agromat-full-row">
                   <label>Dirección</label>
-                  <textarea
-                    value={form.direccion}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, direccion: e.target.value }))
-                    }
-                    className="agromat-textarea"
-                    rows={2}
-                    placeholder="Calle, número, colonia, ciudad"
-                  />
+                  <input className="agromat-input" value={form.direccion} onChange={e => setForm({...form, direccion: e.target.value})} />
+                </div>
+                {/* ✅ 2.13 Comentarios */}
+                <div className="agromat-form-field agromat-full-row">
+                  <label>Comentarios</label>
+                  <textarea className="agromat-textarea" rows="2" value={form.comentarios} onChange={e => setForm({...form, comentarios: e.target.value})} />
                 </div>
               </div>
-
               <div className="agromat-modal-footer">
-                <button
-                  type="button"
-                  className="agromat-btn-secondary"
-                  onClick={() => setModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="agromat-btn-primary">
-                  Guardar proveedor
-                </button>
+                <button type="button" className="agromat-btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="agromat-btn-primary">Guardar</button>
               </div>
             </form>
           </div>

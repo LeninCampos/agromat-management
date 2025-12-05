@@ -1,18 +1,16 @@
 // frontend/src/pages/Suministros.jsx
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import Swal from "sweetalert2";
 import api from "../api/axios"; 
 import { getSuministros, createSuministro, deleteSuministro } from "../api/suministros";
 import { getProveedores } from "../api/proveedores";
 import { getProductos } from "../api/productos";
-// ✅ 1.14: Importar api empleados
 import { getEmpleados } from "../api/empleados"; 
 
 const emptyForm = {
   fecha_llegada: new Date().toISOString().split("T")[0],
   hora_llegada: new Date().toTimeString().split(" ")[0].slice(0, 5),
   id_proveedor: "",
-  // ✅ 1.13 y 1.14: Nuevos campos en el form
   transportista: "",
   id_empleado: "", 
   items: []
@@ -23,7 +21,7 @@ export default function Suministros() {
   const [loading, setLoading] = useState(true);
   
   // Modal registro
-  const [modalOpen, setModalOpen] = useState(false); // ✅ 1.11: Ya existía, se mantiene como Popup
+  const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
   // Modal detalles
@@ -33,7 +31,13 @@ export default function Suministros() {
   // Catálogos
   const [proveedores, setProveedores] = useState([]);
   const [productos, setProductos] = useState([]);
-  const [empleados, setEmpleados] = useState([]); // ✅ 1.14
+  const [empleados, setEmpleados] = useState([]);
+
+  // ✅ Estados para filtros (Requisitos 2.18 - 2.20)
+  const [filterProv, setFilterProv] = useState("");
+  const [filterDateStart, setFilterDateStart] = useState("");
+  const [filterDateEnd, setFilterDateEnd] = useState("");
+  const [filterProd, setFilterProd] = useState("");
 
   // Estado para agregar producto individual (Manual)
   const [newItem, setNewItem] = useState({ id_producto: "", cantidad: 1 });
@@ -43,7 +47,6 @@ export default function Suministros() {
   const load = async () => {
     setLoading(true);
     try {
-      // ✅ 1.14: Cargar empleados
       const [resSum, resProv, resProd, resEmp] = await Promise.all([
         getSuministros(),
         getProveedores(),
@@ -54,13 +57,8 @@ export default function Suministros() {
       setItems(resSum.data);
       setProveedores(resProv.data);
       setEmpleados(resEmp.data);
-
-      // ✅ 1.12: Ordenar combo productos alfabéticamente
-      const sortedProds = resProd.data.sort((a, b) => 
-        a.nombre_producto.localeCompare(b.nombre_producto)
-      );
-      setProductos(sortedProds);
-
+      // Ordenar productos alfabéticamente para el select
+      setProductos(resProd.data.sort((a, b) => a.nombre_producto.localeCompare(b.nombre_producto)));
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No se cargaron los datos", "error");
@@ -70,6 +68,31 @@ export default function Suministros() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // ✅ Lógica de filtrado (Memoria)
+  const filteredItems = useMemo(() => {
+    return items.filter(row => {
+      // 2.18 Filtro Proveedor
+      if (filterProv && String(row.id_proveedor) !== filterProv) return false;
+
+      // 2.19 Filtro Fechas
+      if (filterDateStart && row.fecha_llegada < filterDateStart) return false;
+      if (filterDateEnd && row.fecha_llegada > filterDateEnd) return false;
+
+      // 2.20 Filtro Producto (Buscar en los detalles del suministro)
+      if (filterProd) {
+        const term = filterProd.toLowerCase();
+        // Verificamos si algún producto dentro del suministro coincide con el término
+        const hasProduct = row.Suministras?.some(s => 
+          s.Producto?.nombre_producto?.toLowerCase().includes(term) ||
+          s.id_producto?.toLowerCase().includes(term)
+        );
+        if (!hasProduct) return false;
+      }
+
+      return true;
+    });
+  }, [items, filterProv, filterDateStart, filterDateEnd, filterProd]);
 
   // --- Lógica Items Manuales ---
   const agregarProducto = () => {
@@ -111,7 +134,6 @@ export default function Suministros() {
         fecha_llegada: form.fecha_llegada,
         hora_llegada: form.hora_llegada,
         id_proveedor: form.id_proveedor,
-        // ✅ 1.13 y 1.14: Enviar nuevos campos
         transportista: form.transportista,
         id_empleado: form.id_empleado,
         items: form.items
@@ -135,7 +157,7 @@ export default function Suministros() {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Pedir datos adicionales (Ahora incluyendo empleado y transportista sería ideal, pero dejaremos lo básico por ahora o se puede extender el Swal)
+    // Pedir datos adicionales para el Excel
     const { value: formValues } = await Swal.fire({
       title: 'Datos del Ingreso (Excel)',
       html:
@@ -170,8 +192,6 @@ export default function Suministros() {
       formData.append("id_proveedor", formValues.id_proveedor);
       formData.append("fecha_llegada", formValues.fecha_llegada);
       formData.append("hora_llegada", formValues.hora_llegada);
-      // Nota: Para Excel, el backend también debería actualizarse si queremos transportista/empleado, 
-      // pero por ahora solo se solicitó en el form manual.
 
       try {
         setLoading(true);
@@ -219,7 +239,6 @@ export default function Suministros() {
     }
   };
 
-  // ✅ 1.10: Renombrar títulos a "Ingresos"
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
       
@@ -243,14 +262,46 @@ export default function Suministros() {
                📄 Importar Excel
              </button>
 
-             {/* ✅ 1.15: Quitar botón duplicado (Solo queda este) */}
              <button onClick={() => setModalOpen(true)} className="btn-primary" style={{ background: '#4F46E5', color: 'white', padding: "8px 14px", borderRadius: "6px", fontWeight: 500, border: 'none', cursor: 'pointer' }}>
                 + Nuevo Ingreso
              </button>
         </div>
       </div>
 
-      {/* --- TABLA PRINCIPAL (✅ 1.16: Columnas alineadas) --- */}
+      {/* ✅ BARRA DE FILTROS (Requisitos 2.18, 2.19, 2.20) */}
+      <div style={{ background: "white", padding: "15px", borderRadius: "12px", boxShadow: "0 2px 5px rgba(0,0,0,0.05)", display: "flex", flexWrap: "wrap", gap: "15px", alignItems: "flex-end" }}>
+        
+        {/* Filtro Proveedor */}
+        <div style={{ flex: 1, minWidth: "200px" }}>
+          <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#555" }}>Proveedor</label>
+          <select className="agromat-select" value={filterProv} onChange={e => setFilterProv(e.target.value)} style={{ marginTop: "4px" }}>
+            <option value="">Todos</option>
+            {proveedores.map(p => <option key={p.id_proveedor} value={p.id_proveedor}>{p.nombre_proveedor}</option>)}
+          </select>
+        </div>
+
+        {/* Filtro Fechas */}
+        <div style={{ display: "flex", gap: "10px" }}>
+          <div>
+            <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#555" }}>Desde</label>
+            <input type="date" className="agromat-input" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} style={{ marginTop: "4px" }}/>
+          </div>
+          <div>
+            <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#555" }}>Hasta</label>
+            <input type="date" className="agromat-input" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} style={{ marginTop: "4px" }}/>
+          </div>
+        </div>
+
+        {/* Filtro Producto */}
+        <div style={{ flex: 1, minWidth: "200px" }}>
+          <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#555" }}>Contiene Producto</label>
+          <input type="text" placeholder="Nombre o código..." className="agromat-input" value={filterProd} onChange={e => setFilterProd(e.target.value)} style={{ marginTop: "4px" }}/>
+        </div>
+
+        <button onClick={() => { setFilterProv(""); setFilterDateStart(""); setFilterDateEnd(""); setFilterProd(""); }} className="agromat-btn-secondary" style={{ height: "38px" }}>Limpiar</button>
+      </div>
+
+      {/* --- TABLA PRINCIPAL --- */}
       <div style={{ background: "white", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead style={{ background: "#f9fafb", color: "#555", fontSize: "0.85rem", textTransform: "uppercase" }}>
@@ -258,19 +309,19 @@ export default function Suministros() {
               <th style={{ padding: "12px", textAlign: "left" }}>ID</th>
               <th style={{ padding: "12px", textAlign: "left" }}>Fecha/Hora</th>
               <th style={{ padding: "12px", textAlign: "left" }}>Proveedor</th>
-              <th style={{ padding: "12px", textAlign: "left" }}>Transportista</th> {/* ✅ 1.13 */}
-              <th style={{ padding: "12px", textAlign: "left" }}>Recibió</th>       {/* ✅ 1.14 */}
-              <th style={{ padding: "12px", textAlign: "center" }}>Prods. Distintos</th> {/* ✅ 1.17 */}
+              <th style={{ padding: "12px", textAlign: "left" }}>Transportista</th>
+              <th style={{ padding: "12px", textAlign: "left" }}>Recibió</th>
+              <th style={{ padding: "12px", textAlign: "center" }}>Prods. Distintos</th>
               <th style={{ padding: "12px", textAlign: "center" }}>Acciones</th>
             </tr>
           </thead>
           <tbody style={{ fontSize: "0.9rem" }}>
             {loading ? (
                 <tr><td colSpan={7} style={{textAlign: "center", padding: "20px"}}>Cargando...</td></tr>
-            ) : items.length === 0 ? (
-                <tr><td colSpan={7} style={{textAlign: "center", padding: "20px"}}>No hay registros</td></tr>
+            ) : filteredItems.length === 0 ? (
+                <tr><td colSpan={7} style={{textAlign: "center", padding: "20px"}}>No hay coincidencias</td></tr>
             ) : (
-                items.map(row => (
+                filteredItems.map(row => (
                 <tr key={row.id_suministro} style={{ borderTop: "1px solid #eee" }}>
                     <td style={{ padding: "12px", fontWeight: "bold" }}>#{row.id_suministro}</td>
                     <td style={{ padding: "12px" }}>
@@ -279,15 +330,12 @@ export default function Suministros() {
                     </td>
                     <td style={{ padding: "12px" }}>{row.Proveedor?.nombre_proveedor}</td>
                     
-                    {/* ✅ 1.13 Transportista */}
                     <td style={{ padding: "12px" }}>{row.transportista || "-"}</td>
                     
-                    {/* ✅ 1.14 Empleado Receptor */}
                     <td style={{ padding: "12px" }}>
                       {row.Empleado?.nombre_empleado || <span style={{color:"#999"}}>Sin asignar</span>}
                     </td>
 
-                    {/* ✅ 1.17 Cantidad productos distintos */}
                     <td style={{ padding: "12px", textAlign: "center" }}>
                       <span style={{background: "#e0f2fe", color: "#0369a1", padding: "3px 8px", borderRadius: "10px", fontWeight: "bold"}}>
                         {row.Suministras?.length || 0}
@@ -403,7 +451,7 @@ export default function Suministros() {
                   </select>
                 </div>
 
-                {/* ✅ 1.13: Campo Transportista */}
+                {/* Campo Transportista */}
                 <div className="agromat-form-field">
                   <label>Transportista</label>
                   <input 
@@ -415,7 +463,7 @@ export default function Suministros() {
                   />
                 </div>
 
-                {/* ✅ 1.14: Campo Empleado Receptor */}
+                {/* Campo Empleado Receptor */}
                 <div className="agromat-form-field">
                   <label>Recibió (Empleado)</label>
                   <select 
@@ -440,7 +488,6 @@ export default function Suministros() {
                   <label style={{ fontSize: "0.8rem", fontWeight: 600 }}>Producto</label>
                   <select className="agromat-select" style={{ width: "100%" }} value={newItem.id_producto} onChange={e => setNewItem({...newItem, id_producto: e.target.value})}>
                     <option value="">Buscar producto...</option>
-                    {/* ✅ 1.12: Los productos ya vienen ordenados del load() */}
                     {productos.map(p => <option key={p.id_producto} value={p.id_producto}>{p.nombre_producto} (Stock: {p.stock})</option>)}
                   </select>
                 </div>

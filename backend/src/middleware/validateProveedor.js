@@ -1,7 +1,4 @@
-// src/middleware/validateProveedor.js
 import { body, validationResult } from "express-validator";
-
-const telefonoRegex = /^[0-9+\-\s()]{6,20}$/;
 
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
@@ -12,39 +9,30 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-export const validateProveedorCreate = [
+const commonValidations = [
   body("nombre_proveedor")
-    .trim()
-    .notEmpty().withMessage("El nombre es obligatorio")
+    .trim().notEmpty().withMessage("El nombre es obligatorio")
     .isLength({ max: 100 }).withMessage("Máximo 100 caracteres"),
+  
   body("telefono")
-    .trim()
-    .notEmpty().withMessage("El teléfono es obligatorio")
-    .matches(telefonoRegex).withMessage("Teléfono inválido"),
-  body("direccion")
-    .trim()
-    .notEmpty().withMessage("La dirección es obligatoria")
-    .isLength({ max: 150 }).withMessage("Máximo 150 caracteres"),
+    .optional().trim()
+    .isLength({ max: 20 }).withMessage("Máximo 20 caracteres"),
+
+  body("cuit")
+    .optional().trim()
+    .matches(/^[0-9\-]+$/).withMessage("El CUIT solo debe contener números y guiones"),
+
+  body("nombre_contacto")
+    .optional().isLength({ max: 100 }),
+  
+  body("comentarios")
+    .optional().isLength({ max: 500 }),
+
   body("correo")
-    .optional({ values: "falsy" }).trim()
-    .isEmail().withMessage("Correo inválido")
-    .isLength({ max: 254 }).withMessage("Correo demasiado largo"),
+    .optional({ values: "falsy" }).trim().isEmail().withMessage("Correo inválido"),
+    
   handleValidationErrors,
 ];
 
-export const validateProveedorUpdate = [
-  body("nombre_proveedor")
-    .optional().trim().notEmpty().withMessage("No puede ser vacío")
-    .isLength({ max: 100 }).withMessage("Máximo 100 caracteres"),
-  body("telefono")
-    .optional().trim().notEmpty().withMessage("No puede ser vacío")
-    .matches(telefonoRegex).withMessage("Teléfono inválido"),
-  body("direccion")
-    .optional().trim().notEmpty().withMessage("No puede ser vacío")
-    .isLength({ max: 150 }).withMessage("Máximo 150 caracteres"),
-  body("correo")
-    .optional({ values: "falsy" }).trim()
-    .isEmail().withMessage("Correo inválido")
-    .isLength({ max: 254 }).withMessage("Correo demasiado largo"),
-  handleValidationErrors,
-];
+export const validateProveedorCreate = commonValidations;
+export const validateProveedorUpdate = commonValidations;
