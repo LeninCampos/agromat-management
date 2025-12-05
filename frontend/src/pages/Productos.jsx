@@ -1,4 +1,4 @@
-// frontend/src/pages/Productos.jsx
+// frontend/src/pages/Productos.jsx - VERSIÓN P1 SIN TAILWIND
 import { useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import { getProveedores } from "../api/proveedores";
@@ -8,7 +8,7 @@ import {
   createProducto,
   updateProducto,
   deleteProducto,
-  bulkDeleteProductos, // 👈 nuevo
+  bulkDeleteProductos,
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
 
@@ -21,7 +21,7 @@ const emptyForm = {
   precio: "",
   existencias: "",
   id_proveedor: "",
-  zonaId: "", // id_zona seleccionado
+  zonaId: "",
   imagen_url: "",
 };
 
@@ -35,18 +35,19 @@ export default function Productos() {
   const [proveedores, setProveedores] = useState([]);
   const [zonas, setZonas] = useState([]);
 
-  // 👉 selección múltiple
+  // Selección múltiple
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
   const fileInputRef = useRef(null);
 
-  // 🔍 Filtro rápido
+  // 🔍 Filtro mejorado - incluye búsqueda por código
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return items;
     return items.filter(
       (x) =>
+        x.id_producto?.toLowerCase().includes(query) || // 👈 NUEVO: búsqueda por código
         x.nombre_producto?.toLowerCase().includes(query) ||
         x.descripcion?.toLowerCase().includes(query)
     );
@@ -66,9 +67,7 @@ export default function Productos() {
       setZonas(resZonas.data);
 
       const normalizados = resProductos.data.map((p) => {
-        // Tomamos solo la primera ubicación (si existe)
         const ubicacion = p.SeUbicas?.[0];
-
         const id_zona = ubicacion?.id_zona ?? null;
         const codigo_zona = ubicacion?.Zona?.codigo ?? null;
 
@@ -84,14 +83,17 @@ export default function Productos() {
           precio: p.precio,
           existencias: p.stock,
           id_proveedor: p.id_proveedor,
+          nombre_proveedor: p.Proveedor?.nombre_proveedor || "Sin proveedor", // 👈 NUEVO
           zonaId: id_zona ? String(id_zona) : "",
           codigo_zona,
           imagen_url: imagenUrl,
+          // 👇 NUEVO: fechas de último ingreso/egreso (placeholder por ahora)
+          fecha_ultimo_ingreso: "N/A",
+          fecha_ultimo_egreso: "N/A",
         };
       });
 
       setItems(normalizados);
-      // al recargar, limpiamos selección
       setSelectedIds([]);
       setSelectionMode(false);
     } catch (e) {
@@ -129,13 +131,24 @@ export default function Productos() {
 
   const save = async (e) => {
     e.preventDefault();
+
     if (!form.id_proveedor) {
       Swal.fire("Error", "Selecciona un proveedor", "warning");
       return;
     }
 
+    // 👇 NUEVO: Validar ID único al crear
+    if (!editingId) {
+      const existeId = items.some(
+        (item) => item.id_producto.toLowerCase() === form.id_producto.toLowerCase()
+      );
+      if (existeId) {
+        Swal.fire("Error", `El código "${form.id_producto}" ya existe. Usa otro código.`, "error");
+        return;
+      }
+    }
+
     try {
-      // Construimos el objeto zona { id_zona } o null
       let zonaObj = null;
       if (form.zonaId) {
         zonaObj = { id_zona: Number(form.zonaId) };
@@ -154,23 +167,23 @@ export default function Productos() {
 
       if (editingId) {
         await updateProducto(editingId, payload);
-        Swal.fire("✅ Listo", "Producto actualizado", "success");
+        Swal.fire("✅ Listo", "Producto actualizado correctamente", "success");
       } else {
         await createProducto(payload);
-        Swal.fire("✅ Listo", "Producto creado", "success");
+        Swal.fire("✅ Listo", "Producto creado correctamente", "success");
       }
 
       setModalOpen(false);
       setForm(emptyForm);
       setEditingId(null);
-      await load(); // recarga para ver la zona nueva
+      await load();
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No pude guardar el producto", "error");
+      const errorMsg = e.response?.data?.error || "No pude guardar el producto";
+      Swal.fire("Error", errorMsg, "error");
     }
   };
 
-  // 🔁 selección de una fila
   const toggleSelect = (id_producto) => {
     setSelectedIds((prev) =>
       prev.includes(id_producto)
@@ -179,16 +192,13 @@ export default function Productos() {
     );
   };
 
-  // seleccionar/deseleccionar todos los filtrados
   const toggleSelectAllVisible = () => {
     const visibleIds = filtered.map((p) => p.id_producto);
     const allSelected = visibleIds.every((id) => selectedIds.includes(id));
 
     if (allSelected) {
-      // quitar todos los visibles
       setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
     } else {
-      // agregar los que falten
       setSelectedIds((prev) => [
         ...prev,
         ...visibleIds.filter((id) => !prev.includes(id)),
@@ -205,24 +215,21 @@ export default function Productos() {
       confirmButtonText: "Sí, eliminar",
     });
     if (!result.isConfirmed) return;
+
     try {
       await deleteProducto(row.id_producto);
-      Swal.fire("🗑️ Eliminado", "Producto eliminado", "success");
+      Swal.fire("🗑️ Eliminado", "Producto eliminado correctamente", "success");
       await load();
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No pude eliminar", "error");
+      Swal.fire("Error", "No pude eliminar el producto", "error");
     }
   };
 
-  // 🗑️ borrado masivo
   const removeSelected = async () => {
     if (selectedIds.length === 0) {
-      return Swal.fire(
-        "Nada seleccionado",
-        "Selecciona al menos un producto",
-        "info"
-      );
+      Swal.fire("Nada seleccionado", "Selecciona al menos un producto", "info");
+      return;
     }
 
     const result = await Swal.fire({
@@ -242,15 +249,10 @@ export default function Productos() {
       await load();
     } catch (e) {
       console.error(e);
-      Swal.fire(
-        "Error",
-        "No pude eliminar los productos seleccionados",
-        "error"
-      );
+      Swal.fire("Error", "No pude eliminar los productos seleccionados", "error");
     }
   };
 
-  // 👉 subir imagen desde dispositivo
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -271,11 +273,7 @@ export default function Productos() {
       Swal.fire("✅ Listo", "Imagen subida correctamente", "success");
     } catch (err) {
       console.error(err);
-      Swal.fire(
-        "Error",
-        "No pude subir la imagen. Revisa que el backend tenga /api/upload/productos.",
-        "error"
-      );
+      Swal.fire("Error", "No pude subir la imagen", "error");
     } finally {
       e.target.value = "";
     }
@@ -288,155 +286,181 @@ export default function Productos() {
   };
 
   return (
-    <div className="space-y-4" style={{ padding: "1.5rem" }}>
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}> Inventario </h2>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            onClick={() => setSelectionMode((v) => !v)}
-            style={{
-              background: selectionMode ? "#e5e7eb" : "#f3f4f6",
-              color: "#111827",
-              padding: "8px 12px",
-              borderRadius: "6px",
-              border: "1px solid #d1d5db",
-              cursor: "pointer",
-              fontSize: "0.85rem",
-            }}
-          >
-            {selectionMode ? "Salir de selección" : "Seleccionar múltiples"}
-          </button>
+    <div style={{ padding: "1.5rem" }}>
+      {/* HEADER MEJORADO */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#111", marginBottom: "0.5rem" }}>
+          📦 Inventario
+        </h2>
+        <p style={{ fontSize: "0.95rem", color: "#666" }}>
+          Gestión de productos y existencias
+        </p>
+      </div>
 
-          {selectionMode && (
-            <button
-              onClick={removeSelected}
-              disabled={selectedIds.length === 0}
-              style={{
-                background:
-                  selectedIds.length === 0 ? "#fecaca" : "#DC2626",
-                color: "white",
-                padding: "8px 14px",
-                borderRadius: "6px",
-                border: "none",
-                cursor: selectedIds.length === 0 ? "not-allowed" : "pointer",
-                fontSize: "0.85rem",
-              }}
-            >
-              Eliminar seleccionados ({selectedIds.length})
-            </button>
-          )}
+      {/* BOTONES DE ACCIÓN */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "1rem" }}>
+        <button
+          onClick={() => setSelectionMode((v) => !v)}
+          style={{
+            background: selectionMode ? "#e5e7eb" : "#f3f4f6",
+            color: "#111827",
+            padding: "8px 14px",
+            borderRadius: "6px",
+            border: "1px solid #d1d5db",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+          }}
+        >
+          {selectionMode ? "❌ Cancelar selección" : "☑️ Seleccionar múltiples"}
+        </button>
 
+        {selectionMode && (
           <button
-            onClick={openCreate}
+            onClick={removeSelected}
+            disabled={selectedIds.length === 0}
             style={{
-              background: "#4F46E5",
+              background: selectedIds.length === 0 ? "#fecaca" : "#DC2626",
               color: "white",
               padding: "8px 14px",
               borderRadius: "6px",
               border: "none",
-              cursor: "pointer",
+              cursor: selectedIds.length === 0 ? "not-allowed" : "pointer",
+              fontSize: "0.9rem",
             }}
           >
-            + Nuevo
+            🗑️ Eliminar ({selectedIds.length})
           </button>
-        </div>
+        )}
+
+        <button
+          onClick={openCreate}
+          style={{
+            background: "#4F46E5",
+            color: "white",
+            padding: "8px 16px",
+            borderRadius: "6px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+            fontWeight: 500,
+          }}
+        >
+          ➕ Nuevo producto
+        </button>
       </div>
 
-      {/* BUSCADOR + RECARGAR */}
-      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+      {/* BUSCADOR */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "1.5rem" }}>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre..."
+          placeholder="🔍 Buscar por código, nombre o descripción..."
           style={{
             flex: 1,
-            padding: "8px 12px",
-            borderRadius: "6px",
+            padding: "10px 14px",
+            borderRadius: "8px",
             border: "1px solid #ddd",
+            fontSize: "0.95rem",
           }}
         />
         <button
           onClick={load}
           style={{
             background: "#f3f4f6",
-            padding: "8px 14px",
+            padding: "10px 16px",
             border: "1px solid #ddd",
-            borderRadius: "6px",
+            borderRadius: "8px",
             cursor: "pointer",
+            fontSize: "0.9rem",
           }}
         >
-          Recargar
+          🔄 Recargar
         </button>
       </div>
 
-      {/* TABLA */}
+      {/* TABLA MEJORADA */}
       <div
         style={{
           background: "white",
           borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          border: "1px solid #e5e7eb",
           overflowX: "auto",
         }}
       >
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f9fafb", color: "#555" }}>
+          <thead style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
             <tr>
               {selectionMode && (
-                <th style={{ padding: "10px", textAlign: "center" }}>
+                <th style={{ padding: "12px", textAlign: "center", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
                   <input
                     type="checkbox"
                     onChange={toggleSelectAllVisible}
                     checked={
                       filtered.length > 0 &&
-                      filtered.every((p) =>
-                        selectedIds.includes(p.id_producto)
-                      )
+                      filtered.every((p) => selectedIds.includes(p.id_producto))
                     }
                   />
                 </th>
               )}
-              <th style={{ padding: "10px" }}>Foto</th>
-              <th style={{ padding: "10px" }}>ID</th>
-              <th style={{ padding: "10px" }}>Nombre</th>
-              <th style={{ padding: "10px" }}>Zona</th>
-              <th style={{ padding: "10px", textAlign: "right" }}>Precio</th>
-              <th style={{ padding: "10px", textAlign: "right" }}>Stock</th>
-              <th style={{ padding: "10px", textAlign: "center" }}>Acciones</th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Foto
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Código
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Nombre
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Proveedor
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Zona
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Últ. Ingreso
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Últ. Egreso
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Precio
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Stock
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "center", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Acciones
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td
-                  colSpan={selectionMode ? 8 : 7}
-                  style={{ textAlign: "center", padding: "20px" }}
-                >
-                  Cargando...
+                <td colSpan={selectionMode ? 12 : 11} style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+                  <div style={{ display: "inline-block", width: "24px", height: "24px", border: "3px solid #e5e7eb", borderTop: "3px solid #4F46E5", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+                  <p style={{ marginTop: "12px", fontSize: "0.9rem" }}>Cargando productos...</p>
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td
-                  colSpan={selectionMode ? 8 : 7}
-                  style={{ textAlign: "center", padding: "20px" }}
-                >
-                  Sin resultados
+                <td colSpan={selectionMode ? 12 : 11} style={{ textAlign: "center", padding: "40px" }}>
+                  <div style={{ color: "#9ca3af", fontSize: "3rem" }}>📦</div>
+                  <p style={{ marginTop: "12px", fontSize: "0.95rem", fontWeight: 500, color: "#111" }}>No hay productos</p>
+                  <p style={{ marginTop: "4px", fontSize: "0.85rem", color: "#6b7280" }}>Comienza creando uno nuevo</p>
                 </td>
               </tr>
             ) : (
               filtered.map((row) => (
                 <tr
                   key={row.id_producto}
-                  style={{ borderTop: "1px solid #eee" }}
+                  style={{ borderTop: "1px solid #f3f4f6", transition: "background 0.15s" }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "white"}
                 >
                   {selectionMode && (
-                    <td
-                      style={{
-                        padding: "10px",
-                        textAlign: "center",
-                      }}
-                    >
+                    <td style={{ padding: "12px", textAlign: "center" }}>
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(row.id_producto)}
@@ -444,7 +468,7 @@ export default function Productos() {
                       />
                     </td>
                   )}
-                  <td style={{ padding: "10px" }}>
+                  <td style={{ padding: "12px 16px" }}>
                     {row.imagen_url ? (
                       <img
                         src={row.imagen_url}
@@ -454,7 +478,7 @@ export default function Productos() {
                           height: "48px",
                           objectFit: "cover",
                           borderRadius: "8px",
-                          border: "1px solid #eee",
+                          border: "1px solid #e5e7eb",
                         }}
                       />
                     ) : (
@@ -467,7 +491,7 @@ export default function Productos() {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          fontSize: "0.75rem",
+                          fontSize: "0.7rem",
                           color: "#9ca3af",
                         }}
                       >
@@ -475,45 +499,63 @@ export default function Productos() {
                       </div>
                     )}
                   </td>
-                  <td style={{ padding: "10px" }}>{row.id_producto}</td>
-                  <td style={{ padding: "10px" }}>{row.nombre_producto}</td>
-                  <td style={{ padding: "10px", color: "#666" }}>
-                    {row.codigo_zona ? row.codigo_zona : "Sin asignar"}
+                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", fontWeight: 500, color: "#111" }}>
+                    {row.id_producto}
                   </td>
-                  <td style={{ padding: "10px", textAlign: "right" }}>
+                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#111" }}>
+                    {row.nombre_producto}
+                  </td>
+                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#6b7280" }}>
+                    {row.nombre_proveedor}
+                  </td>
+                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#6b7280" }}>
+                    {row.codigo_zona || "Sin asignar"}
+                  </td>
+                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#6b7280" }}>
+                    {row.fecha_ultimo_ingreso}
+                  </td>
+                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#6b7280" }}>
+                    {row.fecha_ultimo_egreso}
+                  </td>
+                  <td style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.9rem", fontWeight: 500, color: "#111" }}>
                     ${Number(row.precio).toFixed(2)}
                   </td>
-                  <td style={{ padding: "10px", textAlign: "right" }}>
+                  <td style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.9rem", fontWeight: 500, color: "#111" }}>
                     {row.existencias}
                   </td>
-                  <td style={{ padding: "10px", textAlign: "center" }}>
-                    <button
-                      onClick={() => openEdit(row)}
-                      style={{
-                        background: "#F59E0B",
-                        color: "white",
-                        padding: "5px 10px",
-                        borderRadius: "6px",
-                        border: "none",
-                        marginRight: 5,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => remove(row)}
-                      style={{
-                        background: "#DC2626",
-                        color: "white",
-                        padding: "5px 10px",
-                        borderRadius: "6px",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Eliminar
-                    </button>
+                  <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                    <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
+                      <button
+                        onClick={() => openEdit(row)}
+                        style={{
+                          background: "#fef3c7",
+                          color: "#92400e",
+                          padding: "6px 12px",
+                          borderRadius: "6px",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "0.85rem",
+                          fontWeight: 500,
+                        }}
+                      >
+                        ✏️ Editar
+                      </button>
+                      <button
+                        onClick={() => remove(row)}
+                        style={{
+                          background: "#fee2e2",
+                          color: "#991b1b",
+                          padding: "6px 12px",
+                          borderRadius: "6px",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "0.85rem",
+                          fontWeight: 500,
+                        }}
+                      >
+                        🗑️ Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -522,49 +564,95 @@ export default function Productos() {
         </table>
       </div>
 
-      {/* Modal */}
+      {/* MODAL POPUP MEJORADO */}
       {modalOpen && (
-        <div className="agromat-modal-backdrop">
-          <div className="agromat-modal-card">
-            <div className="agromat-modal-header">
-              <h2>{editingId ? "Editar producto" : "Nuevo producto"}</h2>
-              <button
-                type="button"
-                className="agromat-modal-close"
-                onClick={() => setModalOpen(false)}
-              >
-                ✕
-              </button>
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => setModalOpen(false)}
+        >
+          {/* Backdrop */}
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0, 0, 0, 0.5)",
+              backdropFilter: "blur(4px)",
+            }}
+          />
+
+          {/* Modal */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "relative",
+              background: "white",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px rgba(0,0,0,0.3)",
+              width: "100%",
+              maxWidth: "700px",
+              maxHeight: "90vh",
+              overflow: "auto",
+            }}
+          >
+            {/* Header */}
+            <div style={{ borderBottom: "1px solid #f3f4f6", padding: "20px 24px" }}>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 600, color: "#111", margin: 0 }}>
+                {editingId ? "Editar producto" : "Nuevo producto"}
+              </h3>
+              <p style={{ marginTop: "4px", fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+                {editingId ? "Actualiza la información del producto" : "Completa los datos del nuevo producto"}
+              </p>
             </div>
 
-            <form onSubmit={save} className="agromat-modal-body">
-              <div className="agromat-form-grid">
-                <div className="agromat-form-field">
-                  <label>Código (ID)</label>
+            {/* Form */}
+            <form onSubmit={save} style={{ padding: "24px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                    Código (ID)
+                  </label>
                   <input
                     type="text"
                     value={form.id_producto}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, id_producto: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, id_producto: e.target.value }))}
                     disabled={!!editingId}
                     required
-                    className="agromat-input"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.95rem",
+                      background: editingId ? "#f3f4f6" : "white",
+                      cursor: editingId ? "not-allowed" : "text",
+                    }}
+                    placeholder="Ej: PROD001"
                   />
                 </div>
 
-                <div className="agromat-form-field">
-                  <label>Proveedor</label>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                    Proveedor
+                  </label>
                   <select
                     value={form.id_proveedor}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        id_proveedor: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, id_proveedor: e.target.value }))}
                     required
-                    className="agromat-select"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.95rem",
+                    }}
                   >
                     <option value="">Selecciona...</option>
                     {proveedores.map((p) => (
@@ -575,78 +663,91 @@ export default function Productos() {
                   </select>
                 </div>
 
-                <div className="agromat-form-field agromat-full-row">
-                  <label>Zona de Ubicación (Opcional)</label>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                    Nombre del producto
+                  </label>
+                  <input
+                    type="text"
+                    value={form.nombre_producto}
+                    onChange={(e) => setForm((f) => ({ ...f, nombre_producto: e.target.value }))}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.95rem",
+                    }}
+                    placeholder="Ej: Fertilizante NPK 20-20-20"
+                  />
+                </div>
+
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                    Zona de ubicación (opcional)
+                  </label>
                   <select
                     value={form.zonaId}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, zonaId: e.target.value }))
-                    }
-                    className="agromat-select"
+                    onChange={(e) => setForm((f) => ({ ...f, zonaId: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.95rem",
+                    }}
                   >
                     <option value="">-- Sin asignar --</option>
                     {zonas.map((z) => (
                       <option key={z.id_zona} value={z.id_zona}>
-                        {z.codigo} - Rack {z.rack}, módulo {z.modulo}, piso{" "}
-                        {z.piso}
+                        {z.codigo} - Rack {z.rack}, módulo {z.modulo}, piso {z.piso}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <div className="agromat-form-field agromat-full-row">
-                  <label>Nombre</label>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                    URL de la imagen (opcional)
+                  </label>
                   <input
                     type="text"
-                    value={form.nombre_producto}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        nombre_producto: e.target.value,
-                      }))
-                    }
-                    required
-                    className="agromat-input"
-                  />
-                </div>
-
-                <div className="agromat-form-field agromat-full-row">
-                  <label>URL de la imagen (opcional)</label>
-                  <input
-                    type="text"
-                    inputMode="url"
                     value={form.imagen_url}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, imagen_url: e.target.value }))
-                    }
-                    className="agromat-input"
+                    onChange={(e) => setForm((f) => ({ ...f, imagen_url: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.95rem",
+                    }}
                     placeholder="https://ejemplo.com/imagen.jpg"
                   />
                 </div>
 
-                <div className="agromat-form-field agromat-full-row">
-                  <label>Subir imagen desde dispositivo</label>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "8px",
-                      alignItems: "center",
-                    }}
-                  >
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                    O subir imagen desde dispositivo
+                  </label>
+                  <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                     <button
                       type="button"
-                      className="agromat-btn-secondary"
                       onClick={triggerFileInput}
-                    >
-                      Elegir archivo
-                    </button>
-                    <span
                       style={{
-                        fontSize: "0.8rem",
-                        color: "#6b7280",
+                        padding: "10px 16px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        background: "white",
+                        cursor: "pointer",
+                        fontSize: "0.9rem",
+                        fontWeight: 500,
                       }}
                     >
-                      Puedes subir .jpg o .png (máx 5MB)
+                      📁 Elegir archivo
+                    </button>
+                    <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                      JPG o PNG, máx 5MB
                     </span>
                   </div>
                   <input
@@ -658,47 +759,91 @@ export default function Productos() {
                   />
                 </div>
 
-                <div className="agromat-form-field">
-                  <label>Precio</label>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                    Precio
+                  </label>
                   <input
                     type="number"
+                    step="0.01"
                     value={form.precio}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, precio: e.target.value }))
-                    }
-                    className="agromat-input"
+                    onChange={(e) => setForm((f) => ({ ...f, precio: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.95rem",
+                    }}
+                    placeholder="0.00"
                   />
                 </div>
 
-                <div className="agromat-form-field">
-                  <label>Stock</label>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                    Stock inicial
+                  </label>
                   <input
                     type="number"
                     value={form.existencias}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, existencias: e.target.value }))
-                    }
-                    className="agromat-input"
+                    onChange={(e) => setForm((f) => ({ ...f, existencias: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "8px",
+                      fontSize: "0.95rem",
+                    }}
+                    placeholder="0"
                   />
                 </div>
               </div>
 
-              <div className="agromat-modal-footer">
+              <div style={{ marginTop: "24px", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
                 <button
                   type="button"
-                  className="agromat-btn-secondary"
                   onClick={() => setModalOpen(false)}
+                  style={{
+                    padding: "10px 20px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "8px",
+                    background: "white",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                    fontWeight: 500,
+                    color: "#374151",
+                  }}
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="agromat-btn-primary">
-                  Guardar
+                <button
+                  type="submit"
+                  style={{
+                    padding: "10px 20px",
+                    border: "none",
+                    borderRadius: "8px",
+                    background: "#4F46E5",
+                    color: "white",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                    fontWeight: 500,
+                    boxShadow: "0 2px 4px rgba(79, 70, 229, 0.3)",
+                  }}
+                >
+                  {editingId ? "Actualizar producto" : "Crear producto"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* CSS para animación de loading */}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
