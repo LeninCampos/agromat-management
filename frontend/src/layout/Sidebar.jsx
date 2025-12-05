@@ -1,4 +1,4 @@
-// src/layout/Sidebar.jsx
+// frontend/src/layout/Sidebar.jsx
 import { NavLink } from "react-router-dom";
 import {
   Package,
@@ -18,7 +18,8 @@ export default function Sidebar({ isCollapsed = false }) {
     { name: "Dashboard", icon: <LayoutDashboard size={18} />, to: "/app/dashboard" },
     { name: "Proveedores", icon: <Building2 size={18} />, to: "/app/proveedores" },
     { name: "Inventario", icon: <Package size={18} />, to: "/app/productos" },
-    { name: "Entradas", icon: <Archive size={18} />, to: "/app/suministros" },
+    // ✅ CAMBIO 1.10: Renombrado a "Ingresos"
+    { name: "Ingresos", icon: <Archive size={18} />, to: "/app/suministros" },
     { name: "Clientes", icon: <Users size={18} />, to: "/app/clientes" },
     { name: "Pedidos", icon: <ShoppingBag size={18} />, to: "/app/pedidos" },
     { name: "Despachos", icon: <Truck size={18} />, to: "/app/envios" },
@@ -43,7 +44,7 @@ export default function Sidebar({ isCollapsed = false }) {
         transition: "padding 0.3s ease",
       }}
     >
-      {/* Logo y título */}
+      {/* ... (resto del código del logo se mantiene igual) ... */}
       <div
         style={{
           display: "flex",
@@ -101,7 +102,6 @@ export default function Sidebar({ isCollapsed = false }) {
         )}
       </div>
 
-      {/* Título de sección */}
       {!isCollapsed && (
         <div
           style={{
@@ -117,7 +117,6 @@ export default function Sidebar({ isCollapsed = false }) {
         </div>
       )}
 
-      {/* Links de navegación */}
       <nav
         style={{
           display: "flex",
@@ -165,7 +164,6 @@ export default function Sidebar({ isCollapsed = false }) {
         ))}
       </nav>
 
-      {/* Footer */}
       {!isCollapsed && (
         <div
           style={{

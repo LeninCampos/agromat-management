@@ -120,6 +120,13 @@ Producto.hasMany(Suministra, {
   foreignKey: "id_producto",
 });
 
+Suministro.belongsTo(Empleado, {
+  foreignKey: "id_empleado",
+});
+Empleado.hasMany(Suministro, {
+  foreignKey: "id_empleado",
+});
+
 export {
   sequelize,
   Cliente,

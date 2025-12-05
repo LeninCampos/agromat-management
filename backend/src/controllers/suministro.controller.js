@@ -4,6 +4,7 @@ import {
   Proveedor,
   Suministra,
   Producto,
+  Empleado,
 } from "../models/index.js";
 
 export const getAllSuministros = async (req, res, next) => {
@@ -13,6 +14,10 @@ export const getAllSuministros = async (req, res, next) => {
         {
           model: Proveedor,
           attributes: ["id_proveedor", "nombre_proveedor"],
+        },
+        {
+          model: Empleado,
+          attributes: ["id_empleado", "nombre_empleado"],
         },
         {
           model: Suministra,
@@ -42,6 +47,10 @@ export const getSuministroById = async (req, res, next) => {
           attributes: ["id_proveedor", "nombre_proveedor"],
         },
         {
+          model: Empleado,
+          attributes: ["id_empleado", "nombre_empleado"],
+        },
+        {
           model: Suministra,
           include: [
             {
@@ -66,7 +75,7 @@ export const getSuministroById = async (req, res, next) => {
 export const createSuministro = async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
-    const { fecha_llegada, hora_llegada, id_proveedor, items } = req.body;
+    const { fecha_llegada, hora_llegada, id_proveedor, transportista ,id_empleado, items } = req.body;
 
     // 1. Crear Cabecera del Suministro
     const suministro = await Suministro.create(
@@ -74,6 +83,8 @@ export const createSuministro = async (req, res, next) => {
         fecha_llegada,
         hora_llegada,
         id_proveedor,
+        transportista,
+        id_empleado,
       },
       { transaction: t }
     );
