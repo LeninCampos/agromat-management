@@ -1,20 +1,9 @@
-// frontend/src/api/zonas.js
-import axios from "axios";
+import api from "./axios";
 
-const API_URL = "https://agromatgranjas.com/api/zonas";
+export const getZonas = () => api.get("/zonas");
 
-function getAuthHeaders() {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+export const createZona = (data) => api.post("/zonas", data);
 
-export const getZonas = () => axios.get(API_URL);
+export const updateZona = (id, data) => api.put(`/zonas/${id}`, data);
 
-export const createZona = (data) =>
-  axios.post(API_URL, data, { headers: getAuthHeaders() });
-
-export const updateZona = (id, data) =>
-  axios.put(`${API_URL}/${id}`, data, { headers: getAuthHeaders() });
-
-export const deleteZona = (id) =>
-  axios.delete(`${API_URL}/${id}`, { headers: getAuthHeaders() });
+export const deleteZona = (id) => api.delete(`/zonas/${id}`);

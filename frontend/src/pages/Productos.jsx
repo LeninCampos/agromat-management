@@ -12,8 +12,7 @@ import {
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
 
-const BACKEND_URL = "https://agromatgranjas.com";
-
+const BACKEND_URL = import.meta.env.VITE_API_URL; 
 const emptyForm = {
   id_producto: "",
   nombre_producto: "",

@@ -1,18 +1,7 @@
-// frontend/src/api/suministros.js
-import axios from "axios";
+import api from "./axios";
 
-const API_URL = "https://agromatgranjas.com/api/suministro";
+export const getSuministros = () => api.get("/suministro");
 
-function getAuthHeaders() {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+export const createSuministro = (data) => api.post("/suministro", data);
 
-export const getSuministros = () => axios.get(API_URL);
-
-export const createSuministro = (data) =>
-  axios.post(API_URL, data, { headers: getAuthHeaders() });
-
-// Si necesitas borrar o editar:
-export const deleteSuministro = (id) =>
-  axios.delete(`${API_URL}/${id}`, { headers: getAuthHeaders() });
+export const deleteSuministro = (id) => api.delete(`/suministro/${id}`);

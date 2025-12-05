@@ -1,26 +1,9 @@
-// src/api/proveedores.js
-import axios from "axios";
+import api from "./axios";
 
-const API_URL = "https://agromatgranjas.com/api/proveedores";
+export const getProveedores = () => api.get("/proveedores");
 
-// Obtiene el token del login (si lo necesitas después)
-function getAuthHeaders() {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+export const createProveedor = (data) => api.post("/proveedores", data);
 
-// GET todos los proveedores
-export const getProveedores = () =>
-  axios.get(API_URL);
+export const updateProveedor = (id, data) => api.put(`/proveedores/${id}`, data);
 
-// POST crear proveedor
-export const createProveedor = (data) =>
-  axios.post(API_URL, data, { headers: getAuthHeaders() });
-
-// PUT actualizar proveedor
-export const updateProveedor = (id, data) =>
-  axios.put(`${API_URL}/${id}`, data, { headers: getAuthHeaders() });
-
-// DELETE eliminar proveedor
-export const deleteProveedor = (id) =>
-  axios.delete(`${API_URL}/${id}`, { headers: getAuthHeaders() });
+export const deleteProveedor = (id) => api.delete(`/proveedores/${id}`);

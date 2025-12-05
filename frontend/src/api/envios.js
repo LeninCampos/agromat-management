@@ -1,27 +1,9 @@
-// src/api/envios.js
-import axios from "axios";
+import api from "./axios";
 
-const API_URL = "https://agromatgranjas.com/api/envios";
+export const getEnvios = () => api.get("/envios");
 
-// obtener token
-function getAuthHeaders() {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+export const createEnvio = (data) => api.post("/envios", data);
 
-// GET
-export const getEnvios = () =>
-  axios.get(API_URL, { headers: getAuthHeaders() });
+export const updateEnvio = (id, data) => api.put(`/envios/${id}`, data);
 
-// POST
-export const createEnvio = (data) =>
-  
-  axios.post(API_URL, data, { headers: getAuthHeaders() });
-
-// PUT
-export const updateEnvio = (id, data) =>
-  axios.put(`${API_URL}/${id}`, data, { headers: getAuthHeaders() });
-
-// DELETE
-export const deleteEnvio = (id) =>
-  axios.delete(`${API_URL}/${id}`, { headers: getAuthHeaders() });
+export const deleteEnvio = (id) => api.delete(`/envios/${id}`);

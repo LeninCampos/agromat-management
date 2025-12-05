@@ -1,20 +1,9 @@
-// src/api/clientes.js
-import axios from "axios";
+import api from "./axios";
 
-const API_URL = "https://agromatgranjas.com/api/clientes";
+export const getClientes = () => api.get("/clientes");
 
-function getAuthHeaders() {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+export const createCliente = (data) => api.post("/clientes", data);
 
-export const getClientes = () => axios.get(API_URL);
+export const updateCliente = (id, data) => api.put(`/clientes/${id}`, data);
 
-export const createCliente = (data) => 
-  axios.post(API_URL, data, { headers: getAuthHeaders() });
-
-export const updateCliente = (id, data) =>
-  axios.put(`${API_URL}/${id}`, data, { headers: getAuthHeaders() });
-
-export const deleteCliente = (id) =>
-  axios.delete(`${API_URL}/${id}`, { headers: getAuthHeaders() });
+export const deleteCliente = (id) => api.delete(`/clientes/${id}`);

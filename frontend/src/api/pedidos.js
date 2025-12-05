@@ -1,41 +1,20 @@
-import axios from "axios";
+import api from "./axios";
 
-const API_URL = "https://agromatgranjas.com/api/pedidos";
+// GET pedidos
+export const getPedidos = () => api.get("/pedidos");
 
-// obtener token del localStorage
-function getAuthHeaders() {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-// GET pedidos (NO lleva token)
-export const getPedidos = () => axios.get(API_URL);
-
-// POST crear pedido (SÍ lleva token)
-export const createPedido = (data) =>
-  axios.post(API_URL, data, {
-    headers: getAuthHeaders(),
-  });
+// POST crear pedido
+export const createPedido = (data) => api.post("/pedidos", data);
 
 // PUT actualizar pedido
-export const updatePedido = (id, data) =>
-  axios.put(`${API_URL}/${id}`, data, {
-    headers: getAuthHeaders(),
-  });
+export const updatePedido = (id, data) => api.put(`/pedidos/${id}`, data);
 
 // DELETE pedido
-export const deletePedido = (id) =>
-  axios.delete(`${API_URL}/${id}`, {
-    headers: getAuthHeaders(),
-  });
+export const deletePedido = (id) => api.delete(`/pedidos/${id}`);
 
 // Items del pedido
 export const addPedidoItem = (id_pedido, data) =>
-  axios.post(`${API_URL}/${id_pedido}/items`, data, {
-    headers: getAuthHeaders(),
-  });
+  api.post(`/pedidos/${id_pedido}/items`, data);
 
 export const deletePedidoItem = (id_pedido, id_producto) =>
-  axios.delete(`${API_URL}/${id_pedido}/items/${id_producto}`, {
-    headers: getAuthHeaders(),
-  });
+  api.delete(`/pedidos/${id_pedido}/items/${id_producto}`);
