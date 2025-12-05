@@ -1,4 +1,4 @@
-// frontend/src/pages/Productos.jsx - VERSIÓN P1 SIN TAILWIND
+// frontend/src/pages/Productos.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import { getProveedores } from "../api/proveedores";
@@ -12,7 +12,8 @@ import {
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
 
-const BACKEND_URL = import.meta.env.VITE_API_URL; 
+const BACKEND_URL = import.meta.env.VITE_API_URL;
+
 const emptyForm = {
   id_producto: "",
   nombre_producto: "",
@@ -28,6 +29,12 @@ export default function Productos() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  
+  // 🔽 NUEVOS ESTADOS PARA FILTROS Y ORDEN
+  const [showNoStock, setShowNoStock] = useState(false);
+  const [filterZona, setFilterZona] = useState("");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -40,17 +47,68 @@ export default function Productos() {
 
   const fileInputRef = useRef(null);
 
-  // 🔍 Filtro mejorado - incluye búsqueda por código
+  // 🔍 FILTRO Y ORDENAMIENTO (Lógica central mejorada)
   const filtered = useMemo(() => {
+    let result = [...items];
+
+    // 1. Búsqueda de texto
     const query = q.trim().toLowerCase();
-    if (!query) return items;
-    return items.filter(
-      (x) =>
-        x.id_producto?.toLowerCase().includes(query) || // 👈 NUEVO: búsqueda por código
-        x.nombre_producto?.toLowerCase().includes(query) ||
-        x.descripcion?.toLowerCase().includes(query)
-    );
-  }, [q, items]);
+    if (query) {
+      result = result.filter(
+        (x) =>
+          x.id_producto?.toLowerCase().includes(query) ||
+          x.nombre_producto?.toLowerCase().includes(query) ||
+          x.descripcion?.toLowerCase().includes(query)
+      );
+    }
+
+    // 2. Filtro "Sin Stock"
+    if (showNoStock) {
+      result = result.filter((x) => Number(x.existencias) === 0);
+    }
+
+    // 3. Filtro por Zona
+    if (filterZona) {
+      result = result.filter((x) => String(x.zonaId) === String(filterZona));
+    }
+
+    // 4. Ordenamiento
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        const valA = a[sortConfig.key];
+        const valB = b[sortConfig.key];
+
+        // Manejo especial para números
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+        }
+        
+        // Manejo de strings
+        const strA = String(valA).toLowerCase();
+        const strB = String(valB).toLowerCase();
+        if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [q, items, showNoStock, filterZona, sortConfig]);
+
+  // Función para pedir ordenamiento al hacer clic en header
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Helper para mostrar flechita
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) return "↕"; // neutro
+    return sortConfig.direction === 'asc' ? "↑" : "↓";
+  };
 
   // 📦 Cargar datos
   const load = async () => {
@@ -79,14 +137,14 @@ export default function Productos() {
           id_producto: p.id_producto,
           nombre_producto: p.nombre_producto,
           descripcion: p.descripcion,
-          precio: p.precio,
-          existencias: p.stock,
+          precio: Number(p.precio), // asegurar número para sort
+          existencias: Number(p.stock), // asegurar número para sort
           id_proveedor: p.id_proveedor,
-          nombre_proveedor: p.Proveedor?.nombre_proveedor || "Sin proveedor", // 👈 NUEVO
+          nombre_proveedor: p.Proveedor?.nombre_proveedor || "Sin proveedor",
           zonaId: id_zona ? String(id_zona) : "",
           codigo_zona,
           imagen_url: imagenUrl,
-          // 👇 NUEVO: fechas de último ingreso/egreso (placeholder por ahora)
+          // Fechas placeholder
           fecha_ultimo_ingreso: "N/A",
           fecha_ultimo_egreso: "N/A",
         };
@@ -136,13 +194,13 @@ export default function Productos() {
       return;
     }
 
-    // 👇 NUEVO: Validar ID único al crear
+    // Validar ID único al crear
     if (!editingId) {
       const existeId = items.some(
         (item) => item.id_producto.toLowerCase() === form.id_producto.toLowerCase()
       );
       if (existeId) {
-        Swal.fire("Error", `El código "${form.id_producto}" ya existe. Usa otro código.`, "error");
+        Swal.fire("Error", `El código "${form.id_producto}" ya existe. Usa otro.`, "error");
         return;
       }
     }
@@ -286,7 +344,7 @@ export default function Productos() {
 
   return (
     <div style={{ padding: "1.5rem" }}>
-      {/* HEADER MEJORADO */}
+      {/* HEADER */}
       <div style={{ marginBottom: "1.5rem" }}>
         <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#111", marginBottom: "0.5rem" }}>
           📦 Inventario
@@ -296,21 +354,80 @@ export default function Productos() {
         </p>
       </div>
 
-      {/* BOTONES DE ACCIÓN */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "1rem" }}>
+      {/* BARRA DE HERRAMIENTAS SUPERIOR */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginBottom: "1.5rem" }}>
+        
+        {/* BUSCADOR */}
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="🔍 Buscar por código, nombre..."
+          style={{
+            flex: 1,
+            minWidth: "200px",
+            padding: "10px 14px",
+            borderRadius: "8px",
+            border: "1px solid #ddd",
+            fontSize: "0.95rem",
+          }}
+        />
+
+        {/* 13. FILTRO POR ZONA */}
+        <select
+          value={filterZona}
+          onChange={(e) => setFilterZona(e.target.value)}
+          style={{
+            padding: "10px 14px",
+            borderRadius: "8px",
+            border: "1px solid #ddd",
+            fontSize: "0.9rem",
+            cursor: "pointer",
+            backgroundColor: "white",
+          }}
+        >
+          <option value="">🗺️ Todas las zonas</option>
+          {zonas.map((z) => (
+            <option key={z.id_zona} value={z.id_zona}>
+              {z.codigo}
+            </option>
+          ))}
+        </select>
+
+        {/* 12. FILTRO SIN STOCK */}
+        <button
+          onClick={() => setShowNoStock(!showNoStock)}
+          style={{
+            padding: "10px 14px",
+            borderRadius: "8px",
+            border: showNoStock ? "1px solid #ef4444" : "1px solid #ddd",
+            backgroundColor: showNoStock ? "#fef2f2" : "white",
+            color: showNoStock ? "#b91c1c" : "#374151",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+            fontWeight: 500,
+          }}
+        >
+          {showNoStock ? "🔴 Viendo Agotados" : "⚪ Ver Agotados"}
+        </button>
+
+        <button onClick={load} style={{ background: "#f3f4f6", padding: "10px 14px", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>
+          🔄
+        </button>
+
+        {/* SELECCIÓN MÚLTIPLE */}
         <button
           onClick={() => setSelectionMode((v) => !v)}
           style={{
             background: selectionMode ? "#e5e7eb" : "#f3f4f6",
             color: "#111827",
-            padding: "8px 14px",
-            borderRadius: "6px",
+            padding: "10px 14px",
+            borderRadius: "8px",
             border: "1px solid #d1d5db",
             cursor: "pointer",
             fontSize: "0.9rem",
           }}
         >
-          {selectionMode ? "❌ Cancelar selección" : "☑️ Seleccionar múltiples"}
+          {selectionMode ? "Cancelar" : "Seleccionar"}
         </button>
 
         {selectionMode && (
@@ -320,14 +437,14 @@ export default function Productos() {
             style={{
               background: selectedIds.length === 0 ? "#fecaca" : "#DC2626",
               color: "white",
-              padding: "8px 14px",
-              borderRadius: "6px",
+              padding: "10px 14px",
+              borderRadius: "8px",
               border: "none",
               cursor: selectedIds.length === 0 ? "not-allowed" : "pointer",
               fontSize: "0.9rem",
             }}
           >
-            🗑️ Eliminar ({selectedIds.length})
+            Eliminar ({selectedIds.length})
           </button>
         )}
 
@@ -336,48 +453,24 @@ export default function Productos() {
           style={{
             background: "#4F46E5",
             color: "white",
-            padding: "8px 16px",
-            borderRadius: "6px",
+            padding: "10px 18px",
+            borderRadius: "8px",
             border: "none",
             cursor: "pointer",
             fontSize: "0.9rem",
             fontWeight: 500,
           }}
         >
-          ➕ Nuevo producto
+          ➕ Nuevo
         </button>
       </div>
 
-      {/* BUSCADOR */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "1.5rem" }}>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="🔍 Buscar por código, nombre o descripción..."
-          style={{
-            flex: 1,
-            padding: "10px 14px",
-            borderRadius: "8px",
-            border: "1px solid #ddd",
-            fontSize: "0.95rem",
-          }}
-        />
-        <button
-          onClick={load}
-          style={{
-            background: "#f3f4f6",
-            padding: "10px 16px",
-            border: "1px solid #ddd",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontSize: "0.9rem",
-          }}
-        >
-          🔄 Recargar
-        </button>
+      {/* 14. CONTADOR DE RESULTADOS */}
+      <div style={{ marginBottom: "10px", fontSize: "0.85rem", color: "#6b7280" }}>
+        Mostrando <strong>{filtered.length}</strong> de <strong>{items.length}</strong> productos
       </div>
 
-      {/* TABLA MEJORADA */}
+      {/* TABLA */}
       <div
         style={{
           background: "white",
@@ -391,7 +484,7 @@ export default function Productos() {
           <thead style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
             <tr>
               {selectionMode && (
-                <th style={{ padding: "12px", textAlign: "center", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                <th style={{ padding: "12px", textAlign: "center" }}>
                   <input
                     type="checkbox"
                     onChange={toggleSelectAllVisible}
@@ -405,17 +498,18 @@ export default function Productos() {
               <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
                 Foto
               </th>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Código
+              {/* 11. ORDENAMIENTO CLICK EN HEADERS */}
+              <th onClick={() => requestSort('id_producto')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Código {getSortIcon('id_producto')}
               </th>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Nombre
+              <th onClick={() => requestSort('nombre_producto')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Nombre {getSortIcon('nombre_producto')}
               </th>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Proveedor
+              <th onClick={() => requestSort('nombre_proveedor')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Proveedor {getSortIcon('nombre_proveedor')}
               </th>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Zona
+              <th onClick={() => requestSort('codigo_zona')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Zona {getSortIcon('codigo_zona')}
               </th>
               <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
                 Últ. Ingreso
@@ -423,11 +517,11 @@ export default function Productos() {
               <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
                 Últ. Egreso
               </th>
-              <th style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Precio
+              <th onClick={() => requestSort('precio')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "right", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Precio {getSortIcon('precio')}
               </th>
-              <th style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Stock
+              <th onClick={() => requestSort('existencias')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "right", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                Stock {getSortIcon('existencias')}
               </th>
               <th style={{ padding: "12px 16px", textAlign: "center", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
                 Acciones
@@ -437,17 +531,14 @@ export default function Productos() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={selectionMode ? 12 : 11} style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
-                  <div style={{ display: "inline-block", width: "24px", height: "24px", border: "3px solid #e5e7eb", borderTop: "3px solid #4F46E5", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
-                  <p style={{ marginTop: "12px", fontSize: "0.9rem" }}>Cargando productos...</p>
+                <td colSpan={12} style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+                  <p>Cargando productos...</p>
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={selectionMode ? 12 : 11} style={{ textAlign: "center", padding: "40px" }}>
-                  <div style={{ color: "#9ca3af", fontSize: "3rem" }}>📦</div>
-                  <p style={{ marginTop: "12px", fontSize: "0.95rem", fontWeight: 500, color: "#111" }}>No hay productos</p>
-                  <p style={{ marginTop: "4px", fontSize: "0.85rem", color: "#6b7280" }}>Comienza creando uno nuevo</p>
+                <td colSpan={12} style={{ textAlign: "center", padding: "40px" }}>
+                  <p style={{ fontWeight: 500 }}>No hay productos</p>
                 </td>
               </tr>
             ) : (
@@ -468,33 +559,34 @@ export default function Productos() {
                     </td>
                   )}
                   <td style={{ padding: "12px 16px" }}>
+                    {/* 8. REDUCIR ESPACIO FOTO A 32px */}
                     {row.imagen_url ? (
                       <img
                         src={row.imagen_url}
-                        alt={row.nombre_producto}
+                        alt="Foto"
                         style={{
-                          width: "48px",
-                          height: "48px",
+                          width: "32px",
+                          height: "32px",
                           objectFit: "cover",
-                          borderRadius: "8px",
+                          borderRadius: "6px",
                           border: "1px solid #e5e7eb",
                         }}
                       />
                     ) : (
                       <div
                         style={{
-                          width: "48px",
-                          height: "48px",
-                          borderRadius: "8px",
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "6px",
                           background: "#f3f4f6",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          fontSize: "0.7rem",
+                          fontSize: "0.6rem",
                           color: "#9ca3af",
                         }}
                       >
-                        Sin foto
+                        📷
                       </div>
                     )}
                   </td>
@@ -519,7 +611,7 @@ export default function Productos() {
                   <td style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.9rem", fontWeight: 500, color: "#111" }}>
                     ${Number(row.precio).toFixed(2)}
                   </td>
-                  <td style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.9rem", fontWeight: 500, color: "#111" }}>
+                  <td style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.9rem", fontWeight: 500, color: row.existencias === 0 ? "#ef4444" : "#111" }}>
                     {row.existencias}
                   </td>
                   <td style={{ padding: "12px 16px", textAlign: "center" }}>
@@ -529,30 +621,30 @@ export default function Productos() {
                         style={{
                           background: "#fef3c7",
                           color: "#92400e",
-                          padding: "6px 12px",
+                          padding: "4px 10px",
                           borderRadius: "6px",
                           border: "none",
                           cursor: "pointer",
-                          fontSize: "0.85rem",
+                          fontSize: "0.8rem",
                           fontWeight: 500,
                         }}
                       >
-                        ✏️ Editar
+                        ✏️
                       </button>
                       <button
                         onClick={() => remove(row)}
                         style={{
                           background: "#fee2e2",
                           color: "#991b1b",
-                          padding: "6px 12px",
+                          padding: "4px 10px",
                           borderRadius: "6px",
                           border: "none",
                           cursor: "pointer",
-                          fontSize: "0.85rem",
+                          fontSize: "0.8rem",
                           fontWeight: 500,
                         }}
                       >
-                        🗑️ Eliminar
+                        🗑️
                       </button>
                     </div>
                   </td>
@@ -563,7 +655,7 @@ export default function Productos() {
         </table>
       </div>
 
-      {/* MODAL POPUP MEJORADO */}
+      {/* MODAL POPUP */}
       {modalOpen && (
         <div
           style={{
@@ -708,63 +800,30 @@ export default function Productos() {
 
                 <div style={{ gridColumn: "1 / -1" }}>
                   <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
-                    URL de la imagen (opcional)
+                    Descripción (opcional)
                   </label>
-                  <input
-                    type="text"
-                    value={form.imagen_url}
-                    onChange={(e) => setForm((f) => ({ ...f, imagen_url: e.target.value }))}
+                  <textarea
+                    value={form.descripcion}
+                    onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))}
+                    rows={2}
                     style={{
                       width: "100%",
                       padding: "10px 12px",
                       border: "1px solid #d1d5db",
                       borderRadius: "8px",
                       fontSize: "0.95rem",
+                      fontFamily: "inherit",
                     }}
-                    placeholder="https://ejemplo.com/imagen.jpg"
-                  />
-                </div>
-
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
-                    O subir imagen desde dispositivo
-                  </label>
-                  <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                    <button
-                      type="button"
-                      onClick={triggerFileInput}
-                      style={{
-                        padding: "10px 16px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        background: "white",
-                        cursor: "pointer",
-                        fontSize: "0.9rem",
-                        fontWeight: 500,
-                      }}
-                    >
-                      📁 Elegir archivo
-                    </button>
-                    <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                      JPG o PNG, máx 5MB
-                    </span>
-                  </div>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={handleFileChange}
+                    placeholder="Detalles adicionales..."
                   />
                 </div>
 
                 <div>
                   <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
-                    Precio
+                    Precio unitario
                   </label>
                   <input
                     type="number"
-                    step="0.01"
                     value={form.precio}
                     onChange={(e) => setForm((f) => ({ ...f, precio: e.target.value }))}
                     style={{
@@ -780,7 +839,7 @@ export default function Productos() {
 
                 <div>
                   <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
-                    Stock inicial
+                    Existencias (Stock)
                   </label>
                   <input
                     type="number"
@@ -796,21 +855,78 @@ export default function Productos() {
                     placeholder="0"
                   />
                 </div>
+
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                    Imagen (Subir o URL)
+                  </label>
+                  
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "8px" }}>
+                    <button
+                      type="button"
+                      onClick={triggerFileInput}
+                      style={{
+                        background: "#f3f4f6",
+                        border: "1px solid #d1d5db",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      📂 Elegir archivo
+                    </button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={handleFileChange}
+                    />
+                    <input
+                      type="text"
+                      value={form.imagen_url}
+                      onChange={(e) => setForm((f) => ({ ...f, imagen_url: e.target.value }))}
+                      placeholder="O pega una URL aquí..."
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "6px",
+                        fontSize: "0.9rem",
+                      }}
+                    />
+                  </div>
+                  {form.imagen_url && (
+                    <div style={{ marginTop: "10px" }}>
+                      <img
+                        src={form.imagen_url}
+                        alt="Vista previa"
+                        style={{
+                          width: "80px",
+                          height: "80px",
+                          objectFit: "cover",
+                          borderRadius: "8px",
+                          border: "1px solid #ddd",
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div style={{ marginTop: "24px", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+              <div style={{ marginTop: "24px", display: "flex", justifyContent: "flex-end", gap: "12px" }}>
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
                   style={{
-                    padding: "10px 20px",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "8px",
                     background: "white",
-                    cursor: "pointer",
-                    fontSize: "0.9rem",
-                    fontWeight: 500,
+                    border: "1px solid #d1d5db",
+                    padding: "10px 18px",
+                    borderRadius: "8px",
                     color: "#374151",
+                    fontWeight: 500,
+                    cursor: "pointer",
                   }}
                 >
                   Cancelar
@@ -818,31 +934,23 @@ export default function Productos() {
                 <button
                   type="submit"
                   style={{
-                    padding: "10px 20px",
-                    border: "none",
-                    borderRadius: "8px",
                     background: "#4F46E5",
+                    border: "none",
+                    padding: "10px 24px",
+                    borderRadius: "8px",
                     color: "white",
-                    cursor: "pointer",
-                    fontSize: "0.9rem",
                     fontWeight: 500,
-                    boxShadow: "0 2px 4px rgba(79, 70, 229, 0.3)",
+                    cursor: "pointer",
+                    boxShadow: "0 4px 6px -1px rgba(79, 70, 229, 0.2)",
                   }}
                 >
-                  {editingId ? "Actualizar producto" : "Crear producto"}
+                  Guardar producto
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
-      {/* CSS para animación de loading */}
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }
