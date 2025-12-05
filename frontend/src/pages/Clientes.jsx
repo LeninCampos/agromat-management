@@ -10,9 +10,11 @@ import {
 
 const emptyForm = {
   nombre_cliente: "",
+  nombre_contacto: "", // ✅ 2.3
   correo: "",
   telefono: "",
   direccion: "",
+  comentarios: "",     // ✅ 2.4
 };
 
 export default function Clientes() {
@@ -23,23 +25,66 @@ export default function Clientes() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
 
-  // 🔍 FILTRO
-  const filtered = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (!query) return items;
+  // ✅ 2.9 Estado para ordenamiento
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-    return items.filter(
-      (x) =>
-        x.nombre_cliente?.toLowerCase().includes(query) ||
-        x.correo?.toLowerCase().includes(query)
-    );
-  }, [q, items]);
+  // 🔍 FILTRO Y ORDENAMIENTO
+  const processedData = useMemo(() => {
+    let result = [...items];
+    const query = q.trim().toLowerCase();
+
+    // 1. Filtrado (✅ 2.7 y 2.8)
+    if (query) {
+      result = result.filter(
+        (x) =>
+          x.nombre_cliente?.toLowerCase().includes(query) ||
+          x.nombre_contacto?.toLowerCase().includes(query) ||
+          x.correo?.toLowerCase().includes(query) ||
+          x._productos_busqueda?.includes(query) // Busca en productos comprados
+      );
+    }
+
+    // 2. Ordenamiento (✅ 2.9)
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        const valA = a[sortConfig.key];
+        const valB = b[sortConfig.key];
+
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+        }
+        
+        const strA = String(valA || "").toLowerCase();
+        const strB = String(valB || "").toLowerCase();
+        if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [q, items, sortConfig]);
+
+  // Helper para pedir orden
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) return "↕";
+    return sortConfig.direction === 'asc' ? "↑" : "↓";
+  };
 
   // 📦 CARGAR CLIENTES
   const load = async () => {
     setLoading(true);
     try {
       const { data } = await getClientes();
+      // El backend ya trae los campos calculados: ultimo_pedido, pedidos_ultimo_anio
       setItems(data);
     } catch (e) {
       console.error(e);
@@ -53,21 +98,21 @@ export default function Clientes() {
     load();
   }, []);
 
-  // ➕ NUEVO
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
     setModalOpen(true);
   };
 
-  // ✏️ EDITAR
   const openEdit = (row) => {
     setEditingId(row.id_cliente);
     setForm({
       nombre_cliente: row.nombre_cliente ?? "",
+      nombre_contacto: row.nombre_contacto ?? "",
       correo: row.correo ?? "",
       telefono: row.telefono ?? "",
       direccion: row.direccion ?? "",
+      comentarios: row.comentarios ?? "",
     });
     setModalOpen(true);
   };
@@ -77,9 +122,11 @@ export default function Clientes() {
 
     const payload = {
       nombre_cliente: form.nombre_cliente,
+      nombre_contacto: form.nombre_contacto || null,
       correo_cliente: form.correo || null,
       telefono: form.telefono || null,
       direccion: form.direccion || null,
+      comentarios: form.comentarios || null,
     };
 
     try {
@@ -101,7 +148,6 @@ export default function Clientes() {
     }
   };
 
-  // ❌ ELIMINAR
   const remove = async (row) => {
     const result = await Swal.fire({
       title: "¿Eliminar cliente?",
@@ -109,14 +155,13 @@ export default function Clientes() {
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
-      cancelButtonText: "Cancelar",
     });
 
     if (!result.isConfirmed) return;
 
     try {
       await deleteCliente(row.id_cliente);
-      Swal.fire("🗑️ Eliminado", "Cliente eliminado", "success");
+      Swal.fire(" Eliminado", "Cliente eliminado", "success");
       load();
     } catch (e) {
       console.error(e);
@@ -124,12 +169,10 @@ export default function Clientes() {
     }
   };
 
-  // 🧱 UI
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
       <div className="flex items-center justify-between">
         <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}>👥 Clientes</h2>
-
         <button
           onClick={openCreate}
           style={{
@@ -150,7 +193,7 @@ export default function Clientes() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre o correo…"
+          placeholder="Buscar por nombre, producto comprado o correo…"
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -183,60 +226,62 @@ export default function Clientes() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead style={{ background: "#f9fafb", color: "#555" }}>
             <tr>
-              <th style={{ padding: "10px" }}>ID</th>
-              <th style={{ padding: "10px" }}>Nombre</th>
-              <th style={{ padding: "10px" }}>Correo</th>
-              <th style={{ padding: "10px" }}>Teléfono</th>
-              <th style={{ padding: "10px" }}>Dirección</th>
+              <th onClick={() => requestSort('nombre_cliente')} style={{ padding: "10px", cursor: "pointer" }}>
+                Cliente {getSortIcon('nombre_cliente')}
+              </th>
+              <th onClick={() => requestSort('nombre_contacto')} style={{ padding: "10px", cursor: "pointer" }}>
+                Contacto {getSortIcon('nombre_contacto')}
+              </th>
+              <th onClick={() => requestSort('telefono')} style={{ padding: "10px", cursor: "pointer" }}>
+                Teléfono {getSortIcon('telefono')}
+              </th>
+              {/* ✅ 2.5 Columna Fecha Último Pedido */}
+              <th onClick={() => requestSort('ultimo_pedido')} style={{ padding: "10px", cursor: "pointer" }}>
+                Últ. Pedido {getSortIcon('ultimo_pedido')}
+              </th>
+              {/* ✅ 2.6 Columna Cantidad Anual */}
+              <th onClick={() => requestSort('pedidos_ultimo_anio')} style={{ padding: "10px", cursor: "pointer", textAlign: "center" }}>
+                Pedidos (1 año) {getSortIcon('pedidos_ultimo_anio')}
+              </th>
               <th style={{ padding: "10px" }}>Acciones</th>
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
-                  Cargando…
-                </td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>
-                  Sin resultados
-                </td>
-              </tr>
+              <tr><td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>Cargando…</td></tr>
+            ) : processedData.length === 0 ? (
+              <tr><td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>Sin resultados</td></tr>
             ) : (
-              filtered.map((row) => (
+              processedData.map((row) => (
                 <tr key={row.id_cliente} style={{ borderTop: "1px solid #eee" }}>
-                  <td style={{ padding: "10px" }}>{row.id_cliente}</td>
-                  <td style={{ padding: "10px" }}>{row.nombre_cliente}</td>
-                  <td style={{ padding: "10px" }}>{row.correo}</td>
+                  <td style={{ padding: "10px" }}>
+                    <strong>{row.nombre_cliente}</strong><br/>
+                    <span style={{fontSize: "0.85em", color:"#666"}}>{row.correo}</span>
+                  </td>
+                  <td style={{ padding: "10px" }}>{row.nombre_contacto || "-"}</td>
                   <td style={{ padding: "10px" }}>{row.telefono}</td>
-                  <td style={{ padding: "10px" }}>{row.direccion}</td>
+                  
+                  <td style={{ padding: "10px" }}>{row.ultimo_pedido}</td>
+                  <td style={{ padding: "10px", textAlign: "center" }}>
+                    <span style={{background: "#e0e7ff", color:"#3730a3", padding:"4px 8px", borderRadius:"12px", fontSize:"0.85rem", fontWeight:"bold"}}>
+                        {row.pedidos_ultimo_anio}
+                    </span>
+                  </td>
 
                   <td style={{ padding: "10px" }}>
                     <button
                       onClick={() => openEdit(row)}
                       style={{
-                        background: "#F59E0B",
-                        color: "white",
-                        padding: "5px 10px",
-                        borderRadius: "6px",
-                        border: "none",
-                        marginRight: "8px",
+                        background: "#F59E0B", color: "white", padding: "5px 10px", borderRadius: "6px", border: "none", marginRight: "8px", cursor: "pointer"
                       }}
                     >
                       Editar
                     </button>
-
                     <button
                       onClick={() => remove(row)}
                       style={{
-                        background: "#DC2626",
-                        color: "white",
-                        padding: "5px 10px",
-                        borderRadius: "6px",
-                        border: "none",
+                        background: "#DC2626", color: "white", padding: "5px 10px", borderRadius: "6px", border: "none", cursor: "pointer"
                       }}
                     >
                       Eliminar
@@ -249,59 +294,41 @@ export default function Clientes() {
         </table>
       </div>
 
-      {/* MODAL moderno Clientes */}
+      {/* MODAL */}
       {modalOpen && (
         <div className="agromat-modal-backdrop">
           <div className="agromat-modal-card">
             <div className="agromat-modal-header">
               <div>
                 <h2>{editingId ? "Editar cliente" : "Nuevo cliente"}</h2>
-                <p>
-                  {editingId
-                    ? "Modifica los datos del cliente."
-                    : "Completa los datos para registrar un nuevo cliente."}
-                </p>
               </div>
-              <button
-                type="button"
-                className="agromat-modal-close"
-                onClick={() => setModalOpen(false)}
-              >
-                ✕
-              </button>
+              <button type="button" className="agromat-modal-close" onClick={() => setModalOpen(false)}>✕</button>
             </div>
 
             <form onSubmit={save} className="agromat-modal-body">
               <div className="agromat-form-grid">
-                {/* Nombre */}
+                {/* Nombre Cliente */}
                 <div className="agromat-form-field agromat-full-row">
-                  <label>Nombre</label>
+                  <label>Razón Social / Nombre Cliente</label>
                   <input
                     type="text"
                     value={form.nombre_cliente}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        nombre_cliente: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, nombre_cliente: e.target.value }))}
                     required
                     className="agromat-input"
-                    placeholder="Ej. Juan Pérez"
+                    placeholder="Empresa S.A."
                   />
                 </div>
 
-                {/* Correo */}
-                <div className="agromat-form-field agromat-full-row">
-                  <label>Correo</label>
+                {/* ✅ 2.3 Nombre Contacto */}
+                <div className="agromat-form-field">
+                  <label>Nombre Contacto</label>
                   <input
-                    type="email"
-                    value={form.correo}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, correo: e.target.value }))
-                    }
+                    type="text"
+                    value={form.nombre_contacto}
+                    onChange={(e) => setForm((f) => ({ ...f, nombre_contacto: e.target.value }))}
                     className="agromat-input"
-                    placeholder="cliente@ejemplo.com"
+                    placeholder="Persona de contacto"
                   />
                 </div>
 
@@ -311,11 +338,21 @@ export default function Clientes() {
                   <input
                     type="text"
                     value={form.telefono}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, telefono: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, telefono: e.target.value }))}
                     className="agromat-input"
                     placeholder="818 000 0000"
+                  />
+                </div>
+
+                {/* Correo */}
+                <div className="agromat-form-field agromat-full-row">
+                  <label>Correo</label>
+                  <input
+                    type="email"
+                    value={form.correo}
+                    onChange={(e) => setForm((f) => ({ ...f, correo: e.target.value }))}
+                    className="agromat-input"
+                    placeholder="cliente@ejemplo.com"
                   />
                 </div>
 
@@ -324,27 +361,29 @@ export default function Clientes() {
                   <label>Dirección</label>
                   <textarea
                     value={form.direccion}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, direccion: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, direccion: e.target.value }))}
                     className="agromat-textarea"
                     rows={2}
-                    placeholder="Calle, número, colonia, ciudad"
+                    placeholder="Dirección completa de entrega"
+                  />
+                </div>
+
+                {/* ✅ 2.4 Comentarios */}
+                <div className="agromat-form-field agromat-full-row">
+                  <label>Comentarios / Notas</label>
+                  <textarea
+                    value={form.comentarios}
+                    onChange={(e) => setForm((f) => ({ ...f, comentarios: e.target.value }))}
+                    className="agromat-textarea"
+                    rows={2}
+                    placeholder="Preferencias, horarios, etc."
                   />
                 </div>
               </div>
 
               <div className="agromat-modal-footer">
-                <button
-                  type="button"
-                  className="agromat-btn-secondary"
-                  onClick={() => setModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="agromat-btn-primary">
-                  Guardar cliente
-                </button>
+                <button type="button" className="agromat-btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="agromat-btn-primary">Guardar cliente</button>
               </div>
             </form>
           </div>
