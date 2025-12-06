@@ -15,7 +15,7 @@ const router = express.Router();
 router.get("/", getAllEmpleados);
 router.get("/:id", getEmpleadoById);
 router.post("/", verificarAuth, esAdmin, validateEmpleadoCreate, createEmpleado);
-router.put("/:id", verificarAuth, validateEmpleadoUpdate, updateEmpleado);
-router.delete("/:id", verificarAuth, deleteEmpleado);
+router.put("/:id", verificarAuth, esAdmin, validateEmpleadoUpdate, updateEmpleado);
+router.delete("/:id", verificarAuth, esAdmin,verificarAuth, deleteEmpleado);
 
 export default router;

@@ -16,7 +16,14 @@ export const getEmpleadoById = async (req, res, next) => {
 // POST con validación
 export const createEmpleado = async (req, res, next) => {
   try {
-    const created = await Empleado.create(req.body);
+    const data = { ...req.body };
+
+    // ✅ 3.1: Asignar fecha_alta automática si no viene
+    if (!data.fecha_alta) {
+      data.fecha_alta = new Date();
+    }
+
+    const created = await Empleado.create(data);
     res.status(201).json(created);
   } catch (e) { 
     next(e); 

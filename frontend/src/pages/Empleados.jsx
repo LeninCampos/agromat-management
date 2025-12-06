@@ -7,11 +7,11 @@ import {
   deleteEmpleado,
 } from "../api/empleados";
 
+// ✅ 3.1: Quitamos fecha_alta del estado inicial
 const emptyForm = {
   nombre_empleado: "",
   numero_empleado: "",
   correo: "",
-  fecha_alta: "",
   password: "",
   rol: "empleado",
 };
@@ -69,7 +69,7 @@ export default function Empleados() {
       nombre_empleado: row.nombre_empleado ?? "",
       numero_empleado: row.numero_empleado ?? "",
       correo: row.correo ?? "",
-      fecha_alta: row.fecha_alta ?? "",
+      // No cargamos fecha_alta al form para que no sea editable
       rol: row.rol ?? "empleado",
     });
     setModalOpen(true);
@@ -84,8 +84,8 @@ export default function Empleados() {
         nombre_empleado: form.nombre_empleado,
         numero_empleado: form.numero_empleado,
         correo: form.correo,
-        fecha_alta: form.fecha_alta,
         rol: form.rol,
+        // La contraseña es opcional al editar
         ...(form.password ? { password: form.password } : {}),
       };
 
@@ -103,7 +103,13 @@ export default function Empleados() {
       load();
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No pude guardar el empleado", "error");
+      // ✅ 3.2: Mejorar mensajes de error
+      // Intentamos leer el array de errores de express-validator o el mensaje de error general
+      const msg = e.response?.data?.errors?.[0]?.mensaje 
+               || e.response?.data?.error 
+               || "No pude guardar el empleado";
+      
+      Swal.fire("Error", msg, "error");
     }
   };
 
@@ -351,17 +357,9 @@ export default function Empleados() {
               <option value="admin">Administrador</option>
             </select>
 
-            <label>Fecha alta:</label>
-            <input
-              type="date"
-              value={form.fecha_alta}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, fecha_alta: e.target.value }))
-              }
-              style={{ width: "100%", marginBottom: "10px", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
-            />
+            {/* ✅ Campo de Fecha Alta eliminado del formulario visual */}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "1rem" }}>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}

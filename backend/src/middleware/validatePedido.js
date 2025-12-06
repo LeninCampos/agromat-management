@@ -25,6 +25,11 @@ const camposComunes = [
     .isInt({ min: 1 }).withMessage("ID de empleado inválido"),
   body("id_cliente")
     .isInt({ min: 1 }).withMessage("ID de cliente inválido"),
+
+  body("fecha_entrega_estimada").optional({ checkFalsy: true }).isISO8601().withMessage("Fecha inválida"),
+  body("quien_pidio").optional().isString().isLength({ max: 100 }),
+  body("observaciones").optional().isString(),
+
   body("descuento_total")
     .optional()
     .isFloat({ min: 0 }).withMessage("Descuento debe ser número positivo"),
@@ -49,6 +54,9 @@ const camposComunesUpdate = [
   body("id_cliente")
     .optional()
     .isInt({ min: 1 }).withMessage("ID de cliente inválido"),
+  body("fecha_entrega_estimada").optional({ checkFalsy: true }).isISO8601().withMessage("Fecha inválida"),
+  body("quien_pidio").optional().isString().isLength({ max: 100 }),
+  body("observaciones").optional().isString(),
   body("descuento_total")
     .optional()
     .isFloat({ min: 0 }).withMessage("Descuento debe ser número positivo"),

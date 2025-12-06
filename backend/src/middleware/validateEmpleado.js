@@ -37,8 +37,10 @@ export const validateEmpleadoCreate = [
     .isEmail().withMessage("Correo inválido")
     .isLength({ max: 254 }).withMessage("Correo demasiado largo"),
 
+  // ✅ 3.1: Eliminada validación obligatoria de fecha_alta para dejar que el controller la asigne
+  // Si la envían, validamos formato, si no, la ignoramos aquí.
   body("fecha_alta")
-    .notEmpty().withMessage("La fecha de alta es obligatoria").bail()
+    .optional()
     .isISO8601().withMessage("Fecha inválida (YYYY-MM-DD)"),
 
   body("password")

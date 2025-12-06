@@ -14,6 +14,11 @@ const Pedido = sequelize.define(
       type: DataTypes.DATEONLY,
       allowNull: false,
     },
+    // ✅ 3.15: Fecha estimada de despacho
+    fecha_entrega_estimada: {
+      type: DataTypes.DATEONLY,
+      allowNull: true, 
+    },
     hora_pedido: {
       type: DataTypes.TIME,
       allowNull: false,
@@ -30,13 +35,20 @@ const Pedido = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-
-    // dirección de envío del pedido
+    // ✅ 3.17: Quién pidió (Persona de contacto específica para este pedido)
+    quien_pidio: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
     direccion_envio: {
       type: DataTypes.STRING(255),
       allowNull: true,
     },
-
+    // ✅ 3.16: Observaciones
+    observaciones: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     subtotal: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
@@ -66,8 +78,8 @@ const Pedido = sequelize.define(
     sequelize,
     tableName: "pedidos",
     timestamps: true,
-    createdAt: false,        // NO buscará created_at
-    updatedAt: "updated_at", // usará updated_at de la tabla
+    createdAt: false,
+    updatedAt: "updated_at",
   }
 );
 

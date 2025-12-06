@@ -299,12 +299,13 @@ export default function Login() {
             />
           </div>
 
+          {/* ✅ 3.3 y 3.4 Modificados */}
           <div
             style={{
               marginTop: "0.15rem",
               marginBottom: "1.1rem",
               display: "flex",
-              justifyContent: "space-between",
+              justifyContent: "center", // Centrado al quedar un solo elemento
               alignItems: "center",
             }}
           >
@@ -314,16 +315,9 @@ export default function Login() {
                 color: "#9ca3af",
               }}
             >
-              Uso interno — Agromat Monterrey
+              Uso interno — Agromat
             </span>
-            <span
-              style={{
-                fontSize: "0.75rem",
-                color: "#4f46e5",
-              }}
-            >
-              ¿Problemas para entrar?
-            </span>
+            {/* Se eliminó el enlace de problemas para entrar */}
           </div>
 
           <button

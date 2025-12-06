@@ -177,7 +177,7 @@ export const updatePedido = async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
     const { id } = req.params;
-    const { items, ...headerData } = req.body; // aquí viene direccion_envio también
+    const { items, ...headerData } = req.body;
 
     const pedido = await Pedido.findByPk(id, { transaction: t });
     if (!pedido) {
@@ -185,36 +185,14 @@ export const updatePedido = async (req, res, next) => {
       return res.status(404).json({ error: "Pedido no encontrado" });
     }
 
-    // --- construir el mensaje de cambio ---
-    const cambios = [];
+    // Actualizar cabecera con nuevos campos
+    await pedido.update({
+      ...headerData, 
+      last_change: `Actualizado el ${new Date().toLocaleString()}`
+    }, { transaction: t });
 
-    if (headerData.status && headerData.status !== pedido.status) {
-      cambios.push(`Status: ${pedido.status || "N/A"} → ${headerData.status}`);
-    }
-
-    if (
-      headerData.direccion_envio &&
-      headerData.direccion_envio !== pedido.direccion_envio
-    ) {
-      cambios.push("Dirección de envío actualizada");
-    }
-
-    const lastChangeText =
-      cambios.length > 0 ? cambios.join(" | ") : "Pedido actualizado";
-
-    // 1️⃣ Actualizar cabecera (incluye direccion_envio)
-    await pedido.update(
-      {
-        ...headerData, // fecha, hora, status, direccion_envio, desc, imp, etc.
-        last_change: lastChangeText,
-      },
-      { transaction: t }
-    );
-
-    // 2️⃣ Reemplazar items si vienen en el body
     if (items && Array.isArray(items)) {
       await Contiene.destroy({ where: { id_pedido: id }, transaction: t });
-
       const lineas = items.map((i) => ({
         id_pedido: id,
         id_producto: i.id_producto,
@@ -222,13 +200,9 @@ export const updatePedido = async (req, res, next) => {
         precio_unitario: i.precio_unitario,
         subtotal_linea: calcSubtotalLine(i.cantidad, i.precio_unitario),
       }));
-
-      if (lineas.length > 0) {
-        await Contiene.bulkCreate(lineas, { transaction: t });
-      }
+      if (lineas.length > 0) await Contiene.bulkCreate(lineas, { transaction: t });
     }
 
-    // 3️⃣ Recalcular totales
     const tot = await recalcTotales(
       pedido.id_pedido,
       headerData.descuento_total ?? pedido.descuento_total,
@@ -244,56 +218,25 @@ export const updatePedido = async (req, res, next) => {
   }
 };
 
-// =============================
-// DELETE /api/pedidos/:id
-// Borra cabecera + líneas + envíos asociados
-// =============================
 export const deletePedido = async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
     const { id } = req.params;
     const pedido = await Pedido.findByPk(id, { transaction: t });
+    if (!pedido) { await t.rollback(); return res.status(404).json({ error: "No existe" }); }
 
-    if (!pedido) {
-      await t.rollback();
-      return res.status(404).json({ error: "Pedido no encontrado" });
-    }
-
-    // borrar líneas del pedido
-    await Contiene.destroy({
-      where: { id_pedido: pedido.id_pedido },
-      transaction: t,
-    });
-
-    // borrar envíos ligados al pedido
-    const envios = await Envio.findAll({
-      where: { id_pedido: pedido.id_pedido },
-      attributes: ["id_envio"],
-      transaction: t,
-    });
-
-    if (envios.length > 0) {
-      const idsEnvios = envios.map((e) => e.id_envio);
-      await Envio.destroy({
-        where: { id_envio: idsEnvios },
-        transaction: t,
-      });
-    }
-
-    // borrar cabecera
+    await Contiene.destroy({ where: { id_pedido: id }, transaction: t });
+    // Borrar envíos si los hubiera
+    await Envio.destroy({ where: { id_pedido: id }, transaction: t }); 
     await pedido.destroy({ transaction: t });
 
     await t.commit();
-    res.json({
-      ok: true,
-      mensaje: "Pedido y sus envíos eliminados correctamente",
-    });
+    res.json({ ok: true });
   } catch (err) {
     await t.rollback();
     next(err);
   }
 };
-
 // =============================
 // (Opcionales) manejo de items sueltos
 // =============================
