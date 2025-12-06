@@ -4,9 +4,9 @@ import { getPedidos, createPedido, updatePedido, deletePedido } from "../api/ped
 import { getProductos } from "../api/productos";
 import { getClientes } from "../api/clientes";
 import { getEmpleados } from "../api/empleados";
-import { 
-  ArrowUp, ArrowDown, ArrowUpDown, 
-  CheckCircle, Clock, XCircle, Truck, Package 
+import {
+  ArrowUp, ArrowDown, ArrowUpDown,
+  CheckCircle, Clock, XCircle, Truck, Package
 } from "lucide-react";
 
 // ✅ 3.12 Filtro Estado (Opciones)
@@ -35,20 +35,20 @@ function formatDate(d) {
   return `${year}-${month}-${day}`;
 }
 function formatTime(d) {
-  return d.toTimeString().slice(0,5);
+  return d.toTimeString().slice(0, 5);
 }
 
 export default function Pedidos() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // --- Estados para FILTROS (3.9 - 3.12) ---
   const [filters, setFilters] = useState({
-    client: "", 
-    product: "", 
-    dateStart: "", 
-    dateEnd: "", 
-    status: "" 
+    client: "",
+    product: "",
+    dateStart: "",
+    dateEnd: "",
+    status: ""
   });
 
   // --- Estado para ORDENAMIENTO (3.14) ---
@@ -62,7 +62,7 @@ export default function Pedidos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
-  
+
   // Datos Auxiliares
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -79,7 +79,7 @@ export default function Pedidos() {
 
       const pedidosData = resPed.data.map(p => ({
         ...p,
-        quien_pidio: p.quien_pidio || "", 
+        quien_pidio: p.quien_pidio || "",
         fecha_entrega_estimada: p.fecha_entrega_estimada || "",
         observaciones: p.observaciones || "",
         items: (p.Productos || []).map(prod => ({
@@ -110,7 +110,7 @@ export default function Pedidos() {
 
     if (filters.client) {
       const q = filters.client.toLowerCase();
-      result = result.filter(x => 
+      result = result.filter(x =>
         x.Cliente?.nombre_cliente?.toLowerCase().includes(q) ||
         x.quien_pidio?.toLowerCase().includes(q)
       );
@@ -165,8 +165,8 @@ export default function Pedidos() {
 
   const getSortIcon = (key) => {
     if (sortConfig.key !== key) return <ArrowUpDown size={14} className="text-gray-400" />;
-    return sortConfig.direction === "asc" 
-      ? <ArrowUp size={14} className="text-blue-600" /> 
+    return sortConfig.direction === "asc"
+      ? <ArrowUp size={14} className="text-blue-600" />
       : <ArrowDown size={14} className="text-blue-600" />;
   };
 
@@ -211,7 +211,7 @@ export default function Pedidos() {
   const save = async (e) => {
     e.preventDefault();
     if (form.items.length === 0) return Swal.fire("Error", "Agrega al menos un producto", "warning");
-    
+
     try {
       const payload = {
         ...form,
@@ -240,11 +240,14 @@ export default function Pedidos() {
   // 🗑️ Función de eliminar recuperada
   const remove = async (row) => {
     const result = await Swal.fire({
-      title: "¿Eliminar pedido?",
-      text: `Pedido #${row.id_pedido}`,
+      title: "¿Borrar registro?",
+      text: `Se eliminará permanentemente el pedido #${row.id_pedido} de la base de datos. Si solo quieres cancelarlo, edita el estado.`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Sí, eliminar",
+      confirmButtonText: "Sí, borrar definitivamente",
+      cancelButtonText: "No, mantener",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
     });
     if (!result.isConfirmed) return;
     try {
@@ -261,12 +264,12 @@ export default function Pedidos() {
     if (!nuevoItem.id_producto) return;
     const prod = productos.find(p => p.id_producto === nuevoItem.id_producto);
     const precio = nuevoItem.precio_unitario || prod.precio;
-    
+
     setForm(prev => {
       const existe = prev.items.find(i => i.id_producto === nuevoItem.id_producto);
       let nuevosItems;
       if (existe) {
-        nuevosItems = prev.items.map(i => i.id_producto === nuevoItem.id_producto 
+        nuevosItems = prev.items.map(i => i.id_producto === nuevoItem.id_producto
           ? { ...i, cantidad: Number(i.cantidad) + Number(nuevoItem.cantidad) } : i);
       } else {
         nuevosItems = [...prev.items, { ...nuevoItem, nombre_producto: prod.nombre_producto, precio_unitario: precio }];
@@ -289,20 +292,20 @@ export default function Pedidos() {
 
       {/* --- BARRA DE FILTROS --- */}
       <div style={{ background: "white", padding: "15px", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", marginBottom: "20px", display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "flex-end" }}>
-        
+
         <div style={{ flex: 1, minWidth: "150px" }}>
           <label className="text-xs font-bold text-gray-500 mb-1 block">Cliente / Quien pidió</label>
-          <input type="text" className="agromat-input" placeholder="Buscar..." value={filters.client} onChange={e => setFilters({...filters, client: e.target.value})} />
+          <input type="text" className="agromat-input" placeholder="Buscar..." value={filters.client} onChange={e => setFilters({ ...filters, client: e.target.value })} />
         </div>
 
         <div style={{ flex: 1, minWidth: "150px" }}>
           <label className="text-xs font-bold text-gray-500 mb-1 block">Producto</label>
-          <input type="text" className="agromat-input" placeholder="Contiene..." value={filters.product} onChange={e => setFilters({...filters, product: e.target.value})} />
+          <input type="text" className="agromat-input" placeholder="Contiene..." value={filters.product} onChange={e => setFilters({ ...filters, product: e.target.value })} />
         </div>
 
         <div style={{ width: "140px" }}>
           <label className="text-xs font-bold text-gray-500 mb-1 block">Estado</label>
-          <select className="agromat-select" value={filters.status} onChange={e => setFilters({...filters, status: e.target.value})}>
+          <select className="agromat-select" value={filters.status} onChange={e => setFilters({ ...filters, status: e.target.value })}>
             <option value="">Todos</option>
             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -311,15 +314,15 @@ export default function Pedidos() {
         <div style={{ display: "flex", gap: "5px" }}>
           <div>
             <label className="text-xs font-bold text-gray-500 mb-1 block">Desde</label>
-            <input type="date" className="agromat-input" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} />
+            <input type="date" className="agromat-input" value={filters.dateStart} onChange={e => setFilters({ ...filters, dateStart: e.target.value })} />
           </div>
           <div>
             <label className="text-xs font-bold text-gray-500 mb-1 block">Hasta</label>
-            <input type="date" className="agromat-input" value={filters.dateEnd} onChange={e => setFilters({...filters, dateEnd: e.target.value})} />
+            <input type="date" className="agromat-input" value={filters.dateEnd} onChange={e => setFilters({ ...filters, dateEnd: e.target.value })} />
           </div>
         </div>
 
-        <button 
+        <button
           onClick={() => setFilters({ client: "", product: "", dateStart: "", dateEnd: "", status: "" })}
           style={{ padding: "8px 12px", background: "#f3f4f6", border: "1px solid #ddd", borderRadius: "6px", height: "38px", cursor: "pointer" }}
         >
@@ -375,7 +378,7 @@ export default function Pedidos() {
                 <td className="p-3 text-right font-medium">
                   ${Number(row.total).toFixed(2)}
                 </td>
-                
+
                 {/* ✅ Acciones restauradas con colores estándar */}
                 <td className="p-3 text-center">
                   <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
@@ -406,8 +409,9 @@ export default function Pedidos() {
                         cursor: "pointer",
                         fontWeight: 500
                       }}
+                      title="Borrar de la base de datos"
                     >
-                      Eliminar
+                      Borrar
                     </button>
                   </div>
                 </td>
@@ -448,26 +452,26 @@ export default function Pedidos() {
               <h2>{editingId ? "Editar Pedido" : "Nuevo Pedido"}</h2>
               <button onClick={() => setModalOpen(false)} className="agromat-modal-close">✕</button>
             </div>
-            
+
             <form onSubmit={save} className="agromat-modal-body">
               <div className="agromat-form-grid">
-                
+
                 {/* Fechas y Status */}
                 <div className="agromat-form-field">
                   <label>Fecha Pedido</label>
-                  <input type="date" className="agromat-input" value={form.fecha_pedido} onChange={e => setForm({...form, fecha_pedido: e.target.value})} required />
+                  <input type="date" className="agromat-input" value={form.fecha_pedido} onChange={e => setForm({ ...form, fecha_pedido: e.target.value })} required />
                 </div>
                 <div className="agromat-form-field">
                   <label>Fecha Estimada Despacho</label>
-                  <input type="date" className="agromat-input" value={form.fecha_entrega_estimada} onChange={e => setForm({...form, fecha_entrega_estimada: e.target.value})} />
+                  <input type="date" className="agromat-input" value={form.fecha_entrega_estimada} onChange={e => setForm({ ...form, fecha_entrega_estimada: e.target.value })} />
                 </div>
                 <div className="agromat-form-field">
                   <label>Hora</label>
-                  <input type="time" className="agromat-input" value={form.hora_pedido} onChange={e => setForm({...form, hora_pedido: e.target.value})} required />
+                  <input type="time" className="agromat-input" value={form.hora_pedido} onChange={e => setForm({ ...form, hora_pedido: e.target.value })} required />
                 </div>
                 <div className="agromat-form-field">
                   <label>Status</label>
-                  <select className="agromat-select" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
+                  <select className="agromat-select" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
                     {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
@@ -475,14 +479,14 @@ export default function Pedidos() {
                 {/* Cliente y Empleado */}
                 <div className="agromat-form-field">
                   <label>Cliente</label>
-                  <select className="agromat-select" value={form.id_cliente} onChange={e => setForm({...form, id_cliente: e.target.value})} required>
+                  <select className="agromat-select" value={form.id_cliente} onChange={e => setForm({ ...form, id_cliente: e.target.value })} required>
                     <option value="">Selecciona...</option>
                     {clientes.map(c => <option key={c.id_cliente} value={c.id_cliente}>{c.nombre_cliente}</option>)}
                   </select>
                 </div>
                 <div className="agromat-form-field">
                   <label>Vendedor (Empleado)</label>
-                  <select className="agromat-select" value={form.id_empleado} onChange={e => setForm({...form, id_empleado: e.target.value})} required>
+                  <select className="agromat-select" value={form.id_empleado} onChange={e => setForm({ ...form, id_empleado: e.target.value })} required>
                     <option value="">Selecciona...</option>
                     {empleados.map(e => <option key={e.id_empleado} value={e.id_empleado}>{e.nombre_empleado}</option>)}
                   </select>
@@ -490,29 +494,29 @@ export default function Pedidos() {
 
                 <div className="agromat-form-field">
                   <label>¿Quién pidió? (Contacto)</label>
-                  <input type="text" className="agromat-input" placeholder="Ej. Arq. Pérez" value={form.quien_pidio} onChange={e => setForm({...form, quien_pidio: e.target.value})} />
+                  <input type="text" className="agromat-input" placeholder="Ej. Arq. Pérez" value={form.quien_pidio} onChange={e => setForm({ ...form, quien_pidio: e.target.value })} />
                 </div>
                 <div className="agromat-form-field">
                   <label>Dirección Envío</label>
-                  <input type="text" className="agromat-input" value={form.direccion_envio} onChange={e => setForm({...form, direccion_envio: e.target.value})} />
+                  <input type="text" className="agromat-input" value={form.direccion_envio} onChange={e => setForm({ ...form, direccion_envio: e.target.value })} />
                 </div>
 
                 <div className="agromat-form-field agromat-full-row">
                   <label>Observaciones</label>
-                  <textarea className="agromat-textarea" rows="2" value={form.observaciones} onChange={e => setForm({...form, observaciones: e.target.value})} placeholder="Notas internas..." />
+                  <textarea className="agromat-textarea" rows="2" value={form.observaciones} onChange={e => setForm({ ...form, observaciones: e.target.value })} placeholder="Notas internas..." />
                 </div>
               </div>
 
               {/* Items Section */}
               <div style={{ background: "#f9fafb", padding: "15px", borderRadius: "10px", marginTop: "15px" }}>
                 <h4 style={{ margin: "0 0 10px 0", fontSize: "0.9rem" }}>Productos ({form.items.length}) - Total: ${totalCalculado.toFixed(2)}</h4>
-                
+
                 <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
-                  <select className="agromat-select" style={{ flex: 2 }} value={nuevoItem.id_producto} onChange={e => setNuevoItem({...nuevoItem, id_producto: e.target.value})}>
+                  <select className="agromat-select" style={{ flex: 2 }} value={nuevoItem.id_producto} onChange={e => setNuevoItem({ ...nuevoItem, id_producto: e.target.value })}>
                     <option value="">Buscar producto...</option>
                     {productos.map(p => <option key={p.id_producto} value={p.id_producto}>{p.nombre_producto} (${p.precio})</option>)}
                   </select>
-                  <input type="number" className="agromat-input" style={{ width: "80px" }} min="1" value={nuevoItem.cantidad} onChange={e => setNuevoItem({...nuevoItem, cantidad: e.target.value})} />
+                  <input type="number" className="agromat-input" style={{ width: "80px" }} min="1" value={nuevoItem.cantidad} onChange={e => setNuevoItem({ ...nuevoItem, cantidad: e.target.value })} />
                   <button type="button" className="agromat-btn-primary" onClick={agregarItem}>+</button>
                 </div>
 
@@ -525,7 +529,7 @@ export default function Pedidos() {
                           <td className="p-1 font-bold">x{it.cantidad}</td>
                           <td className="p-1 text-right">${(it.cantidad * it.precio_unitario).toFixed(2)}</td>
                           <td className="p-1 text-right">
-                            <button type="button" onClick={() => setForm(f => ({...f, items: f.items.filter(x => x.id_producto !== it.id_producto)}))} className="text-red-500 font-bold">×</button>
+                            <button type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter(x => x.id_producto !== it.id_producto) }))} className="text-red-500 font-bold">×</button>
                           </td>
                         </tr>
                       ))}

@@ -14,15 +14,23 @@ import {
 import agromatLogo from "../assets/agromat-logo.png";
 
 export default function Sidebar({ isCollapsed = false }) {
+  // ✅ 4.2 Reordenamiento lógico del menú
   const links = [
     { name: "Dashboard", icon: <LayoutDashboard size={18} />, to: "/app/dashboard" },
-    { name: "Proveedores", icon: <Building2 size={18} />, to: "/app/proveedores" },
-    { name: "Inventario", icon: <Package size={18} />, to: "/app/productos" },
-    // ✅ CAMBIO 1.10: Renombrado a "Ingresos"
-    { name: "Ingresos", icon: <Archive size={18} />, to: "/app/suministros" },
-    { name: "Clientes", icon: <Users size={18} />, to: "/app/clientes" },
+    
+    // Bloque Ventas
     { name: "Pedidos", icon: <ShoppingBag size={18} />, to: "/app/pedidos" },
+    { name: "Clientes", icon: <Users size={18} />, to: "/app/clientes" },
+    
+    // Bloque Inventario
+    { name: "Inventario", icon: <Package size={18} />, to: "/app/productos" },
+    { name: "Ingresos", icon: <Archive size={18} />, to: "/app/suministros" },
+    
+    // Bloque Logística / Proveedores
     { name: "Despachos", icon: <Truck size={18} />, to: "/app/envios" },
+    { name: "Proveedores", icon: <Building2 size={18} />, to: "/app/proveedores" },
+    
+    // Bloque Admin
     { name: "Empleados", icon: <UserCog size={18} />, to: "/app/empleados" },
     { name: "Zonas", icon: <MapPin size={18} />, to: "/app/zonas" },
   ];
@@ -44,7 +52,8 @@ export default function Sidebar({ isCollapsed = false }) {
         transition: "padding 0.3s ease",
       }}
     >
-      {/* ... (resto del código del logo se mantiene igual) ... */}
+      {/* ... (el resto del componente Sidebar se mantiene igual, logo y footer) ... */}
+      
       <div
         style={{
           display: "flex",
