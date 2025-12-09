@@ -17,6 +17,11 @@ export const updateProducto = (id, data) => api.put(`/productos/${id}`, data);
 // DELETE eliminar producto (uno)
 export const deleteProducto = (id) => api.delete(`/productos/${id}`);
 
+export const descargarInventarioExcel = () =>
+  api.get("/productos/exportar-excel", {
+    responseType: "blob",
+  });
+
 // DELETE eliminar productos múltiples
 export const bulkDeleteProductos = (ids) =>
   api.delete("/productos", {

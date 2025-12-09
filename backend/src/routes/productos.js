@@ -14,11 +14,13 @@ import {
   bulkDeleteProductos,
   getMovimientosProducto,
   recalcularStock,
+  exportarProductosExcel,
 } from "../controllers/producto.controller.js";
 
 const router = express.Router();
 
 router.get("/", getAllProductos);
+router.get("/exportar-excel", verificarAuth, exportarProductosExcel);
 router.get("/:id/movimientos", getMovimientosProducto);
 router.get("/:id", getProductoById);
 

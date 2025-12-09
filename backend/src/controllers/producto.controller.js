@@ -1,5 +1,6 @@
 // backend/src/controllers/producto.controller.js
 import { QueryTypes } from "sequelize";
+import  XLSX  from "xlsx";
 import {
   sequelize,
   Producto,
@@ -623,5 +624,82 @@ export const recalcularStock = async (req, res, next) => {
     console.error("ERROR recalcularStock:", err);
     await t.rollback();
     return res.status(500).json({ error: "Error al recalcular stock" });
+  }
+};
+
+export const exportarProductosExcel = async (req, res, next) => {
+  try {
+    const productos = await Producto.findAll({
+      include: [
+        {
+          model: Proveedor,
+          attributes: ["nombre_proveedor"],
+        },
+        {
+          model: SeUbica,
+          as: "SeUbicas",
+          include: [
+            {
+              model: Zona,
+              as: "Zona",
+              attributes: ["codigo", "rack", "modulo", "piso"],
+            },
+          ],
+        },
+      ],
+      order: [["id_producto", "ASC"]],
+    });
+    const datosExcel = productos.map((p) => {
+      const ubicacion = p.SeUbicas?.[0]?.Zona;
+      const ubicacionTexto = ubicacion
+        ? `${ubicacion.codigo} (R:${ubicacion.rack} M:${ubicacion.modulo} P:${ubicacion.piso})`
+        : "Sin asignar";
+
+      return {
+        "Código": p.id_producto,
+        "Producto": p.nombre_producto,
+        "Descripción": p.descripcion || "",
+        "Proveedor": p.Proveedor?.nombre_proveedor || "Sin proveedor",
+        "Ubicación": ubicacionTexto,
+        "Precio": Number(p.precio),
+        "Stock Actual": Number(p.stock),
+      };
+    });
+
+    const workBook = XLSX.utils.book_new();
+    const workSheet = XLSX.utils.json_to_sheet(datosExcel);
+
+    const wscols = [
+      { wch: 15 }, // Código
+      { wch: 30 }, // Producto
+      { wch: 30 }, // Descripción
+      { wch: 20 }, // Proveedor
+      { wch: 25 }, // Ubicación
+      { wch: 10 }, // Precio
+      { wch: 10 }, // Stock
+    ];
+    workSheet["!cols"] = wscols;
+
+    XLSX.utils.book_append_sheet(workBook, workSheet, "Inventario");
+
+    const excelBuffer = XLSX.write(workBook, {
+      bookType: "xlsx",
+      type: "buffer",
+    });
+
+    // 5. Enviar respuesta como archivo descargable
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=Inventario.xlsx"
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.send(excelBuffer);
+
+  } catch (err) {
+    console.error("ERROR exportarProductosExcel:", err);
+    next(err);
   }
 };

@@ -10,6 +10,7 @@ import {
   updateProducto,
   deleteProducto,
   bulkDeleteProductos,
+  descargarInventarioExcel,
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
 
@@ -52,6 +53,45 @@ export default function Productos() {
   const [selectedIds, setSelectedIds] = useState([]);
 
   const fileInputRef = useRef(null);
+  const handleExport = async () => {
+    try {
+      const response = await descargarInventarioExcel();
+
+      // Crear URL temporal para el blob
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+
+      // Calcular fecha actual formato mm/dd/aa
+      const now = new Date();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const aa = String(now.getFullYear()).slice(-2); // Últimos 2 dígitos del año
+
+      const fileName = `INVENTARIO A DIA ${mm}-${dd}-${aa}.xlsx`; // Usé guiones para evitar problemas con ciertos SO, pero puedes probar '/'
+
+      // Crear enlace invisible y hacer click
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+
+      // Limpieza
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Descarga iniciada',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000
+      });
+    } catch (error) {
+      console.error("Error descargando excel:", error);
+      Swal.fire("Error", "No se pudo descargar el reporte", "error");
+    }
+  };
 
   const formatCurrency = (value) =>
     Number(value || 0).toLocaleString("es-MX", {
@@ -688,6 +728,24 @@ export default function Productos() {
             Eliminar ({selectedIds.length})
           </button>
         )}
+        <button
+          onClick={handleExport}
+          style={{
+            background: "#10B981", 
+            color: "white",
+            padding: "10px 14px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px"
+          }}
+          title="Exportar a Excel"
+        >
+          <span></span> Exportar
+        </button>
 
         <button
           onClick={openCreate}
