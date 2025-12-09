@@ -11,15 +11,13 @@ import {
   Suministro,
 } from "../models/index.js";
 
-/* =======================
+/* =========================================================
    HELPER: borrar producto por id usando una transacción
    (borra ubicaciones, líneas de pedido y suministros)
-======================= */
+========================================================= */
 async function deleteProductoById(id, t) {
   const producto = await Producto.findByPk(id, { transaction: t });
-  if (!producto) {
-    return;
-  }
+  if (!producto) return;
 
   // 1️⃣ Borrar ubicaciones del producto
   await SeUbica.destroy({
@@ -43,12 +41,38 @@ async function deleteProductoById(id, t) {
   await producto.destroy({ transaction: t });
 }
 
-/* =======================
-   HELPER: Recalcular stock de un producto basándose en entradas y salidas
-======================= */
+/* =========================================================
+   HELPER: registrar ajustes manuales de stock
+   (cuando cambias el campo stock en Productos)
+========================================================= */
+async function registrarAjusteStock({ t, id_producto, delta, motivo }) {
+  if (!delta || delta === 0) return;
+
+  try {
+    await sequelize.query(
+      `
+      INSERT INTO ajustes_stock (id_producto, fecha, hora, cantidad, motivo)
+      VALUES (?, CURDATE(), CURTIME(), ?, ?)
+      `,
+      {
+        replacements: [id_producto, delta, motivo],
+        type: QueryTypes.INSERT,
+        transaction: t,
+      }
+    );
+  } catch (err) {
+    // Si por alguna razón falla, no truena todo el flujo
+    console.error("ERROR registrarAjusteStock:", err.message);
+  }
+}
+
+/* =========================================================
+   HELPER: Recalcular stock de un producto
+   = entradas (suministros) - salidas (pedidos) + ajustes
+========================================================= */
 export async function recalcularStockProducto(id_producto, t) {
-  // Sumar todas las entradas (suministros)
-  const [entradasResult] = await sequelize.query(
+  // Entradas de suministra / suministro
+  const entradasRow = await sequelize.query(
     `
     SELECT COALESCE(SUM(sm.cantidad), 0) AS total_entradas
     FROM suministra sm
@@ -62,8 +86,10 @@ export async function recalcularStockProducto(id_producto, t) {
     }
   );
 
-  // Sumar todas las salidas (pedidos)
-  const [salidasResult] = await sequelize.query(
+  const totalEntradas = Number(entradasRow[0]?.total_entradas || 0);
+
+  // Salidas de contiene / pedidos
+  const salidasRow = await sequelize.query(
     `
     SELECT COALESCE(SUM(c.cantidad), 0) AS total_salidas
     FROM contiene c
@@ -77,9 +103,25 @@ export async function recalcularStockProducto(id_producto, t) {
     }
   );
 
-  const totalEntradas = Number(entradasResult?.total_entradas) || 0;
-  const totalSalidas = Number(salidasResult?.total_salidas) || 0;
-  const nuevoStock = totalEntradas - totalSalidas;
+  const totalSalidas = Number(salidasRow[0]?.total_salidas || 0);
+
+  // Ajustes manuales
+  const ajustesRow = await sequelize.query(
+    `
+    SELECT COALESCE(SUM(a.cantidad), 0) AS total_ajustes
+    FROM ajustes_stock a
+    WHERE a.id_producto = ?
+    `,
+    {
+      replacements: [id_producto],
+      type: QueryTypes.SELECT,
+      transaction: t,
+    }
+  );
+
+  const totalAjustes = Number(ajustesRow[0]?.total_ajustes || 0);
+
+  const nuevoStock = totalEntradas - totalSalidas + totalAjustes;
 
   // Actualizar el stock del producto
   await Producto.update(
@@ -90,9 +132,9 @@ export async function recalcularStockProducto(id_producto, t) {
   return nuevoStock;
 }
 
-// =======================
-// GET: todos los productos
-// =======================
+/* =========================================================
+   GET: todos los productos
+========================================================= */
 export const getAllProductos = async (req, res, next) => {
   try {
     const productos = await Producto.findAll({
@@ -117,12 +159,11 @@ export const getAllProductos = async (req, res, next) => {
       order: [["id_producto", "ASC"]],
     });
 
-    // Obtener fechas de último ingreso y egreso para cada producto
+    // Agregamos fechas de último ingreso / egreso
     const productosConFechas = await Promise.all(
       productos.map(async (p) => {
         const producto = p.toJSON();
 
-        // Último ingreso (suministro)
         const [ultimoIngreso] = await sequelize.query(
           `
           SELECT MAX(su.fecha_llegada) AS fecha
@@ -136,7 +177,6 @@ export const getAllProductos = async (req, res, next) => {
           }
         );
 
-        // Último egreso (pedido)
         const [ultimoEgreso] = await sequelize.query(
           `
           SELECT MAX(p.fecha_pedido) AS fecha
@@ -168,9 +208,9 @@ export const getAllProductos = async (req, res, next) => {
   }
 };
 
-// =======================
-// GET: producto por ID
-// =======================
+/* =========================================================
+   GET: producto por ID
+========================================================= */
 export const getProductoById = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -206,11 +246,11 @@ export const getProductoById = async (req, res, next) => {
   }
 };
 
-// ==========================================================
-// POST /api/productos
-// - Si el ID NO existe: CREA el producto.
-// - Si el ID YA existe: suma stock y actualiza datos.
-// ==========================================================
+/* =========================================================
+   POST /api/productos
+   - Si el ID NO existe: CREA el producto.
+   - Si el ID YA existe: suma stock y actualiza datos.
+========================================================= */
 export const createProducto = async (req, res, next) => {
   const t = await sequelize.transaction();
 
@@ -277,9 +317,10 @@ export const createProducto = async (req, res, next) => {
   }
 };
 
-// =======================
-// PUT /api/productos/:id
-// =======================
+/* =========================================================
+   PUT /api/productos/:id
+   - Si cambia el stock, se registra un ajuste en ajustes_stock
+========================================================= */
 export const updateProducto = async (req, res, next) => {
   const t = await sequelize.transaction();
 
@@ -293,8 +334,31 @@ export const updateProducto = async (req, res, next) => {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    await producto.update(datos, { transaction: t });
+    const stockActual = Number(producto.stock ?? 0);
+    const stockNuevo =
+      datos.stock !== undefined ? Number(datos.stock) : stockActual;
+    const delta = stockNuevo - stockActual;
 
+    // Actualizar datos del producto (incluye nuevo stock)
+    await producto.update(
+      {
+        ...datos,
+        stock: stockNuevo,
+      },
+      { transaction: t }
+    );
+
+    // Registrar ajuste si hubo cambio de stock
+    if (delta !== 0) {
+      await registrarAjusteStock({
+        t,
+        id_producto: id,
+        delta,
+        motivo: "Ajuste manual en ficha de producto",
+      });
+    }
+
+    // Actualizar ubicación si se envía zona
     if (zona !== undefined) {
       await SeUbica.destroy({
         where: { id_producto: id },
@@ -320,9 +384,9 @@ export const updateProducto = async (req, res, next) => {
   }
 };
 
-// =======================
-// DELETE /api/productos/:id
-// =======================
+/* =========================================================
+   DELETE /api/productos/:id
+========================================================= */
 export const deleteProducto = async (req, res, next) => {
   const t = await sequelize.transaction();
 
@@ -347,9 +411,9 @@ export const deleteProducto = async (req, res, next) => {
   }
 };
 
-// =======================
-// DELETE /api/productos  (borrado masivo)
-// =======================
+/* =========================================================
+   DELETE /api/productos  (borrado masivo)
+========================================================= */
 export const bulkDeleteProductos = async (req, res, next) => {
   const t = await sequelize.transaction();
 
@@ -382,9 +446,12 @@ export const bulkDeleteProductos = async (req, res, next) => {
   }
 };
 
-// =======================
-// GET /api/productos/:id/movimientos
-// =======================
+/* =========================================================
+   GET /api/productos/:id/movimientos
+   - Entradas: suministros
+   - Salidas: pedidos
+   - Ajustes: ajustes_stock (se suman como +entradas o +salidas)
+========================================================= */
 export const getMovimientosProducto = async (req, res, next) => {
   const { id } = req.params;
 
@@ -427,11 +494,31 @@ export const getMovimientosProducto = async (req, res, next) => {
       }
     );
 
-    // 3) Combinar por fecha
+    // 3) AJUSTES MANUALES: ajustes_stock
+    const ajustes = await sequelize.query(
+      `
+      SELECT
+        fecha,
+        SUM(CASE WHEN cantidad > 0 THEN cantidad ELSE 0 END) AS entradas_ajuste,
+        SUM(CASE WHEN cantidad < 0 THEN -cantidad ELSE 0 END) AS salidas_ajuste
+      FROM ajustes_stock
+      WHERE id_producto = ?
+      GROUP BY fecha
+      ORDER BY fecha
+      `,
+      {
+        replacements: [id],
+        type: QueryTypes.SELECT,
+        raw: true,
+      }
+    );
+
+    // 4) Combinar por fecha
     const byDate = new Map();
 
+    // Entradas de suministros
     for (const row of entradas) {
-      const key = row.fecha;
+      const key = String(row.fecha);
       byDate.set(key, {
         fecha: key,
         entradas: Number(row.cantidad_entrada) || 0,
@@ -439,8 +526,9 @@ export const getMovimientosProducto = async (req, res, next) => {
       });
     }
 
+    // Salidas de pedidos
     for (const row of salidas) {
-      const key = row.fecha;
+      const key = String(row.fecha);
       const existing = byDate.get(key) || {
         fecha: key,
         entradas: 0,
@@ -450,19 +538,34 @@ export const getMovimientosProducto = async (req, res, next) => {
       byDate.set(key, existing);
     }
 
+    // Ajustes manuales
+    for (const row of ajustes) {
+      const key = String(row.fecha);
+      const existing = byDate.get(key) || {
+        fecha: key,
+        entradas: 0,
+        salidas: 0,
+      };
+      existing.entradas += Number(row.entradas_ajuste) || 0;
+      existing.salidas += Number(row.salidas_ajuste) || 0;
+      byDate.set(key, existing);
+    }
+
     const movimientos = Array.from(byDate.values()).sort((a, b) =>
       a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0
     );
 
     const producto = await Producto.findByPk(id);
 
-    // Calcular stock actual basado en movimientos
+    // Calcular stock basado en movimientos
     const totalEntradas = movimientos.reduce((sum, m) => sum + m.entradas, 0);
     const totalSalidas = movimientos.reduce((sum, m) => sum + m.salidas, 0);
     const stockCalculado = totalEntradas - totalSalidas;
 
     return res.json({
-      producto: producto ? { ...producto.toJSON(), stock_calculado: stockCalculado } : null,
+      producto: producto
+        ? { ...producto.toJSON(), stock_calculado: stockCalculado }
+        : null,
       movimientos,
       resumen: {
         total_entradas: totalEntradas,
@@ -478,10 +581,10 @@ export const getMovimientosProducto = async (req, res, next) => {
   }
 };
 
-// =======================
-// POST /api/productos/recalcular-stock
-// Recalcula el stock de todos los productos o uno específico
-// =======================
+/* =========================================================
+   POST /api/productos/recalcular-stock
+   - Recalcula usando: entradas - salidas + ajustes
+========================================================= */
 export const recalcularStock = async (req, res, next) => {
   const t = await sequelize.transaction();
 
@@ -489,7 +592,6 @@ export const recalcularStock = async (req, res, next) => {
     const { id_producto } = req.body;
 
     if (id_producto) {
-      // Recalcular solo un producto
       const nuevoStock = await recalcularStockProducto(id_producto, t);
       await t.commit();
       return res.json({
@@ -499,7 +601,6 @@ export const recalcularStock = async (req, res, next) => {
       });
     }
 
-    // Recalcular todos los productos
     const productos = await Producto.findAll({ transaction: t });
     const resultados = [];
 
