@@ -1,5 +1,6 @@
 // frontend/src/pages/Productos.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { getProveedores } from "../api/proveedores";
 import { getZonas } from "../api/zonas";
@@ -26,14 +27,19 @@ const emptyForm = {
 };
 
 export default function Productos() {
+  const navigate = useNavigate();
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
-  // 🔽 NUEVOS ESTADOS PARA FILTROS Y ORDEN
+  // Filtros / orden
   const [showNoStock, setShowNoStock] = useState(false);
   const [filterZona, setFilterZona] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  // Umbral configurable de bajo stock
+  const [lowStockThreshold, setLowStockThreshold] = useState(10);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -47,7 +53,38 @@ export default function Productos() {
 
   const fileInputRef = useRef(null);
 
-  // 🔍 FILTRO Y ORDENAMIENTO (Lógica central mejorada)
+  const formatCurrency = (value) =>
+    Number(value || 0).toLocaleString("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  // 🔢 Estadísticas generales del inventario (cards de arriba)
+  const stats = useMemo(() => {
+    const total = items.length;
+    let sinStock = 0;
+    let bajoStock = 0;
+    let valor = 0;
+
+    for (const p of items) {
+      const stock = Number(p.existencias) || 0;
+      const precio = Number(p.precio) || 0;
+
+      if (stock === 0) {
+        sinStock += 1;
+      } else if (stock > 0 && stock <= lowStockThreshold) {
+        bajoStock += 1;
+      }
+
+      valor += stock * precio;
+    }
+
+    return { total, sinStock, bajoStock, valor };
+  }, [items, lowStockThreshold]);
+
+  // 🔍 FILTRO Y ORDENAMIENTO
   const filtered = useMemo(() => {
     let result = [...items];
 
@@ -78,16 +115,14 @@ export default function Productos() {
         const valA = a[sortConfig.key];
         const valB = b[sortConfig.key];
 
-        // Manejo especial para números
-        if (typeof valA === 'number' && typeof valB === 'number') {
-          return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+        if (typeof valA === "number" && typeof valB === "number") {
+          return sortConfig.direction === "asc" ? valA - valB : valB - valA;
         }
 
-        // Manejo de strings
-        const strA = String(valA).toLowerCase();
-        const strB = String(valB).toLowerCase();
-        if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
+        const strA = String(valA ?? "").toLowerCase();
+        const strB = String(valB ?? "").toLowerCase();
+        if (strA < strB) return sortConfig.direction === "asc" ? -1 : 1;
+        if (strA > strB) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
       });
     }
@@ -95,19 +130,17 @@ export default function Productos() {
     return result;
   }, [q, items, showNoStock, filterZona, sortConfig]);
 
-  // Función para pedir ordenamiento al hacer clic en header
   const requestSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
     }
     setSortConfig({ key, direction });
   };
 
-  // Helper para mostrar flechita
   const getSortIcon = (key) => {
-    if (sortConfig.key !== key) return "↕"; // neutro
-    return sortConfig.direction === 'asc' ? "↑" : "↓";
+    if (sortConfig.key !== key) return "↕";
+    return sortConfig.direction === "asc" ? "↑" : "↓";
   };
 
   // 📦 Cargar datos
@@ -133,20 +166,25 @@ export default function Productos() {
           imagenUrl = `${BACKEND_URL}${imagenUrl}`;
         }
 
+        // ⬇️ precio: soporta p.precio o p.precio_unitario
+        const precioRaw =
+          p.precio !== undefined && p.precio !== null
+            ? p.precio
+            : p.precio_unitario ?? 0;
+
         return {
           id_producto: p.id_producto,
           nombre_producto: p.nombre_producto,
           descripcion: p.descripcion,
-          precio: Number(p.precio), // asegurar número para sort
-          existencias: Number(p.stock), // asegurar número para sort
+          precio: Number(precioRaw),
+          existencias: Number(p.stock),
           id_proveedor: p.id_proveedor,
           nombre_proveedor: p.Proveedor?.nombre_proveedor || "Sin proveedor",
           zonaId: id_zona ? String(id_zona) : "",
           codigo_zona,
           imagen_url: imagenUrl,
-          // Fechas placeholder
-          fecha_ultimo_ingreso: "N/A",
-          fecha_ultimo_egreso: "N/A",
+          fecha_ultimo_ingreso: p.fecha_ultimo_ingreso || "N/A",
+          fecha_ultimo_egreso: p.fecha_ultimo_egreso || "N/A",
         };
       });
 
@@ -194,28 +232,30 @@ export default function Productos() {
       return;
     }
 
-    // Validar ID único al crear
     if (!editingId) {
       const existeId = items.some(
-        (item) => item.id_producto.toLowerCase() === form.id_producto.toLowerCase()
+        (item) =>
+          item.id_producto.toLowerCase() === form.id_producto.toLowerCase()
       );
       if (existeId) {
-        Swal.fire("Error", `El código "${form.id_producto}" ya existe. Usa otro.`, "error");
+        Swal.fire(
+          "Error",
+          `El código "${form.id_producto}" ya existe. Usa otro.`,
+          "error"
+        );
         return;
       }
     }
 
     try {
       let zonaObj = null;
-      if (form.zonaId) {
-        zonaObj = { id_zona: Number(form.zonaId) };
-      }
+      if (form.zonaId) zonaObj = { id_zona: Number(form.zonaId) };
 
       const payload = {
         id_producto: form.id_producto,
         nombre_producto: form.nombre_producto,
         descripcion: form.descripcion || null,
-        precio: Number(form.precio) || 0,
+        precio: Number(form.precio) || 0, // 👈 asegúrate que el backend use "precio"
         stock: Number(form.existencias) || 0,
         id_proveedor: Number(form.id_proveedor),
         zona: zonaObj,
@@ -306,7 +346,11 @@ export default function Productos() {
       await load();
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No pude eliminar los productos seleccionados", "error");
+      Swal.fire(
+        "Error",
+        "No pude eliminar los productos seleccionados",
+        "error"
+      );
     }
   };
 
@@ -337,16 +381,22 @@ export default function Productos() {
   };
 
   const triggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+    if (fileInputRef.current) fileInputRef.current.click();
   };
 
+  // ========================= JSX =========================
   return (
     <div style={{ padding: "1.5rem" }}>
       {/* HEADER */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#111", marginBottom: "0.5rem" }}>
+      <div style={{ marginBottom: "1.25rem" }}>
+        <h2
+          style={{
+            fontSize: "1.75rem",
+            fontWeight: 700,
+            color: "#111",
+            marginBottom: "0.35rem",
+          }}
+        >
           📦 Inventario
         </h2>
         <p style={{ fontSize: "0.95rem", color: "#666" }}>
@@ -354,9 +404,154 @@ export default function Productos() {
         </p>
       </div>
 
-      {/* BARRA DE HERRAMIENTAS SUPERIOR */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginBottom: "1.5rem" }}>
+      {/* CARDS DE ESTADÍSTICAS */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: "12px",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <div
+          style={{
+            background: "white",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            border: "1px solid #e5e7eb",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.8rem",
+              color: "#6b7280",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            Total productos
+          </p>
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontSize: "1.4rem",
+              fontWeight: 700,
+              color: "#111827",
+            }}
+          >
+            {stats.total}
+          </p>
+        </div>
 
+        <div
+          style={{
+            background: "white",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            border: "1px solid #fee2e2",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.8rem",
+              color: "#b91c1c",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            Sin stock
+          </p>
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontSize: "1.4rem",
+              fontWeight: 700,
+              color: "#b91c1c",
+            }}
+          >
+            {stats.sinStock}
+          </p>
+        </div>
+
+        <div
+          style={{
+            background: "white",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            border: "1px solid #fef3c7",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.8rem",
+              color: "#92400e",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            Bajo stock (≤{lowStockThreshold})
+          </p>
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontSize: "1.4rem",
+              fontWeight: 700,
+              color: "#92400e",
+            }}
+          >
+            {stats.bajoStock}
+          </p>
+        </div>
+
+        <div
+          style={{
+            background: "white",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            border: "1px solid #d1fae5",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.8rem",
+              color: "#047857",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            Valor inventario
+          </p>
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontSize: "1.2rem",
+              fontWeight: 700,
+              color: "#047857",
+            }}
+          >
+            {formatCurrency(stats.valor)}
+          </p>
+        </div>
+      </div>
+
+      {/* BARRA DE HERRAMIENTAS SUPERIOR */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "12px",
+          alignItems: "center",
+          marginBottom: "1.5rem",
+        }}
+      >
         {/* BUSCADOR */}
         <input
           value={q}
@@ -372,7 +567,7 @@ export default function Productos() {
           }}
         />
 
-        {/* 13. FILTRO POR ZONA */}
+        {/* FILTRO POR ZONA */}
         <select
           value={filterZona}
           onChange={(e) => setFilterZona(e.target.value)}
@@ -393,7 +588,7 @@ export default function Productos() {
           ))}
         </select>
 
-        {/* 12. FILTRO SIN STOCK */}
+        {/* FILTRO SIN STOCK */}
         <button
           onClick={() => setShowNoStock(!showNoStock)}
           style={{
@@ -410,7 +605,53 @@ export default function Productos() {
           {showNoStock ? "🔴 Viendo Agotados" : "⚪ Ver Agotados"}
         </button>
 
-        <button onClick={load} style={{ background: "#f3f4f6", padding: "10px 14px", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer" }}>
+        {/* INPUT PARA UMBRAL DE BAJO STOCK */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "0 4px",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "0.8rem",
+              color: "#6b7280",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Umbral bajo stock:
+          </span>
+          <input
+            type="number"
+            min={0}
+            value={lowStockThreshold}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              if (Number.isNaN(val)) return;
+              setLowStockThreshold(val < 0 ? 0 : val);
+            }}
+            style={{
+              width: "70px",
+              padding: "6px 8px",
+              borderRadius: "8px",
+              border: "1px solid #d1d5db",
+              fontSize: "0.85rem",
+            }}
+          />
+        </div>
+
+        <button
+          onClick={load}
+          style={{
+            background: "#f3f4f6",
+            padding: "10px 14px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+            cursor: "pointer",
+          }}
+        >
           🔄
         </button>
 
@@ -465,9 +706,16 @@ export default function Productos() {
         </button>
       </div>
 
-      {/* 14. CONTADOR DE RESULTADOS */}
-      <div style={{ marginBottom: "10px", fontSize: "0.85rem", color: "#6b7280" }}>
-        Mostrando <strong>{filtered.length}</strong> de <strong>{items.length}</strong> productos
+      {/* CONTADOR DE RESULTADOS */}
+      <div
+        style={{
+          marginBottom: "10px",
+          fontSize: "0.85rem",
+          color: "#6b7280",
+        }}
+      >
+        Mostrando <strong>{filtered.length}</strong> de{" "}
+        <strong>{items.length}</strong> productos
       </div>
 
       {/* TABLA */}
@@ -481,7 +729,12 @@ export default function Productos() {
         }}
       >
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
+          <thead
+            style={{
+              background: "#f9fafb",
+              borderBottom: "2px solid #e5e7eb",
+            }}
+          >
             <tr>
               {selectionMode && (
                 <th style={{ padding: "12px", textAlign: "center" }}>
@@ -490,40 +743,143 @@ export default function Productos() {
                     onChange={toggleSelectAllVisible}
                     checked={
                       filtered.length > 0 &&
-                      filtered.every((p) => selectedIds.includes(p.id_producto))
+                      filtered.every((p) =>
+                        selectedIds.includes(p.id_producto)
+                      )
                     }
                   />
                 </th>
               )}
-              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+              <th
+                style={{
+                  padding: "12px 16px",
+                  textAlign: "left",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
                 Foto
               </th>
-              {/* 11. ORDENAMIENTO CLICK EN HEADERS */}
-              <th onClick={() => requestSort('id_producto')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Código {getSortIcon('id_producto')}
+              <th
+                onClick={() => requestSort("id_producto")}
+                style={{
+                  cursor: "pointer",
+                  padding: "12px 16px",
+                  textAlign: "left",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
+                Código {getSortIcon("id_producto")}
               </th>
-              <th onClick={() => requestSort('nombre_producto')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Nombre {getSortIcon('nombre_producto')}
+              <th
+                onClick={() => requestSort("nombre_producto")}
+                style={{
+                  cursor: "pointer",
+                  padding: "12px 16px",
+                  textAlign: "left",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
+                Nombre {getSortIcon("nombre_producto")}
               </th>
-              <th onClick={() => requestSort('nombre_proveedor')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Proveedor {getSortIcon('nombre_proveedor')}
+              <th
+                onClick={() => requestSort("nombre_proveedor")}
+                style={{
+                  cursor: "pointer",
+                  padding: "12px 16px",
+                  textAlign: "left",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
+                Proveedor {getSortIcon("nombre_proveedor")}
               </th>
-              <th onClick={() => requestSort('codigo_zona')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Zona {getSortIcon('codigo_zona')}
+              <th
+                onClick={() => requestSort("codigo_zona")}
+                style={{
+                  cursor: "pointer",
+                  padding: "12px 16px",
+                  textAlign: "left",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
+                Zona {getSortIcon("codigo_zona")}
               </th>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+              <th
+                style={{
+                  padding: "12px 16px",
+                  textAlign: "left",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
                 Últ. Ingreso
               </th>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+              <th
+                style={{
+                  padding: "12px 16px",
+                  textAlign: "left",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
                 Últ. Egreso
               </th>
-              <th onClick={() => requestSort('precio')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "right", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Precio {getSortIcon('precio')}
+              <th
+                onClick={() => requestSort("precio")}
+                style={{
+                  cursor: "pointer",
+                  padding: "12px 16px",
+                  textAlign: "right",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
+                Precio {getSortIcon("precio")}
               </th>
-              <th onClick={() => requestSort('existencias')} style={{ cursor: "pointer", padding: "12px 16px", textAlign: "right", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
-                Stock {getSortIcon('existencias')}
+              <th
+                onClick={() => requestSort("existencias")}
+                style={{
+                  cursor: "pointer",
+                  padding: "12px 16px",
+                  textAlign: "right",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
+                Stock {getSortIcon("existencias")}
               </th>
-              <th style={{ padding: "12px 16px", textAlign: "center", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+              <th
+                style={{
+                  padding: "12px 16px",
+                  textAlign: "center",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                }}
+              >
                 Acciones
               </th>
             </tr>
@@ -531,7 +887,14 @@ export default function Productos() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={12} style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+                <td
+                  colSpan={12}
+                  style={{
+                    textAlign: "center",
+                    padding: "40px",
+                    color: "#6b7280",
+                  }}
+                >
                   <p>Cargando productos...</p>
                 </td>
               </tr>
@@ -542,123 +905,235 @@ export default function Productos() {
                 </td>
               </tr>
             ) : (
-              filtered.map((row) => (
-                <tr
-                  key={row.id_producto}
-                  style={{ borderTop: "1px solid #f3f4f6", transition: "background 0.15s" }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "white"}
-                >
-                  {selectionMode && (
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(row.id_producto)}
-                        onChange={() => toggleSelect(row.id_producto)}
-                      />
+              filtered.map((row) => {
+                const stock = Number(row.existencias) || 0;
+
+                let stockBg = "transparent";
+                let stockColor = "#111827";
+
+                if (stock === 0) {
+                  stockBg = "#fee2e2";
+                  stockColor = "#b91c1c";
+                } else if (stock > 0 && stock <= lowStockThreshold) {
+                  stockBg = "#fef3c7";
+                  stockColor = "#92400e";
+                }
+
+                return (
+                  <tr
+                    key={row.id_producto}
+                    style={{
+                      borderTop: "1px solid #f3f4f6",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = "#f9fafb")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "white")
+                    }
+                  >
+                    {selectionMode && (
+                      <td style={{ padding: "12px", textAlign: "center" }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(row.id_producto)}
+                          onChange={() => toggleSelect(row.id_producto)}
+                        />
+                      </td>
+                    )}
+                    <td style={{ padding: "12px 16px" }}>
+                      {row.imagen_url ? (
+                        <img
+                          src={row.imagen_url}
+                          alt="Foto"
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            objectFit: "cover",
+                            borderRadius: "6px",
+                            border: "1px solid #e5e7eb",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "6px",
+                            background: "#f3f4f6",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "0.6rem",
+                            color: "#9ca3af",
+                          }}
+                        >
+                          📷
+                        </div>
+                      )}
                     </td>
-                  )}
-                  <td style={{ padding: "12px 16px" }}>
-                    {/* 8. REDUCIR ESPACIO FOTO A 32px */}
-                    {row.imagen_url ? (
-                      <img
-                        src={row.imagen_url}
-                        alt="Foto"
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        fontSize: "0.9rem",
+                        fontWeight: 500,
+                        color: "#111",
+                      }}
+                    >
+                      {row.id_producto}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        fontSize: "0.9rem",
+                        color: "#111",
+                      }}
+                    >
+                      {row.nombre_producto}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        fontSize: "0.9rem",
+                        color: "#6b7280",
+                      }}
+                    >
+                      {row.nombre_proveedor}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        fontSize: "0.9rem",
+                        color: "#6b7280",
+                      }}
+                    >
+                      {row.codigo_zona || "Sin asignar"}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        fontSize: "0.9rem",
+                        color: "#6b7280",
+                      }}
+                    >
+                      {row.fecha_ultimo_ingreso}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        fontSize: "0.9rem",
+                        color: "#6b7280",
+                      }}
+                    >
+                      {row.fecha_ultimo_egreso}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        textAlign: "right",
+                        fontSize: "0.9rem",
+                        fontWeight: 500,
+                        color: "#111",
+                      }}
+                    >
+                      {formatCurrency(row.precio)}
+                    </td>
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        textAlign: "right",
+                        fontSize: "0.9rem",
+                        fontWeight: 500,
+                      }}
+                    >
+                      <span
                         style={{
-                          width: "32px",
-                          height: "32px",
-                          objectFit: "cover",
-                          borderRadius: "6px",
-                          border: "1px solid #e5e7eb",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "flex-end",
+                          minWidth: "56px",
+                          padding: "4px 10px",
+                          borderRadius: "999px",
+                          backgroundColor: stockBg,
+                          color: stockColor,
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
                         }}
-                      />
-                    ) : (
+                      >
+                        {stock}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "center" }}>
                       <div
                         style={{
-                          width: "32px",
-                          height: "32px",
-                          borderRadius: "6px",
-                          background: "#f3f4f6",
                           display: "flex",
-                          alignItems: "center",
+                          gap: "8px",
                           justifyContent: "center",
-                          fontSize: "0.6rem",
-                          color: "#9ca3af",
                         }}
                       >
-                        📷
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", fontWeight: 500, color: "#111" }}>
-                    {row.id_producto}
-                  </td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#111" }}>
-                    {row.nombre_producto}
-                  </td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#6b7280" }}>
-                    {row.nombre_proveedor}
-                  </td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#6b7280" }}>
-                    {row.codigo_zona || "Sin asignar"}
-                  </td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#6b7280" }}>
-                    {row.fecha_ultimo_ingreso}
-                  </td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.9rem", color: "#6b7280" }}>
-                    {row.fecha_ultimo_egreso}
-                  </td>
-                  <td style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.9rem", fontWeight: 500, color: "#111" }}>
-                    ${Number(row.precio).toFixed(2)}
-                  </td>
-                  <td style={{ padding: "12px 16px", textAlign: "right", fontSize: "0.9rem", fontWeight: 500, color: row.existencias === 0 ? "#ef4444" : "#111" }}>
-                    {row.existencias}
-                  </td>
-                  <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-                      {/* ✅ CAMBIO: Botón Editar estandarizado */}
-                      <button
-                        onClick={() => openEdit(row)}
-                        style={{
-                          background: "#F59E0B",
-                          color: "white",
-                          padding: "5px 12px",
-                          borderRadius: "999px",
-                          border: "none",
-                          cursor: "pointer",
-                          fontSize: "0.8rem",
-                          fontWeight: 500,
-                        }}
-                      >
-                        Editar
-                      </button>
+                        <button
+                          onClick={() =>
+                            navigate(
+                              `/app/productos/${row.id_producto}/historial`
+                            )
+                          }
+                          style={{
+                            background: "#2563EB",
+                            color: "white",
+                            padding: "5px 12px",
+                            borderRadius: "999px",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Historial
+                        </button>
 
-                      {/* ✅ CAMBIO: Botón Eliminar estandarizado */}
-                      <button
-                        onClick={() => remove(row)}
-                        style={{
-                          background: "#DC2626",
-                          color: "white",
-                          padding: "5px 12px",
-                          borderRadius: "999px",
-                          border: "none",
-                          cursor: "pointer",
-                          fontSize: "0.8rem",
-                          fontWeight: 500,
-                        }}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                        <button
+                          onClick={() => openEdit(row)}
+                          style={{
+                            background: "#F59E0B",
+                            color: "white",
+                            padding: "5px 12px",
+                            borderRadius: "999px",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Editar
+                        </button>
+
+                        <button
+                          onClick={() => remove(row)}
+                          style={{
+                            background: "#DC2626",
+                            color: "white",
+                            padding: "5px 12px",
+                            borderRadius: "999px",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
 
-      {/* MODAL POPUP */}
+      {/* MODAL */}
       {modalOpen && (
         <div
           style={{
@@ -672,7 +1147,6 @@ export default function Productos() {
           }}
           onClick={() => setModalOpen(false)}
         >
-          {/* Backdrop */}
           <div
             style={{
               position: "fixed",
@@ -682,7 +1156,6 @@ export default function Productos() {
             }}
           />
 
-          {/* Modal */}
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
@@ -696,27 +1169,62 @@ export default function Productos() {
               overflow: "auto",
             }}
           >
-            {/* Header */}
-            <div style={{ borderBottom: "1px solid #f3f4f6", padding: "20px 24px" }}>
-              <h3 style={{ fontSize: "1.25rem", fontWeight: 600, color: "#111", margin: 0 }}>
+            <div
+              style={{
+                borderBottom: "1px solid #f3f4f6",
+                padding: "20px 24px",
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: 600,
+                  color: "#111",
+                  margin: 0,
+                }}
+              >
                 {editingId ? "Editar producto" : "Nuevo producto"}
               </h3>
-              <p style={{ marginTop: "4px", fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-                {editingId ? "Actualiza la información del producto" : "Completa los datos del nuevo producto"}
+              <p
+                style={{
+                  marginTop: "4px",
+                  fontSize: "0.85rem",
+                  color: "#6b7280",
+                  margin: 0,
+                }}
+              >
+                {editingId
+                  ? "Actualiza la información del producto"
+                  : "Completa los datos del nuevo producto"}
               </p>
             </div>
 
-            {/* Form */}
             <form onSubmit={save} style={{ padding: "24px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "16px",
+                }}
+              >
                 <div>
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.9rem",
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: "6px",
+                    }}
+                  >
                     Código (ID)
                   </label>
                   <input
                     type="text"
                     value={form.id_producto}
-                    onChange={(e) => setForm((f) => ({ ...f, id_producto: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, id_producto: e.target.value }))
+                    }
                     disabled={!!editingId}
                     required
                     style={{
@@ -733,12 +1241,22 @@ export default function Productos() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.9rem",
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: "6px",
+                    }}
+                  >
                     Proveedor
                   </label>
                   <select
                     value={form.id_proveedor}
-                    onChange={(e) => setForm((f) => ({ ...f, id_proveedor: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, id_proveedor: e.target.value }))
+                    }
                     required
                     style={{
                       width: "100%",
@@ -758,13 +1276,26 @@ export default function Productos() {
                 </div>
 
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.9rem",
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: "6px",
+                    }}
+                  >
                     Nombre del producto
                   </label>
                   <input
                     type="text"
                     value={form.nombre_producto}
-                    onChange={(e) => setForm((f) => ({ ...f, nombre_producto: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        nombre_producto: e.target.value,
+                      }))
+                    }
                     required
                     style={{
                       width: "100%",
@@ -778,12 +1309,22 @@ export default function Productos() {
                 </div>
 
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.9rem",
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: "6px",
+                    }}
+                  >
                     Zona de ubicación (opcional)
                   </label>
                   <select
                     value={form.zonaId}
-                    onChange={(e) => setForm((f) => ({ ...f, zonaId: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, zonaId: e.target.value }))
+                    }
                     style={{
                       width: "100%",
                       padding: "10px 12px",
@@ -795,19 +1336,30 @@ export default function Productos() {
                     <option value="">-- Sin asignar --</option>
                     {zonas.map((z) => (
                       <option key={z.id_zona} value={z.id_zona}>
-                        {z.codigo} - Rack {z.rack}, módulo {z.modulo}, piso {z.piso}
+                        {z.codigo} - Rack {z.rack}, módulo {z.modulo}, piso{" "}
+                        {z.piso}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.9rem",
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: "6px",
+                    }}
+                  >
                     Descripción (opcional)
                   </label>
                   <textarea
                     value={form.descripcion}
-                    onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, descripcion: e.target.value }))
+                    }
                     rows={2}
                     style={{
                       width: "100%",
@@ -822,13 +1374,23 @@ export default function Productos() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.9rem",
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: "6px",
+                    }}
+                  >
                     Precio unitario
                   </label>
                   <input
                     type="number"
                     value={form.precio}
-                    onChange={(e) => setForm((f) => ({ ...f, precio: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, precio: e.target.value }))
+                    }
                     style={{
                       width: "100%",
                       padding: "10px 12px",
@@ -841,13 +1403,23 @@ export default function Productos() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.9rem",
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: "6px",
+                    }}
+                  >
                     Existencias (Stock)
                   </label>
                   <input
                     type="number"
                     value={form.existencias}
-                    onChange={(e) => setForm((f) => ({ ...f, existencias: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, existencias: e.target.value }))
+                    }
                     style={{
                       width: "100%",
                       padding: "10px 12px",
@@ -860,11 +1432,25 @@ export default function Productos() {
                 </div>
 
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 500, color: "#374151", marginBottom: "6px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.9rem",
+                      fontWeight: 500,
+                      color: "#374151",
+                      marginBottom: "6px",
+                    }}
+                  >
                     Imagen (Subir o URL)
                   </label>
 
-                  <div style={{ display: "flex", gap: "10px", marginBottom: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      marginBottom: "8px",
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={triggerFileInput}
@@ -889,7 +1475,9 @@ export default function Productos() {
                     <input
                       type="text"
                       value={form.imagen_url}
-                      onChange={(e) => setForm((f) => ({ ...f, imagen_url: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, imagen_url: e.target.value }))
+                      }
                       placeholder="O pega una URL aquí..."
                       style={{
                         flex: 1,
@@ -918,7 +1506,14 @@ export default function Productos() {
                 </div>
               </div>
 
-              <div style={{ marginTop: "24px", display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <div
+                style={{
+                  marginTop: "24px",
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "12px",
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}

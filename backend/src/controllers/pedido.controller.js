@@ -42,6 +42,42 @@ async function recalcTotales(
 }
 
 // =============================
+// HELPER: Actualizar stock de productos después de un pedido
+// =============================
+async function actualizarStockProductos(items, operacion, t) {
+  // operacion: 'restar' para nuevos pedidos, 'sumar' para eliminar pedidos
+  for (const item of items) {
+    const producto = await Producto.findByPk(item.id_producto, { transaction: t });
+    if (producto) {
+      const cantidad = Number(item.cantidad) || 0;
+      let nuevoStock;
+
+      if (operacion === 'restar') {
+        nuevoStock = Math.max(0, Number(producto.stock || 0) - cantidad);
+      } else {
+        nuevoStock = Number(producto.stock || 0) + cantidad;
+      }
+
+      await producto.update({ stock: nuevoStock }, { transaction: t });
+    }
+  }
+}
+
+// =============================
+// HELPER: Obtener items actuales de un pedido
+// =============================
+async function obtenerItemsPedido(id_pedido, t) {
+  const items = await Contiene.findAll({
+    where: { id_pedido },
+    transaction: t,
+  });
+  return items.map(item => ({
+    id_producto: item.id_producto,
+    cantidad: item.cantidad,
+  }));
+}
+
+// =============================
 // GET /api/pedidos
 // =============================
 export const getAllPedidos = async (req, res, next) => {
@@ -120,11 +156,32 @@ export const createPedido = async (req, res, next) => {
       status,
       id_empleado,
       id_cliente,
-      direccion_envio, // 👈 NUEVO
+      direccion_envio,
       descuento_total = 0,
       impuesto_total = 0,
       items = [],
     } = req.body;
+
+    // Verificar que hay suficiente stock antes de crear el pedido
+    for (const item of items) {
+      const producto = await Producto.findByPk(item.id_producto, { transaction: t });
+      if (!producto) {
+        await t.rollback();
+        return res.status(400).json({
+          error: `Producto ${item.id_producto} no encontrado`,
+        });
+      }
+      
+      const stockDisponible = Number(producto.stock) || 0;
+      const cantidadSolicitada = Number(item.cantidad) || 0;
+      
+      if (cantidadSolicitada > stockDisponible) {
+        await t.rollback();
+        return res.status(400).json({
+          error: `Stock insuficiente para ${producto.nombre_producto}. Disponible: ${stockDisponible}, Solicitado: ${cantidadSolicitada}`,
+        });
+      }
+    }
 
     const pedido = await Pedido.create(
       {
@@ -133,7 +190,7 @@ export const createPedido = async (req, res, next) => {
         status,
         id_empleado,
         id_cliente,
-        direccion_envio, // 👈 NUEVO
+        direccion_envio,
         subtotal: 0,
         descuento_total,
         impuesto_total,
@@ -153,6 +210,9 @@ export const createPedido = async (req, res, next) => {
 
     if (lineas.length > 0) {
       await Contiene.bulkCreate(lineas, { transaction: t });
+      
+      // ⚡ RESTAR STOCK de los productos
+      await actualizarStockProductos(items, 'restar', t);
     }
 
     const tot = await recalcTotales(
@@ -185,14 +245,46 @@ export const updatePedido = async (req, res, next) => {
       return res.status(404).json({ error: "Pedido no encontrado" });
     }
 
-    // Actualizar cabecera con nuevos campos
+    // Actualizar cabecera
     await pedido.update({
-      ...headerData, 
-      last_change: `Actualizado el ${new Date().toLocaleString()}`
+      ...headerData,
+      last_change: `Actualizado el ${new Date().toLocaleString()}`,
     }, { transaction: t });
 
     if (items && Array.isArray(items)) {
+      // Obtener items anteriores para devolver stock
+      const itemsAnteriores = await obtenerItemsPedido(id, t);
+      
+      // Devolver stock de items anteriores
+      if (itemsAnteriores.length > 0) {
+        await actualizarStockProductos(itemsAnteriores, 'sumar', t);
+      }
+
+      // Verificar stock disponible para los nuevos items
+      for (const item of items) {
+        const producto = await Producto.findByPk(item.id_producto, { transaction: t });
+        if (!producto) {
+          await t.rollback();
+          return res.status(400).json({
+            error: `Producto ${item.id_producto} no encontrado`,
+          });
+        }
+
+        const stockDisponible = Number(producto.stock) || 0;
+        const cantidadSolicitada = Number(item.cantidad) || 0;
+
+        if (cantidadSolicitada > stockDisponible) {
+          await t.rollback();
+          return res.status(400).json({
+            error: `Stock insuficiente para ${producto.nombre_producto}. Disponible: ${stockDisponible}, Solicitado: ${cantidadSolicitada}`,
+          });
+        }
+      }
+
+      // Eliminar items anteriores
       await Contiene.destroy({ where: { id_pedido: id }, transaction: t });
+
+      // Crear nuevos items
       const lineas = items.map((i) => ({
         id_pedido: id,
         id_producto: i.id_producto,
@@ -200,7 +292,13 @@ export const updatePedido = async (req, res, next) => {
         precio_unitario: i.precio_unitario,
         subtotal_linea: calcSubtotalLine(i.cantidad, i.precio_unitario),
       }));
-      if (lineas.length > 0) await Contiene.bulkCreate(lineas, { transaction: t });
+
+      if (lineas.length > 0) {
+        await Contiene.bulkCreate(lineas, { transaction: t });
+        
+        // ⚡ RESTAR STOCK de los nuevos items
+        await actualizarStockProductos(items, 'restar', t);
+      }
     }
 
     const tot = await recalcTotales(
@@ -218,39 +316,136 @@ export const updatePedido = async (req, res, next) => {
   }
 };
 
+// =============================
+// DELETE /api/pedidos/:id
+// =============================
 export const deletePedido = async (req, res, next) => {
   const t = await sequelize.transaction();
   try {
     const { id } = req.params;
     const pedido = await Pedido.findByPk(id, { transaction: t });
-    if (!pedido) { await t.rollback(); return res.status(404).json({ error: "No existe" }); }
+    if (!pedido) {
+      await t.rollback();
+      return res.status(404).json({ error: "No existe" });
+    }
+
+    // Obtener items del pedido para devolver stock
+    const itemsPedido = await obtenerItemsPedido(id, t);
+
+    // ⚡ DEVOLVER STOCK de los productos
+    if (itemsPedido.length > 0) {
+      await actualizarStockProductos(itemsPedido, 'sumar', t);
+    }
 
     await Contiene.destroy({ where: { id_pedido: id }, transaction: t });
-    // Borrar envíos si los hubiera
-    await Envio.destroy({ where: { id_pedido: id }, transaction: t }); 
+    await Envio.destroy({ where: { id_pedido: id }, transaction: t });
     await pedido.destroy({ transaction: t });
 
     await t.commit();
-    res.json({ ok: true });
+    res.json({ ok: true, message: "Pedido eliminado y stock restaurado" });
   } catch (err) {
     await t.rollback();
     next(err);
   }
 };
+
 // =============================
 // (Opcionales) manejo de items sueltos
 // =============================
 export const addPedidoItem = async (req, res, next) => {
-  // si después quieres, aquí podemos implementar agregar un item
-  // sin rehacer todo el pedido.
-  return res
-    .status(501)
-    .json({ error: "addPedidoItem aún no está implementado" });
+  const t = await sequelize.transaction();
+  try {
+    const { id } = req.params;
+    const { id_producto, cantidad, precio_unitario } = req.body;
+
+    const pedido = await Pedido.findByPk(id, { transaction: t });
+    if (!pedido) {
+      await t.rollback();
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    // Verificar stock
+    const producto = await Producto.findByPk(id_producto, { transaction: t });
+    if (!producto) {
+      await t.rollback();
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    const stockDisponible = Number(producto.stock) || 0;
+    const cantidadSolicitada = Number(cantidad) || 0;
+
+    if (cantidadSolicitada > stockDisponible) {
+      await t.rollback();
+      return res.status(400).json({
+        error: `Stock insuficiente. Disponible: ${stockDisponible}`,
+      });
+    }
+
+    // Crear línea
+    await Contiene.create({
+      id_pedido: id,
+      id_producto,
+      cantidad,
+      precio_unitario,
+      subtotal_linea: calcSubtotalLine(cantidad, precio_unitario),
+    }, { transaction: t });
+
+    // Restar stock
+    await producto.update({
+      stock: stockDisponible - cantidadSolicitada,
+    }, { transaction: t });
+
+    // Recalcular totales
+    await recalcTotales(id, pedido.descuento_total, pedido.impuesto_total, t);
+
+    await t.commit();
+    res.json({ ok: true, message: "Item agregado y stock actualizado" });
+  } catch (err) {
+    await t.rollback();
+    next(err);
+  }
 };
 
 export const deletePedidoItem = async (req, res, next) => {
-  // igual que arriba, por ahora lo dejamos como no implementado.
-  return res
-    .status(501)
-    .json({ error: "deletePedidoItem aún no está implementado" });
+  const t = await sequelize.transaction();
+  try {
+    const { id, id_producto } = req.params;
+
+    const pedido = await Pedido.findByPk(id, { transaction: t });
+    if (!pedido) {
+      await t.rollback();
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    // Buscar el item
+    const item = await Contiene.findOne({
+      where: { id_pedido: id, id_producto },
+      transaction: t,
+    });
+
+    if (!item) {
+      await t.rollback();
+      return res.status(404).json({ error: "Item no encontrado en el pedido" });
+    }
+
+    // Devolver stock
+    const producto = await Producto.findByPk(id_producto, { transaction: t });
+    if (producto) {
+      await producto.update({
+        stock: Number(producto.stock || 0) + Number(item.cantidad || 0),
+      }, { transaction: t });
+    }
+
+    // Eliminar item
+    await item.destroy({ transaction: t });
+
+    // Recalcular totales
+    await recalcTotales(id, pedido.descuento_total, pedido.impuesto_total, t);
+
+    await t.commit();
+    res.json({ ok: true, message: "Item eliminado y stock restaurado" });
+  } catch (err) {
+    await t.rollback();
+    next(err);
+  }
 };

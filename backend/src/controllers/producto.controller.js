@@ -1,4 +1,5 @@
 // backend/src/controllers/producto.controller.js
+import { QueryTypes } from "sequelize";
 import {
   sequelize,
   Producto,
@@ -7,6 +8,7 @@ import {
   Zona,
   Contiene,
   Suministra,
+  Suministro,
 } from "../models/index.js";
 
 /* =======================
@@ -16,7 +18,6 @@ import {
 async function deleteProductoById(id, t) {
   const producto = await Producto.findByPk(id, { transaction: t });
   if (!producto) {
-    // Si no existe, no hacemos nada (evitamos tronar el bulk)
     return;
   }
 
@@ -42,6 +43,53 @@ async function deleteProductoById(id, t) {
   await producto.destroy({ transaction: t });
 }
 
+/* =======================
+   HELPER: Recalcular stock de un producto basándose en entradas y salidas
+======================= */
+export async function recalcularStockProducto(id_producto, t) {
+  // Sumar todas las entradas (suministros)
+  const [entradasResult] = await sequelize.query(
+    `
+    SELECT COALESCE(SUM(sm.cantidad), 0) AS total_entradas
+    FROM suministra sm
+    INNER JOIN suministro su ON su.id_suministro = sm.id_suministro
+    WHERE sm.id_producto = ?
+    `,
+    {
+      replacements: [id_producto],
+      type: QueryTypes.SELECT,
+      transaction: t,
+    }
+  );
+
+  // Sumar todas las salidas (pedidos)
+  const [salidasResult] = await sequelize.query(
+    `
+    SELECT COALESCE(SUM(c.cantidad), 0) AS total_salidas
+    FROM contiene c
+    INNER JOIN pedidos p ON p.id_pedido = c.id_pedido
+    WHERE c.id_producto = ?
+    `,
+    {
+      replacements: [id_producto],
+      type: QueryTypes.SELECT,
+      transaction: t,
+    }
+  );
+
+  const totalEntradas = Number(entradasResult?.total_entradas) || 0;
+  const totalSalidas = Number(salidasResult?.total_salidas) || 0;
+  const nuevoStock = totalEntradas - totalSalidas;
+
+  // Actualizar el stock del producto
+  await Producto.update(
+    { stock: nuevoStock >= 0 ? nuevoStock : 0 },
+    { where: { id_producto }, transaction: t }
+  );
+
+  return nuevoStock;
+}
+
 // =======================
 // GET: todos los productos
 // =======================
@@ -61,7 +109,7 @@ export const getAllProductos = async (req, res, next) => {
             {
               model: Zona,
               as: "Zona",
-              attributes: ["id_zona", "codigo"],
+              attributes: ["id_zona", "codigo", "rack", "modulo", "piso"],
             },
           ],
         },
@@ -69,7 +117,52 @@ export const getAllProductos = async (req, res, next) => {
       order: [["id_producto", "ASC"]],
     });
 
-    res.json(productos);
+    // Obtener fechas de último ingreso y egreso para cada producto
+    const productosConFechas = await Promise.all(
+      productos.map(async (p) => {
+        const producto = p.toJSON();
+
+        // Último ingreso (suministro)
+        const [ultimoIngreso] = await sequelize.query(
+          `
+          SELECT MAX(su.fecha_llegada) AS fecha
+          FROM suministra sm
+          INNER JOIN suministro su ON su.id_suministro = sm.id_suministro
+          WHERE sm.id_producto = ?
+          `,
+          {
+            replacements: [producto.id_producto],
+            type: QueryTypes.SELECT,
+          }
+        );
+
+        // Último egreso (pedido)
+        const [ultimoEgreso] = await sequelize.query(
+          `
+          SELECT MAX(p.fecha_pedido) AS fecha
+          FROM contiene c
+          INNER JOIN pedidos p ON p.id_pedido = c.id_pedido
+          WHERE c.id_producto = ?
+          `,
+          {
+            replacements: [producto.id_producto],
+            type: QueryTypes.SELECT,
+          }
+        );
+
+        return {
+          ...producto,
+          fecha_ultimo_ingreso: ultimoIngreso?.fecha
+            ? String(ultimoIngreso.fecha).slice(0, 10)
+            : null,
+          fecha_ultimo_egreso: ultimoEgreso?.fecha
+            ? String(ultimoEgreso.fecha).slice(0, 10)
+            : null,
+        };
+      })
+    );
+
+    res.json(productosConFechas);
   } catch (err) {
     next(err);
   }
@@ -96,7 +189,7 @@ export const getProductoById = async (req, res, next) => {
             {
               model: Zona,
               as: "Zona",
-              attributes: ["id_zona", "codigo"],
+              attributes: ["id_zona", "codigo", "rack", "modulo", "piso"],
             },
           ],
         },
@@ -122,10 +215,8 @@ export const createProducto = async (req, res, next) => {
   const t = await sequelize.transaction();
 
   try {
-    // zona puede ser { id_zona } o null
     const { zona, ...datos } = req.body;
 
-    // 1) Buscar si ya existe el producto
     const existente = await Producto.findByPk(datos.id_producto, {
       transaction: t,
     });
@@ -133,7 +224,6 @@ export const createProducto = async (req, res, next) => {
     let productoFinal;
 
     if (existente) {
-      // --- CASO EXISTE: actualizar y sumar stock ---
       const nuevoStock =
         Number(existente.stock ?? 0) + Number(datos.stock ?? 0);
 
@@ -151,19 +241,15 @@ export const createProducto = async (req, res, next) => {
 
       productoFinal = existente;
     } else {
-      // --- CASO NUEVO: crear producto ---
       productoFinal = await Producto.create(datos, { transaction: t });
     }
 
-    // 2) Manejar la ubicación en seubica
     if (zona !== undefined) {
-      // Borro cualquier ubicación previa de ese producto
       await SeUbica.destroy({
         where: { id_producto: datos.id_producto },
         transaction: t,
       });
 
-      // Si viene una zona válida, la creo
       if (zona && zona.id_zona != null) {
         await SeUbica.create(
           {
@@ -173,7 +259,6 @@ export const createProducto = async (req, res, next) => {
           { transaction: t }
         );
       }
-      // Si zona es null => se queda sin ubicación
     }
 
     await t.commit();
@@ -200,7 +285,6 @@ export const updateProducto = async (req, res, next) => {
 
   try {
     const { id } = req.params;
-    // zona puede ser { id_zona } o null
     const { zona, ...datos } = req.body;
 
     const producto = await Producto.findByPk(id, { transaction: t });
@@ -209,18 +293,14 @@ export const updateProducto = async (req, res, next) => {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    // Actualiza datos del producto (incluye imagen_url si viene)
     await producto.update(datos, { transaction: t });
 
-    // Manejo de zona
     if (zona !== undefined) {
-      // Elimino ubicación previa
       await SeUbica.destroy({
         where: { id_producto: id },
         transaction: t,
       });
 
-      // Si mandan una zona válida se crea
       if (zona && zona.id_zona != null) {
         await SeUbica.create(
           {
@@ -242,7 +322,6 @@ export const updateProducto = async (req, res, next) => {
 
 // =======================
 // DELETE /api/productos/:id
-// Borra producto + ubicaciones + movimientos relacionados
 // =======================
 export const deleteProducto = async (req, res, next) => {
   const t = await sequelize.transaction();
@@ -270,7 +349,6 @@ export const deleteProducto = async (req, res, next) => {
 
 // =======================
 // DELETE /api/productos  (borrado masivo)
-// Body: { ids: ["03000577","12312311", ...] }
 // =======================
 export const bulkDeleteProductos = async (req, res, next) => {
   const t = await sequelize.transaction();
@@ -301,5 +379,148 @@ export const bulkDeleteProductos = async (req, res, next) => {
     return res
       .status(500)
       .json({ error: "No se pudo eliminar en bloque (ver servidor)." });
+  }
+};
+
+// =======================
+// GET /api/productos/:id/movimientos
+// =======================
+export const getMovimientosProducto = async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    // 1) SALIDAS: pedidos (contiene + pedidos)
+    const salidas = await sequelize.query(
+      `
+      SELECT
+        DATE(p.fecha_pedido) AS fecha,
+        SUM(c.cantidad)     AS cantidad_salida
+      FROM contiene c
+      INNER JOIN pedidos p ON p.id_pedido = c.id_pedido
+      WHERE c.id_producto = ?
+      GROUP BY DATE(p.fecha_pedido)
+      ORDER BY DATE(p.fecha_pedido)
+      `,
+      {
+        replacements: [id],
+        type: QueryTypes.SELECT,
+        raw: true,
+      }
+    );
+
+    // 2) ENTRADAS: suministros (suministra + suministro)
+    const entradas = await sequelize.query(
+      `
+      SELECT
+        DATE(su.fecha_llegada) AS fecha,
+        SUM(sm.cantidad)       AS cantidad_entrada
+      FROM suministra sm
+      INNER JOIN suministro su ON su.id_suministro = sm.id_suministro
+      WHERE sm.id_producto = ?
+      GROUP BY DATE(su.fecha_llegada)
+      ORDER BY DATE(su.fecha_llegada)
+      `,
+      {
+        replacements: [id],
+        type: QueryTypes.SELECT,
+        raw: true,
+      }
+    );
+
+    // 3) Combinar por fecha
+    const byDate = new Map();
+
+    for (const row of entradas) {
+      const key = row.fecha;
+      byDate.set(key, {
+        fecha: key,
+        entradas: Number(row.cantidad_entrada) || 0,
+        salidas: 0,
+      });
+    }
+
+    for (const row of salidas) {
+      const key = row.fecha;
+      const existing = byDate.get(key) || {
+        fecha: key,
+        entradas: 0,
+        salidas: 0,
+      };
+      existing.salidas += Number(row.cantidad_salida) || 0;
+      byDate.set(key, existing);
+    }
+
+    const movimientos = Array.from(byDate.values()).sort((a, b) =>
+      a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0
+    );
+
+    const producto = await Producto.findByPk(id);
+
+    // Calcular stock actual basado en movimientos
+    const totalEntradas = movimientos.reduce((sum, m) => sum + m.entradas, 0);
+    const totalSalidas = movimientos.reduce((sum, m) => sum + m.salidas, 0);
+    const stockCalculado = totalEntradas - totalSalidas;
+
+    return res.json({
+      producto: producto ? { ...producto.toJSON(), stock_calculado: stockCalculado } : null,
+      movimientos,
+      resumen: {
+        total_entradas: totalEntradas,
+        total_salidas: totalSalidas,
+        stock_calculado: stockCalculado,
+      },
+    });
+  } catch (err) {
+    console.error("ERROR getMovimientosProducto:", err);
+    return res
+      .status(500)
+      .json({ error: "Error al obtener los movimientos de inventario" });
+  }
+};
+
+// =======================
+// POST /api/productos/recalcular-stock
+// Recalcula el stock de todos los productos o uno específico
+// =======================
+export const recalcularStock = async (req, res, next) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const { id_producto } = req.body;
+
+    if (id_producto) {
+      // Recalcular solo un producto
+      const nuevoStock = await recalcularStockProducto(id_producto, t);
+      await t.commit();
+      return res.json({
+        ok: true,
+        id_producto,
+        nuevo_stock: nuevoStock,
+      });
+    }
+
+    // Recalcular todos los productos
+    const productos = await Producto.findAll({ transaction: t });
+    const resultados = [];
+
+    for (const producto of productos) {
+      const nuevoStock = await recalcularStockProducto(producto.id_producto, t);
+      resultados.push({
+        id_producto: producto.id_producto,
+        nuevo_stock: nuevoStock,
+      });
+    }
+
+    await t.commit();
+
+    return res.json({
+      ok: true,
+      message: `Se recalculó el stock de ${resultados.length} productos`,
+      resultados,
+    });
+  } catch (err) {
+    console.error("ERROR recalcularStock:", err);
+    await t.rollback();
+    return res.status(500).json({ error: "Error al recalcular stock" });
   }
 };

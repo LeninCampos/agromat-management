@@ -11,19 +11,24 @@ import {
   createProducto,
   updateProducto,
   deleteProducto,
-  bulkDeleteProductos, // 👈 nuevo
+  bulkDeleteProductos,
+  getMovimientosProducto,
+  recalcularStock,
 } from "../controllers/producto.controller.js";
 
 const router = express.Router();
 
 router.get("/", getAllProductos);
+router.get("/:id/movimientos", getMovimientosProducto);
 router.get("/:id", getProductoById);
 
 router.post("/", verificarAuth, validateProductoCreate, createProducto);
+router.post("/recalcular-stock", verificarAuth, recalcularStock);
+
 router.put("/:id", verificarAuth, validateProductoUpdate, updateProducto);
 router.delete("/:id", verificarAuth, deleteProducto);
 
-// 👇 NUEVA RUTA: borrado masivo
+// Borrado masivo
 router.delete("/", verificarAuth, bulkDeleteProductos);
 
 export default router;

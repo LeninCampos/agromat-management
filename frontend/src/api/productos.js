@@ -1,7 +1,12 @@
+// frontend/src/api/productos.js
 import api from "./axios";
 
 // GET productos
 export const getProductos = () => api.get("/productos");
+
+// GET movimientos / historial de un producto específico
+export const getMovimientosProducto = (id_producto) =>
+  api.get(`/productos/${id_producto}/movimientos`);
 
 // POST crear producto
 export const createProducto = (data) => api.post("/productos", data);
