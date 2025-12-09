@@ -10,7 +10,10 @@ import {
   updateProducto,
   deleteProducto,
   bulkDeleteProductos,
+<<<<<<< HEAD
   descargarInventarioExcel, // <--- Fusión: Importación para Excel
+=======
+>>>>>>> 170c75331fa4878c3d99ea52319355b8cbb27855
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
 
@@ -52,9 +55,15 @@ export default function Productos() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
+<<<<<<< HEAD
   // Inputs de archivo (Fusión: Se mantienen ambas refs para cámara y galería)
   const fileInputRef = useRef(null);      // galería / archivos
   const cameraInputRef = useRef(null);    // cámara
+=======
+  // Inputs de archivo
+  const fileInputRef = useRef(null);     // galería / archivos
+  const cameraInputRef = useRef(null);   // cámara
+>>>>>>> 170c75331fa4878c3d99ea52319355b8cbb27855
 
   const formatCurrency = (value) =>
     Number(value || 0).toLocaleString("es-MX", {
@@ -738,6 +747,7 @@ export default function Productos() {
             Eliminar ({selectedIds.length})
           </button>
         )}
+<<<<<<< HEAD
 
         {/* --- Fusión: Botón para Exportar Excel --- */}
         <button
@@ -758,6 +768,8 @@ export default function Productos() {
         >
           <span>📊</span> Exportar
         </button>
+=======
+>>>>>>> 170c75331fa4878c3d99ea52319355b8cbb27855
 
         <button
           onClick={openCreate}
@@ -1538,7 +1550,11 @@ export default function Productos() {
                       📂 Elegir archivo
                     </button>
 
+<<<<<<< HEAD
                     {/* Cámara (Fusión: Botón para tomar foto) */}
+=======
+                    {/* Cámara */}
+>>>>>>> 170c75331fa4878c3d99ea52319355b8cbb27855
                     <button
                       type="button"
                       onClick={triggerCameraInput}
