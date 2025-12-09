@@ -10,7 +10,6 @@ import {
   updateProducto,
   deleteProducto,
   bulkDeleteProductos,
-  descargarInventarioExcel,
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
 
@@ -52,46 +51,9 @@ export default function Productos() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
-  const fileInputRef = useRef(null);
-  const handleExport = async () => {
-    try {
-      const response = await descargarInventarioExcel();
-
-      // Crear URL temporal para el blob
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-
-      // Calcular fecha actual formato mm/dd/aa
-      const now = new Date();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const aa = String(now.getFullYear()).slice(-2); // Últimos 2 dígitos del año
-
-      const fileName = `INVENTARIO A DIA ${mm}-${dd}-${aa}.xlsx`; // Usé guiones para evitar problemas con ciertos SO, pero puedes probar '/'
-
-      // Crear enlace invisible y hacer click
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", fileName);
-      document.body.appendChild(link);
-      link.click();
-
-      // Limpieza
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Descarga iniciada',
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000
-      });
-    } catch (error) {
-      console.error("Error descargando excel:", error);
-      Swal.fire("Error", "No se pudo descargar el reporte", "error");
-    }
-  };
+  // Inputs de archivo
+  const fileInputRef = useRef(null);     // galería / archivos
+  const cameraInputRef = useRef(null);   // cámara
 
   const formatCurrency = (value) =>
     Number(value || 0).toLocaleString("es-MX", {
@@ -206,7 +168,7 @@ export default function Productos() {
           imagenUrl = `${BACKEND_URL}${imagenUrl}`;
         }
 
-        // ⬇️ precio: soporta p.precio o p.precio_unitario
+        // soporta p.precio o p.precio_unitario
         const precioRaw =
           p.precio !== undefined && p.precio !== null
             ? p.precio
@@ -295,7 +257,7 @@ export default function Productos() {
         id_producto: form.id_producto,
         nombre_producto: form.nombre_producto,
         descripcion: form.descripcion || null,
-        precio: Number(form.precio) || 0, // 👈 asegúrate que el backend use "precio"
+        precio: Number(form.precio) || 0,
         stock: Number(form.existencias) || 0,
         id_proveedor: Number(form.id_proveedor),
         zona: zonaObj,
@@ -421,7 +383,15 @@ export default function Productos() {
   };
 
   const triggerFileInput = () => {
-    if (fileInputRef.current) fileInputRef.current.click();
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const triggerCameraInput = () => {
+    if (cameraInputRef.current) {
+      cameraInputRef.current.click();
+    }
   };
 
   // ========================= JSX =========================
@@ -728,24 +698,6 @@ export default function Productos() {
             Eliminar ({selectedIds.length})
           </button>
         )}
-        <button
-          onClick={handleExport}
-          style={{
-            background: "#10B981", 
-            color: "white",
-            padding: "10px 14px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "0.9rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px"
-          }}
-          title="Exportar a Excel"
-        >
-          <span></span> Exportar
-        </button>
 
         <button
           onClick={openCreate}
@@ -1505,10 +1457,12 @@ export default function Productos() {
                   <div
                     style={{
                       display: "flex",
+                      flexWrap: "wrap",
                       gap: "10px",
                       marginBottom: "8px",
                     }}
                   >
+                    {/* Galería / archivos */}
                     <button
                       type="button"
                       onClick={triggerFileInput}
@@ -1523,6 +1477,28 @@ export default function Productos() {
                     >
                       📂 Elegir archivo
                     </button>
+
+                    {/* Cámara */}
+                    <button
+                      type="button"
+                      onClick={triggerCameraInput}
+                      style={{
+                        background: "#e0f2fe",
+                        border: "1px solid #38bdf8",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "0.9rem",
+                        color: "#0369a1",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      📷 Tomar foto
+                    </button>
+
+                    {/* Input oculto para archivos / galería */}
                     <input
                       type="file"
                       ref={fileInputRef}
@@ -1530,6 +1506,18 @@ export default function Productos() {
                       style={{ display: "none" }}
                       onChange={handleFileChange}
                     />
+
+                    {/* Input oculto para cámara */}
+                    <input
+                      type="file"
+                      ref={cameraInputRef}
+                      accept="image/*"
+                      capture="environment"
+                      style={{ display: "none" }}
+                      onChange={handleFileChange}
+                    />
+
+                    {/* URL manual */}
                     <input
                       type="text"
                       value={form.imagen_url}
@@ -1539,6 +1527,7 @@ export default function Productos() {
                       placeholder="O pega una URL aquí..."
                       style={{
                         flex: 1,
+                        minWidth: "200px",
                         padding: "8px 12px",
                         border: "1px solid #d1d5db",
                         borderRadius: "6px",
@@ -1546,6 +1535,7 @@ export default function Productos() {
                       }}
                     />
                   </div>
+
                   {form.imagen_url && (
                     <div style={{ marginTop: "10px" }}>
                       <img
