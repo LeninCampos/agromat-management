@@ -3,6 +3,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
+import rateLimit from "express-rate-limit";
+
 import sequelize from "./config/db.js";   // única conexión
 import "./models/index.js";               // carga asociaciones
 
@@ -31,27 +33,43 @@ const app = express();
    ========================== */
 
 // Permitimos tu FRONT local + lo que venga en FRONTEND_URL
-const whiteList = [
-  process.env.FRONTEND_URL,
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-];
+const whiteList = [process.env.FRONTEND_URL];
 
-const corsOptions = {
-  origin(origin, callback) {
-    // origin === undefined cuando es misma máquina (Postman, curl, etc.)
-    if (!origin || whiteList.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("No permitido por CORS"));
-    }
-  },
-  credentials: true,
-};
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // (!origin) permite peticiones sin origen (como Postman o scripts de servidor a servidor)
+      if (!origin || whiteList.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS Error: El origen ${origin} no está autorizado`));
+      }
+    },
+    credentials: true, // Importante si en el futuro usas cookies o sesiones seguras
+  })
+);
 
-app.use(cors(corsOptions));
 app.use(express.static("public"));
 app.use(express.json());
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 300, // Máximo de peticiones por IP por ventana
+  standardHeaders: true, // Devuelve info en los headers `RateLimit-*`
+  legacyHeaders: false, // Deshabilita los headers `X-RateLimit-*`
+  message: { error: "Demasiadas peticiones, por favor intenta más tarde." }
+});
+
+// 2. Limiter Estricto: Solo para Auth (Login/Registro)
+// Evita fuerza bruta para adivinar contraseñas
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10, // Solo 10 intentos por IP cada 15 min
+  message: { error: "Demasiados intentos de inicio de sesión, cuenta bloqueada temporalmente por seguridad." }
+});
+
+app.use("/api/", apiLimiter);
+app.use("/api/auth", authLimiter);
 
 /* ==========================
    🩺 Healthcheck
@@ -82,7 +100,8 @@ app.use("/api/seubica", seubicaRouter);
 app.use("/api/suministro", suministroRouter);
 app.use("/api/suministra", suministraRouter);
 app.use("/api/contiene", contieneRouter);
-app.use("/api/upload", uploadRouter); 
+app.use("/api/upload", uploadRouter);
+
 
 /* ==========================
    404 y manejo de errores

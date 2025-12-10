@@ -1,8 +1,23 @@
 // backend/src/middleware/upload.js
 import multer from "multer";
 import fs from "fs";
+import path from "path"; // 1. Importamos 'path' para manejar extensiones seguramente
 
-/* === Storage ENVÍOS (lo que ya tenías) === */
+/* =========================================================
+   🛡️ FUNCIONES DE SEGURIDAD
+   ========================================================= */
+
+// Generador de nombres aleatorios (Evita colisiones y nombres maliciosos)
+const generarNombreSeguro = (file) => {
+  const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+  // Extraemos la extensión original de forma segura y la pasamos a minúsculas
+  const ext = path.extname(file.originalname).toLowerCase();
+  return `file-${uniqueSuffix}${ext}`;
+};
+
+/* =========================================================
+   📂 STORAGE: ENVÍOS (Excel)
+   ========================================================= */
 const storageEnvios = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = "public/uploads/envios";
@@ -12,25 +27,36 @@ const storageEnvios = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
-    const nombreUnico = Date.now() + "-" + file.originalname;
-    cb(null, nombreUnico);
+    cb(null, generarNombreSeguro(file)); // Usamos la función segura
   },
 });
 
 const fileFilterExcel = (req, file, cb) => {
-  if (file.mimetype.includes("spreadsheet") || file.mimetype.includes("excel") || file.originalname.endsWith(".xlsx")) {
+  // Verificamos MimeType Y extensión
+  const mimetypesExcel = [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+  ];
+  
+  // Seguridad extra: validamos que la extensión real sea .xlsx
+  const ext = path.extname(file.originalname).toLowerCase();
+
+  if (mimetypesExcel.includes(file.mimetype) && ext === ".xlsx") {
     cb(null, true);
   } else {
-    cb(new Error("Solo se permiten archivos Excel (.xlsx)"), false);
+    cb(new Error("⚠️ Archivo no permitido. Solo se aceptan Excel (.xlsx)"), false);
   }
 };
 
 export const uploadExcel = multer({
-  storage: storageEnvios, 
+  storage: storageEnvios,
   fileFilter: fileFilterExcel,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB para Excels grandes
 });
 
-/* === Storage PRODUCTOS (nuevo) === */
+/* =========================================================
+   📂 STORAGE: PRODUCTOS (Imágenes)
+   ========================================================= */
 const storageProductos = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = "public/uploads/productos";
@@ -40,29 +66,36 @@ const storageProductos = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
-    const nombreUnico = Date.now() + "-" + file.originalname;
-    cb(null, nombreUnico);
+    cb(null, generarNombreSeguro(file));
   },
 });
 
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
+const fileFilterImagen = (req, file, cb) => {
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  const allowedExts = [".jpg", ".jpeg", ".png", ".webp"];
+
+  const ext = path.extname(file.originalname).toLowerCase();
+
+  if (allowedTypes.includes(file.mimetype) && allowedExts.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error("Formato de imagen no válido (solo .jpg o .png)"), false);
+    cb(new Error("⚠️ Formato no válido. Solo .jpg, .png o .webp"), false);
   }
 };
 
-// para envíos
-export const upload = multer({
-  storage: storageEnvios,
-  fileFilter,
-  limits: { fileSize: 1024 * 1024 * 5 },
-});
-
-// para productos
+// Middleware específico para productos
 export const uploadProducto = multer({
   storage: storageProductos,
-  fileFilter,
-  limits: { fileSize: 1024 * 1024 * 5 },
+  fileFilter: fileFilterImagen,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+});
+
+/* =========================================================
+   🛠️ UTILS EXTRAS
+   ========================================================= */
+// Si necesitas un upload genérico (cuidado con dónde lo usas)
+export const upload = multer({
+  storage: storageEnvios, // Ojo: está guardando en envíos
+  fileFilter: fileFilterImagen, // Pero filtrando imágenes (?)
+  limits: { fileSize: 5 * 1024 * 1024 },
 });

@@ -2,7 +2,6 @@
 import express from "express";
 import { verificarAuth } from "../middleware/verificarAuth.js";
 import { uploadProducto } from "../middleware/upload.js";
-const API_URL = "https://agromatgranjas.com/api/upload";
 
 const router = express.Router();
 

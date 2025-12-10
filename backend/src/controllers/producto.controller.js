@@ -629,6 +629,7 @@ export const recalcularStock = async (req, res, next) => {
 
 export const exportarProductosExcel = async (req, res, next) => {
   try {
+    // 1. Obtener productos básicos
     const productos = await Producto.findAll({
       include: [
         {
@@ -649,7 +650,52 @@ export const exportarProductosExcel = async (req, res, next) => {
       ],
       order: [["id_producto", "ASC"]],
     });
-    const datosExcel = productos.map((p) => {
+
+    // 2. Calcular fechas de último ingreso y salida (Lógica traída de getAllProductos)
+    const productosConFechas = await Promise.all(
+      productos.map(async (p) => {
+        // Consultar último ingreso (suministra -> suministro)
+        const [ultimoIngreso] = await sequelize.query(
+          `
+          SELECT MAX(su.fecha_llegada) AS fecha
+          FROM suministra sm
+          INNER JOIN suministro su ON su.id_suministro = sm.id_suministro
+          WHERE sm.id_producto = ?
+          `,
+          {
+            replacements: [p.id_producto],
+            type: QueryTypes.SELECT,
+          }
+        );
+
+        // Consultar última salida (contiene -> pedidos)
+        const [ultimoEgreso] = await sequelize.query(
+          `
+          SELECT MAX(p.fecha_pedido) AS fecha
+          FROM contiene c
+          INNER JOIN pedidos p ON p.id_pedido = c.id_pedido
+          WHERE c.id_producto = ?
+          `,
+          {
+            replacements: [p.id_producto],
+            type: QueryTypes.SELECT,
+          }
+        );
+
+        return {
+            producto: p,
+            fecha_ultimo_ingreso: ultimoIngreso?.fecha
+              ? String(ultimoIngreso.fecha).slice(0, 10)
+              : "N/A",
+            fecha_ultimo_egreso: ultimoEgreso?.fecha
+              ? String(ultimoEgreso.fecha).slice(0, 10)
+              : "N/A",
+        };
+      })
+    );
+
+    // 3. Mapear datos para Excel (Modificado: Sin Descripción, con Fechas)
+    const datosExcel = productosConFechas.map(({ producto: p, fecha_ultimo_ingreso, fecha_ultimo_egreso }) => {
       const ubicacion = p.SeUbicas?.[0]?.Zona;
       const ubicacionTexto = ubicacion
         ? `${ubicacion.codigo} (R:${ubicacion.rack} M:${ubicacion.modulo} P:${ubicacion.piso})`
@@ -658,9 +704,11 @@ export const exportarProductosExcel = async (req, res, next) => {
       return {
         "Código": p.id_producto,
         "Producto": p.nombre_producto,
-        "Descripción": p.descripcion || "",
+        // "Descripción": p.descripcion || "", <--- ELIMINADO
         "Proveedor": p.Proveedor?.nombre_proveedor || "Sin proveedor",
         "Ubicación": ubicacionTexto,
+        "Último Ingreso": fecha_ultimo_ingreso, // <--- AGREGADO
+        "Última Salida": fecha_ultimo_egreso,   // <--- AGREGADO
         "Precio": Number(p.precio),
         "Stock Actual": Number(p.stock),
       };
@@ -669,12 +717,15 @@ export const exportarProductosExcel = async (req, res, next) => {
     const workBook = XLSX.utils.book_new();
     const workSheet = XLSX.utils.json_to_sheet(datosExcel);
 
+    // 4. Ajustar ancho de columnas
     const wscols = [
       { wch: 15 }, // Código
       { wch: 30 }, // Producto
-      { wch: 30 }, // Descripción
+      // { wch: 30 }, // Descripción <--- ELIMINADO
       { wch: 20 }, // Proveedor
       { wch: 25 }, // Ubicación
+      { wch: 15 }, // Último Ingreso <--- AGREGADO
+      { wch: 15 }, // Última Salida  <--- AGREGADO
       { wch: 10 }, // Precio
       { wch: 10 }, // Stock
     ];
