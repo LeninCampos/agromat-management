@@ -14,7 +14,8 @@ export const importarSuministroExcel = async (req, res, next) => {
 
     // data será un array de objetos: [{ "item code": "00107092", "Quantity": "16 pcs", ... }]
 
-    const { id_proveedor, fecha_llegada, hora_llegada } = req.body;
+    // 👇 CAMBIO: Recibimos id_empleado del body
+    const { id_proveedor, fecha_llegada, hora_llegada, id_empleado } = req.body;
 
     // 1️⃣ Crear el Suministro (Cabecera)
     const suministro = await Suministro.create(
@@ -22,6 +23,7 @@ export const importarSuministroExcel = async (req, res, next) => {
         fecha_llegada,
         hora_llegada,
         id_proveedor,
+        id_empleado, // 👈 AGREGADO: Se guarda el ID del usuario logueado
       },
       { transaction: t }
     );
@@ -66,14 +68,13 @@ export const importarSuministroExcel = async (req, res, next) => {
             precio: 0,                           // sin precio por ahora
             stock: 0,
             descripcion: "Importado automáticamente desde Excel",
-            imagen_url: null,                    // 👈 NUEVO: sin foto al inicio
+            imagen_url: null,                    // sin foto al inicio
           },
           { transaction: t }
         );
         productosCreados++;
       }
-      // ⚠️ Importante: si el producto YA EXISTE, NO lo actualizamos aquí
-      // (no tocamos imagen_url, ni descripción) → conserva la foto que ya tenía.
+      // ⚠️ Importante: si el producto YA EXISTE, NO lo actualizamos aquí.
 
       // 4️⃣ Registrar el detalle en Suministra
       await Suministra.create(

@@ -1,25 +1,28 @@
 // frontend/src/pages/Suministros.jsx
 import { useEffect, useState, useRef, useMemo } from "react";
 import Swal from "sweetalert2";
-import api from "../api/axios"; 
+import { useAuth } from "../context/AuthContext"; // <--- IMPORTACIÓN DEL CONTEXTO DE AUTH
+import api from "../api/axios";
 import { getSuministros, createSuministro, deleteSuministro } from "../api/suministros";
 import { getProveedores } from "../api/proveedores";
 import { getProductos } from "../api/productos";
-import { getEmpleados } from "../api/empleados"; 
+import { getEmpleados } from "../api/empleados";
 
 const emptyForm = {
   fecha_llegada: new Date().toISOString().split("T")[0],
   hora_llegada: new Date().toTimeString().split(" ")[0].slice(0, 5),
   id_proveedor: "",
   transportista: "",
-  id_empleado: "", 
+  // id_empleado: "", <--- YA NO SE NECESITA EN EL ESTADO INICIAL MANUAL
   items: []
 };
 
 export default function Suministros() {
+  const { user } = useAuth(); // <--- OBTENER USUARIO ACTUAL
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Modal registro
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -53,7 +56,7 @@ export default function Suministros() {
         getProductos(),
         getEmpleados()
       ]);
-      
+
       setItems(resSum.data);
       setProveedores(resProv.data);
       setEmpleados(resEmp.data);
@@ -83,7 +86,7 @@ export default function Suministros() {
       if (filterProd) {
         const term = filterProd.toLowerCase();
         // Verificamos si algún producto dentro del suministro coincide con el término
-        const hasProduct = row.Suministras?.some(s => 
+        const hasProduct = row.Suministras?.some(s =>
           s.Producto?.nombre_producto?.toLowerCase().includes(term) ||
           s.id_producto?.toLowerCase().includes(term)
         );
@@ -106,7 +109,7 @@ export default function Suministros() {
       const existe = prev.items.find(i => i.id_producto === newItem.id_producto);
       let nuevosItems;
       if (existe) {
-        nuevosItems = prev.items.map(i => 
+        nuevosItems = prev.items.map(i =>
           i.id_producto === newItem.id_producto ? { ...i, cantidad: i.cantidad + cant } : i
         );
       } else {
@@ -125,9 +128,9 @@ export default function Suministros() {
   const save = async (e) => {
     e.preventDefault();
     if (form.items.length === 0) return Swal.fire("Error", "Agrega productos al ingreso", "warning");
-    
-    // Validar empleado
-    if (!form.id_empleado) return Swal.fire("Error", "Selecciona el empleado que recibió", "warning");
+
+    // Validación de usuario logueado en lugar de selección manual
+    if (!user || !user.id) return Swal.fire("Error", "No se pudo identificar al usuario logueado", "error");
 
     try {
       await createSuministro({
@@ -135,7 +138,7 @@ export default function Suministros() {
         hora_llegada: form.hora_llegada,
         id_proveedor: form.id_proveedor,
         transportista: form.transportista,
-        id_empleado: form.id_empleado,
+        id_empleado: user.id, // <--- ID DEL USUARIO AUTOMÁTICO
         items: form.items
       });
       Swal.fire("Éxito", "Ingreso registrado y stock actualizado", "success");
@@ -157,6 +160,9 @@ export default function Suministros() {
     const file = e.target.files[0];
     if (!file) return;
 
+    // Validación previa antes de abrir el modal de SweetAlert
+    if (!user || !user.id) return Swal.fire("Error", "No se pudo identificar al usuario logueado", "error");
+
     // Pedir datos adicionales para el Excel
     const { value: formValues } = await Swal.fire({
       title: 'Datos del Ingreso (Excel)',
@@ -164,12 +170,12 @@ export default function Suministros() {
         '<div style="text-align: left; font-size: 0.9rem; color: #555;">' +
         '<label style="display:block; margin-bottom: 4px;">Proveedor</label>' +
         `<select id="swal-proveedor" class="swal2-select" style="display:flex; width: 100%; margin: 0 0 10px;">` +
-          proveedores.map(p => `<option value="${p.id_proveedor}">${p.nombre_proveedor}</option>`).join('') +
+        proveedores.map(p => `<option value="${p.id_proveedor}">${p.nombre_proveedor}</option>`).join('') +
         '</select>' +
         '<label style="display:block; margin-bottom: 4px;">Fecha</label>' +
         `<input id="swal-fecha" type="date" class="swal2-input" style="margin: 0 0 10px; width: 100%; box-sizing: border-box;" value="${new Date().toISOString().split('T')[0]}">` +
         '<label style="display:block; margin-bottom: 4px;">Hora</label>' +
-        `<input id="swal-hora" type="time" class="swal2-input" style="margin: 0; width: 100%; box-sizing: border-box;" value="${new Date().toTimeString().slice(0,5)}">` +
+        `<input id="swal-hora" type="time" class="swal2-input" style="margin: 0; width: 100%; box-sizing: border-box;" value="${new Date().toTimeString().slice(0, 5)}">` +
         '</div>',
       focusConfirm: false,
       showCancelButton: true,
@@ -193,15 +199,18 @@ export default function Suministros() {
       formData.append("fecha_llegada", formValues.fecha_llegada);
       formData.append("hora_llegada", formValues.hora_llegada);
 
+      // AGREGAR ID DE EMPLEADO (USUARIO LOGUEADO)
+      formData.append("id_empleado", user.id);
+
       try {
         setLoading(true);
         const res = await api.post("/suministro/importar", formData, {
           headers: { "Content-Type": "multipart/form-data" }
         });
-        
+
         Swal.fire("Éxito", res.data.mensaje, "success");
-        if(res.data.alertas) Swal.fire("Atención", res.data.alertas, "warning");
-        load(); 
+        if (res.data.alertas) Swal.fire("Atención", res.data.alertas, "warning");
+        load();
       } catch (error) {
         console.error(error);
         const msg = error.response?.data?.error || "Error al importar el archivo";
@@ -210,7 +219,7 @@ export default function Suministros() {
         setLoading(false);
       }
     }
-    e.target.value = ""; 
+    e.target.value = "";
   };
 
   const openDetails = (row) => {
@@ -220,12 +229,12 @@ export default function Suministros() {
 
   const remove = async (id) => {
     const result = await Swal.fire({
-        title: "¿Eliminar ingreso?",
-        text: "El stock se revertirá automáticamente.",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "Sí, eliminar",
-        cancelButtonText: "Cancelar"
+      title: "¿Eliminar ingreso?",
+      text: "El stock se revertirá automáticamente.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar"
     });
 
     if (!result.isConfirmed) return;
@@ -234,43 +243,43 @@ export default function Suministros() {
       await deleteSuministro(id);
       load();
       Swal.fire("Eliminado", "Registro eliminado correctamente", "success");
-    } catch (e) { 
-        Swal.fire("Error", "No se pudo eliminar", "error"); 
+    } catch (e) {
+      Swal.fire("Error", "No se pudo eliminar", "error");
     }
   };
 
   return (
     <div className="space-y-4" style={{ padding: "1.5rem" }}>
-      
+
       {/* --- HEADER --- */}
       <div className="flex items-center justify-between">
         <h2 style={{ fontSize: "1.5rem", fontWeight: 600 }}>📥 Ingresos de Mercancía</h2>
-        
-        <div style={{ display: 'flex', gap: '10px'}}>
-             <input 
-               type="file" 
-               ref={fileInputRef} 
-               style={{display: 'none'}} 
-               accept=".xlsx, .xls" 
-               onChange={handleFileChange}
-             />
-             
-             <button 
-               onClick={handleImportClick} 
-               style={{ background: '#10B981', color: 'white', padding: "8px 14px", borderRadius: "6px", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontWeight: 500 }}
-             >
-               📄 Importar Excel
-             </button>
 
-             <button onClick={() => setModalOpen(true)} className="btn-primary" style={{ background: '#4F46E5', color: 'white', padding: "8px 14px", borderRadius: "6px", fontWeight: 500, border: 'none', cursor: 'pointer' }}>
-                + Nuevo Ingreso
-             </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".xlsx, .xls"
+            onChange={handleFileChange}
+          />
+
+          <button
+            onClick={handleImportClick}
+            style={{ background: '#10B981', color: 'white', padding: "8px 14px", borderRadius: "6px", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontWeight: 500 }}
+          >
+            📄 Importar Excel
+          </button>
+
+          <button onClick={() => setModalOpen(true)} className="btn-primary" style={{ background: '#4F46E5', color: 'white', padding: "8px 14px", borderRadius: "6px", fontWeight: 500, border: 'none', cursor: 'pointer' }}>
+            + Nuevo Ingreso
+          </button>
         </div>
       </div>
 
       {/* ✅ BARRA DE FILTROS (Requisitos 2.18, 2.19, 2.20) */}
       <div style={{ background: "white", padding: "15px", borderRadius: "12px", boxShadow: "0 2px 5px rgba(0,0,0,0.05)", display: "flex", flexWrap: "wrap", gap: "15px", alignItems: "flex-end" }}>
-        
+
         {/* Filtro Proveedor */}
         <div style={{ flex: 1, minWidth: "200px" }}>
           <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#555" }}>Proveedor</label>
@@ -284,18 +293,18 @@ export default function Suministros() {
         <div style={{ display: "flex", gap: "10px" }}>
           <div>
             <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#555" }}>Desde</label>
-            <input type="date" className="agromat-input" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} style={{ marginTop: "4px" }}/>
+            <input type="date" className="agromat-input" value={filterDateStart} onChange={e => setFilterDateStart(e.target.value)} style={{ marginTop: "4px" }} />
           </div>
           <div>
             <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#555" }}>Hasta</label>
-            <input type="date" className="agromat-input" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} style={{ marginTop: "4px" }}/>
+            <input type="date" className="agromat-input" value={filterDateEnd} onChange={e => setFilterDateEnd(e.target.value)} style={{ marginTop: "4px" }} />
           </div>
         </div>
 
         {/* Filtro Producto */}
         <div style={{ flex: 1, minWidth: "200px" }}>
           <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#555" }}>Contiene Producto</label>
-          <input type="text" placeholder="Nombre o código..." className="agromat-input" value={filterProd} onChange={e => setFilterProd(e.target.value)} style={{ marginTop: "4px" }}/>
+          <input type="text" placeholder="Nombre o código..." className="agromat-input" value={filterProd} onChange={e => setFilterProd(e.target.value)} style={{ marginTop: "4px" }} />
         </div>
 
         <button onClick={() => { setFilterProv(""); setFilterDateStart(""); setFilterDateEnd(""); setFilterProd(""); }} className="agromat-btn-secondary" style={{ height: "38px" }}>Limpiar</button>
@@ -317,49 +326,49 @@ export default function Suministros() {
           </thead>
           <tbody style={{ fontSize: "0.9rem" }}>
             {loading ? (
-                <tr><td colSpan={7} style={{textAlign: "center", padding: "20px"}}>Cargando...</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>Cargando...</td></tr>
             ) : filteredItems.length === 0 ? (
-                <tr><td colSpan={7} style={{textAlign: "center", padding: "20px"}}>No hay coincidencias</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>No hay coincidencias</td></tr>
             ) : (
-                filteredItems.map(row => (
+              filteredItems.map(row => (
                 <tr key={row.id_suministro} style={{ borderTop: "1px solid #eee" }}>
-                    <td style={{ padding: "12px", fontWeight: "bold" }}>#{row.id_suministro}</td>
-                    <td style={{ padding: "12px" }}>
-                      {row.fecha_llegada}<br/>
-                      <span style={{fontSize: "0.8em", color: "#666"}}>{row.hora_llegada}</span>
-                    </td>
-                    <td style={{ padding: "12px" }}>{row.Proveedor?.nombre_proveedor}</td>
-                    
-                    <td style={{ padding: "12px" }}>{row.transportista || "-"}</td>
-                    
-                    <td style={{ padding: "12px" }}>
-                      {row.Empleado?.nombre_empleado || <span style={{color:"#999"}}>Sin asignar</span>}
-                    </td>
+                  <td style={{ padding: "12px", fontWeight: "bold" }}>#{row.id_suministro}</td>
+                  <td style={{ padding: "12px" }}>
+                    {row.fecha_llegada}<br />
+                    <span style={{ fontSize: "0.8em", color: "#666" }}>{row.hora_llegada}</span>
+                  </td>
+                  <td style={{ padding: "12px" }}>{row.Proveedor?.nombre_proveedor}</td>
 
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <span style={{background: "#e0f2fe", color: "#0369a1", padding: "3px 8px", borderRadius: "10px", fontWeight: "bold"}}>
-                        {row.Suministras?.length || 0}
-                      </span>
-                    </td>
+                  <td style={{ padding: "12px" }}>{row.transportista || "-"}</td>
 
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                        <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-                            <button 
-                                onClick={() => openDetails(row)} 
-                                style={{ background: "#3B82F6", color: "white", padding: "5px 10px", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "0.8rem" }}
-                            >
-                                Detalles
-                            </button>
-                            <button 
-                                onClick={() => remove(row.id_suministro)} 
-                                style={{ background: "#DC2626", color: "white", padding: "5px 10px", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "0.8rem" }}
-                            >
-                                Eliminar
-                            </button>
-                        </div>
-                    </td>
+                  <td style={{ padding: "12px" }}>
+                    {row.Empleado?.nombre_empleado || <span style={{ color: "#999" }}>Sin asignar</span>}
+                  </td>
+
+                  <td style={{ padding: "12px", textAlign: "center" }}>
+                    <span style={{ background: "#e0f2fe", color: "#0369a1", padding: "3px 8px", borderRadius: "10px", fontWeight: "bold" }}>
+                      {row.Suministras?.length || 0}
+                    </span>
+                  </td>
+
+                  <td style={{ padding: "12px", textAlign: "center" }}>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                      <button
+                        onClick={() => openDetails(row)}
+                        style={{ background: "#3B82F6", color: "white", padding: "5px 10px", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "0.8rem" }}
+                      >
+                        Detalles
+                      </button>
+                      <button
+                        onClick={() => remove(row.id_suministro)}
+                        style={{ background: "#DC2626", color: "white", padding: "5px 10px", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "0.8rem" }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-                ))
+              ))
             )}
           </tbody>
         </table>
@@ -429,23 +438,23 @@ export default function Suministros() {
               <h2>Registrar Ingreso Manual</h2>
               <button onClick={() => setModalOpen(false)} className="agromat-modal-close">✕</button>
             </div>
-            
+
             <form onSubmit={save} className="agromat-modal-body">
               <div className="agromat-form-grid">
                 {/* Fecha y Hora */}
                 <div className="agromat-form-field">
                   <label>Fecha</label>
-                  <input type="date" className="agromat-input" required value={form.fecha_llegada} onChange={e => setForm({...form, fecha_llegada: e.target.value})} />
+                  <input type="date" className="agromat-input" required value={form.fecha_llegada} onChange={e => setForm({ ...form, fecha_llegada: e.target.value })} />
                 </div>
                 <div className="agromat-form-field">
                   <label>Hora</label>
-                  <input type="time" className="agromat-input" required value={form.hora_llegada} onChange={e => setForm({...form, hora_llegada: e.target.value})} />
+                  <input type="time" className="agromat-input" required value={form.hora_llegada} onChange={e => setForm({ ...form, hora_llegada: e.target.value })} />
                 </div>
 
                 {/* Proveedor */}
                 <div className="agromat-form-field agromat-full-row">
                   <label>Proveedor</label>
-                  <select className="agromat-select" required value={form.id_proveedor} onChange={e => setForm({...form, id_proveedor: e.target.value})}>
+                  <select className="agromat-select" required value={form.id_proveedor} onChange={e => setForm({ ...form, id_proveedor: e.target.value })}>
                     <option value="">-- Selecciona --</option>
                     {proveedores.map(p => <option key={p.id_proveedor} value={p.id_proveedor}>{p.nombre_proveedor}</option>)}
                   </select>
@@ -454,46 +463,42 @@ export default function Suministros() {
                 {/* Campo Transportista */}
                 <div className="agromat-form-field">
                   <label>Transportista</label>
-                  <input 
-                    type="text" 
-                    className="agromat-input" 
+                  <input
+                    type="text"
+                    className="agromat-input"
                     placeholder="Ej. DHL, Camión propio..."
-                    value={form.transportista} 
-                    onChange={e => setForm({...form, transportista: e.target.value})} 
+                    value={form.transportista}
+                    onChange={e => setForm({ ...form, transportista: e.target.value })}
                   />
                 </div>
 
-                {/* Campo Empleado Receptor */}
+                {/* Campo Empleado Receptor (AUTOMÁTICO) */}
                 <div className="agromat-form-field">
-                  <label>Recibió (Empleado)</label>
-                  <select 
-                    className="agromat-select" 
-                    required 
-                    value={form.id_empleado} 
-                    onChange={e => setForm({...form, id_empleado: e.target.value})}
-                  >
-                    <option value="">-- Selecciona --</option>
-                    {empleados.map(e => (
-                      <option key={e.id_empleado} value={e.id_empleado}>{e.nombre_empleado}</option>
-                    ))}
-                  </select>
+                  <label>Recibió (Usuario Actual)</label>
+                  <input
+                    type="text"
+                    className="agromat-input"
+                    value={user ? user.nombre : "Cargando..."}
+                    disabled
+                    style={{ backgroundColor: "#f3f4f6", cursor: "not-allowed", color: "#555" }}
+                  />
                 </div>
               </div>
 
               <hr style={{ margin: "20px 0", border: "0", borderTop: "1px solid #eee" }} />
-              
+
               {/* Agregar items */}
               <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: "0.8rem", fontWeight: 600 }}>Producto</label>
-                  <select className="agromat-select" style={{ width: "100%" }} value={newItem.id_producto} onChange={e => setNewItem({...newItem, id_producto: e.target.value})}>
+                  <select className="agromat-select" style={{ width: "100%" }} value={newItem.id_producto} onChange={e => setNewItem({ ...newItem, id_producto: e.target.value })}>
                     <option value="">Buscar producto...</option>
                     {productos.map(p => <option key={p.id_producto} value={p.id_producto}>{p.nombre_producto} (Stock: {p.stock})</option>)}
                   </select>
                 </div>
                 <div style={{ width: "80px" }}>
                   <label style={{ fontSize: "0.8rem", fontWeight: 600 }}>Cant.</label>
-                  <input type="number" className="agromat-input" min="1" style={{ width: "100%" }} value={newItem.cantidad} onChange={e => setNewItem({...newItem, cantidad: parseInt(e.target.value) || 0})} />
+                  <input type="number" className="agromat-input" min="1" style={{ width: "100%" }} value={newItem.cantidad} onChange={e => setNewItem({ ...newItem, cantidad: parseInt(e.target.value) || 0 })} />
                 </div>
                 <button type="button" className="agromat-btn-primary" style={{ padding: "9px 12px" }} onClick={agregarProducto}>+</button>
               </div>
