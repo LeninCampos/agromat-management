@@ -1,20 +1,19 @@
-// src/layout/AppLayout.jsx
+// frontend/src/layout/AppLayout.jsx
 import { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import { Outlet } from "react-router-dom";
+import "../App.css"; // Aseguramos que cargue los estilos nuevos
 
 export default function AppLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Detectar si estamos en móvil
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 1024);
     };
-
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
@@ -22,10 +21,8 @@ export default function AppLayout() {
 
   const toggleSidebar = () => {
     if (isMobile) {
-      // En móvil: abrir/cerrar sidebar
       setIsSidebarOpen((prev) => !prev);
     } else {
-      // En desktop: colapsar/expandir sidebar
       setIsSidebarCollapsed((prev) => !prev);
     }
   };
@@ -34,13 +31,13 @@ export default function AppLayout() {
 
   return (
     <div className="app-container">
-      {/* Overlay (solo se ve en móvil cuando el menú está abierto) */}
+      {/* Overlay para móvil */}
       <div
         className={`sidebar-overlay ${isSidebarOpen ? "open" : ""}`}
         onClick={closeSidebar}
       />
 
-      {/* Sidebar */}
+      {/* Sidebar (Ahora controlada por el CSS para ser altura 100%) */}
       <aside
         className={`sidebar-container ${isSidebarOpen ? "open" : ""} ${
           isSidebarCollapsed ? "collapsed" : ""
@@ -49,17 +46,13 @@ export default function AppLayout() {
         <Sidebar isCollapsed={isSidebarCollapsed} />
       </aside>
 
-      {/* Contenido principal */}
+      {/* Columna principal */}
       <div className="main-content">
+        {/* Topbar fija arriba */}
         <Topbar onToggleSidebar={toggleSidebar} />
 
-        <main
-          style={{
-            flex: 1,
-            padding: "1.75rem 1.75rem 2rem",
-            overflowX: "hidden",
-          }}
-        >
+        {/* AQUÍ está el cambio: main tiene su propio scroll independiente */}
+        <main className="content-scroll-area">
           <Outlet />
         </main>
       </div>

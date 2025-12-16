@@ -1,7 +1,7 @@
-// src/layout/Topbar.jsx
-import { useMemo } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+// frontend/src/layout/Topbar.jsx
+import { useLocation, useNavigate } from "react-router-dom";
 import { Menu } from "lucide-react";
+import { useAuth } from "../context/AuthContext"; // Importamos el contexto
 
 function getPageTitle(pathname) {
   if (pathname.startsWith("/app/productos")) return "Productos";
@@ -12,37 +12,24 @@ function getPageTitle(pathname) {
   if (pathname.startsWith("/app/empleados")) return "Empleados";
   if (pathname.startsWith("/app/zonas")) return "Zonas";
   if (pathname.startsWith("/app/suministros")) return "Entradas";
-  return "Dashboard general";
+  if (pathname.startsWith("/app/dashboard")) return "Dashboard general";
+  return "Panel de Administración";
 }
 
 export default function Topbar({ onToggleSidebar = () => {} }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth(); // Usamos el hook del contexto
 
-  const { name, role } = useMemo(() => {
-    const raw = localStorage.getItem("user");
-    if (!raw) return { name: "Admin", role: "ADMIN" };
-
-    try {
-      const u = JSON.parse(raw);
-      return {
-        name:
-          u.nombre_empleado ||
-          u.nombre ||
-          u.nombre_usuario ||
-          "Admin",
-        role: (u.rol || "ADMIN").toUpperCase(),
-      };
-    } catch {
-      return { name: "Admin", role: "ADMIN" };
-    }
-  }, []);
+  // Obtenemos los datos del usuario desde el contexto
+  // Aseguramos que existan valores por defecto por seguridad
+  const userName = user?.nombre_empleado || user?.nombre || user?.nombre_usuario || "Usuario";
+  const userRole = (user?.rol || "Usuario").toUpperCase();
 
   const pageTitle = getPageTitle(location.pathname);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    logout(); // Usamos la función logout del contexto
     navigate("/login", { replace: true });
   };
 
@@ -58,6 +45,9 @@ export default function Topbar({ onToggleSidebar = () => {} }) {
         justifyContent: "space-between",
         padding: "0 1.5rem",
         boxShadow: "0 1px 3px rgba(15,23,42,0.04)",
+        zIndex: 40, // Aseguramos que la sombra quede sobre el contenido
+        position: "sticky",
+        top: 0,
       }}
     >
       {/* IZQUIERDA: Hamburguesa + texto */}
@@ -67,6 +57,14 @@ export default function Topbar({ onToggleSidebar = () => {} }) {
           type="button"
           aria-label="Abrir menú de navegación"
           onClick={onToggleSidebar}
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            color: "#374151"
+          }}
         >
           <Menu size={22} />
         </button>
@@ -76,7 +74,7 @@ export default function Topbar({ onToggleSidebar = () => {} }) {
             Bienvenido,
             <span style={{ color: "#111827", fontWeight: 600 }}>
               {" "}
-              {name}
+              {userName}
             </span>
           </div>
           <div style={{ fontSize: "0.8rem", color: "#9ca3af", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -99,7 +97,7 @@ export default function Topbar({ onToggleSidebar = () => {} }) {
             whiteSpace: "nowrap",
           }}
         >
-          {role}
+          {userRole}
         </span>
 
         <button
