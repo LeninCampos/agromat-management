@@ -10,7 +10,7 @@ import {
   updateProducto,
   deleteProducto,
   bulkDeleteProductos,
-  descargarInventarioExcel, // <--- Fusión: Importación para Excel
+  descargarInventarioExcel,
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
 
@@ -30,18 +30,24 @@ const emptyForm = {
 export default function Productos() {
   const navigate = useNavigate();
 
+  // Estados de datos
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Filtros y Búsqueda
   const [q, setQ] = useState("");
-
-  // Filtros / orden
   const [showNoStock, setShowNoStock] = useState(false);
   const [filterZona, setFilterZona] = useState("");
+  const [filterProveedor, setFilterProveedor] = useState(""); // <-- NUEVO: Filtro Proveedor
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-
-  // Umbral configurable de bajo stock
   const [lowStockThreshold, setLowStockThreshold] = useState(10);
 
+  // --- ESTADOS DE PAGINACIÓN ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50); 
+  const [isCustomPagination, setIsCustomPagination] = useState(false);
+
+  // Modal y Formularios
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -52,9 +58,9 @@ export default function Productos() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
-  // Inputs de archivo (Fusión: Se mantienen ambas refs para cámara y galería)
-  const fileInputRef = useRef(null);      // galería / archivos
-  const cameraInputRef = useRef(null);    // cámara
+  // Referencias para inputs de archivo
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const formatCurrency = (value) =>
     Number(value || 0).toLocaleString("es-MX", {
@@ -64,7 +70,7 @@ export default function Productos() {
       maximumFractionDigits: 2,
     });
 
-  // 🔢 Estadísticas generales del inventario (cards de arriba)
+  // 🔢 Estadísticas generales
   const stats = useMemo(() => {
     const total = items.length;
     let sinStock = 0;
@@ -112,7 +118,12 @@ export default function Productos() {
       result = result.filter((x) => String(x.zonaId) === String(filterZona));
     }
 
-    // 4. Ordenamiento
+    // 4. Filtro por Proveedor (NUEVO)
+    if (filterProveedor) {
+      result = result.filter((x) => String(x.id_proveedor) === String(filterProveedor));
+    }
+
+    // 5. Ordenamiento
     if (sortConfig.key) {
       result.sort((a, b) => {
         const valA = a[sortConfig.key];
@@ -131,7 +142,44 @@ export default function Productos() {
     }
 
     return result;
-  }, [q, items, showNoStock, filterZona, sortConfig]);
+  }, [q, items, showNoStock, filterZona, filterProveedor, sortConfig]); // Agregado filterProveedor a dependencias
+
+  // --- LÓGICA DE PAGINACIÓN ---
+  
+  // 1. Resetear página a 1 cuando cambian filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [q, showNoStock, filterZona, filterProveedor, itemsPerPage]);
+
+  // 2. Calcular datos de la página actual
+  const paginatedData = useMemo(() => {
+    if (itemsPerPage === "all") return filtered;
+    
+    const lastIndex = currentPage * itemsPerPage;
+    const firstIndex = lastIndex - itemsPerPage;
+    return filtered.slice(firstIndex, lastIndex);
+  }, [filtered, currentPage, itemsPerPage]);
+
+  // 3. Calcular total de páginas
+  const totalPages = useMemo(() => {
+    if (itemsPerPage === "all") return 1;
+    return Math.ceil(filtered.length / itemsPerPage);
+  }, [filtered.length, itemsPerPage]);
+
+  // 4. Manejador del select "Items por página"
+  const handleItemsPerPageChange = (e) => {
+    const val = e.target.value;
+    if (val === "custom") {
+      setIsCustomPagination(true);
+      setItemsPerPage((prev) => (typeof prev === 'number' ? prev : 50));
+    } else if (val === "all") {
+      setIsCustomPagination(false);
+      setItemsPerPage("all");
+    } else {
+      setIsCustomPagination(false);
+      setItemsPerPage(Number(val));
+    }
+  };
 
   const requestSort = (key) => {
     let direction = "asc";
@@ -169,7 +217,6 @@ export default function Productos() {
           imagenUrl = `${BACKEND_URL}${imagenUrl}`;
         }
 
-        // soporta p.precio o p.precio_unitario
         const precioRaw =
           p.precio !== undefined && p.precio !== null
             ? p.precio
@@ -206,15 +253,11 @@ export default function Productos() {
     load();
   }, []);
 
-  // --- Fusión: Función para exportar Excel ---
   const handleExport = async () => {
     try {
       const response = await descargarInventarioExcel();
-      
-      // Crear URL temporal
       const url = window.URL.createObjectURL(new Blob([response.data]));
       
-      // Calcular fecha formato mm-dd-aa
       const now = new Date();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
@@ -332,7 +375,7 @@ export default function Productos() {
   };
 
   const toggleSelectAllVisible = () => {
-    const visibleIds = filtered.map((p) => p.id_producto);
+    const visibleIds = paginatedData.map((p) => p.id_producto);
     const allSelected = visibleIds.every((id) => selectedIds.includes(id));
 
     if (allSelected) {
@@ -434,6 +477,51 @@ export default function Productos() {
     }
   };
 
+  // COMPONENTE O VARIABLE DE CONTROLES DE PAGINACIÓN (Para reutilizar Arriba y Abajo)
+  const renderPaginationControls = () => {
+    if (itemsPerPage === 'all' || filtered.length === 0) return null;
+
+    return (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+            <button
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                style={{
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #d1d5db",
+                    background: currentPage === 1 ? "#f3f4f6" : "white",
+                    color: currentPage === 1 ? "#9ca3af" : "#374151",
+                    cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                    fontSize: "0.85rem"
+                }}
+            >
+                &larr; Ant
+            </button>
+            
+            <span style={{ fontSize: "0.85rem", color: "#374151", whiteSpace: "nowrap" }}>
+                Pág <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+            </span>
+
+            <button
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                style={{
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #d1d5db",
+                    background: currentPage === totalPages ? "#f3f4f6" : "white",
+                    color: currentPage === totalPages ? "#9ca3af" : "#374151",
+                    cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                    fontSize: "0.85rem"
+                }}
+            >
+                Sig &rarr;
+            </button>
+        </div>
+    );
+  };
+
   // ========================= JSX =========================
   return (
     <div style={{ padding: "1.5rem" }}>
@@ -458,7 +546,7 @@ export default function Productos() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", // Mejor responsividad en grid
           gap: "12px",
           marginBottom: "1.5rem",
         }}
@@ -606,7 +694,7 @@ export default function Productos() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="🔍 Buscar por código, nombre..."
+          placeholder="🔍 Buscar..."
           style={{
             flex: 1,
             minWidth: "200px",
@@ -628,12 +716,35 @@ export default function Productos() {
             fontSize: "0.9rem",
             cursor: "pointer",
             backgroundColor: "white",
+            maxWidth: "180px"
           }}
         >
-          <option value="">🗺️ Todas las zonas</option>
+          <option value="">🗺️ Zonas</option>
           {zonas.map((z) => (
             <option key={z.id_zona} value={z.id_zona}>
               {z.codigo}
+            </option>
+          ))}
+        </select>
+
+        {/* FILTRO POR PROVEEDOR (NUEVO) */}
+        <select
+          value={filterProveedor}
+          onChange={(e) => setFilterProveedor(e.target.value)}
+          style={{
+            padding: "10px 14px",
+            borderRadius: "8px",
+            border: "1px solid #ddd",
+            fontSize: "0.9rem",
+            cursor: "pointer",
+            backgroundColor: "white",
+            maxWidth: "180px"
+          }}
+        >
+          <option value="">🏭 Proveedores</option>
+          {proveedores.map((p) => (
+            <option key={p.id_proveedor} value={p.id_proveedor}>
+              {p.nombre_proveedor}
             </option>
           ))}
         </select>
@@ -650,9 +761,10 @@ export default function Productos() {
             cursor: "pointer",
             fontSize: "0.9rem",
             fontWeight: 500,
+            whiteSpace: "nowrap"
           }}
         >
-          {showNoStock ? "🔴 Viendo Agotados" : "⚪ Ver Agotados"}
+          {showNoStock ? "🔴 Agotados" : "⚪ Agotados"}
         </button>
 
         {/* INPUT PARA UMBRAL DE BAJO STOCK */}
@@ -662,6 +774,10 @@ export default function Productos() {
             alignItems: "center",
             gap: "6px",
             padding: "0 4px",
+            background: "white",
+            border: "1px solid #eee",
+            borderRadius: "8px",
+            paddingRight: "8px"
           }}
         >
           <span
@@ -669,9 +785,10 @@ export default function Productos() {
               fontSize: "0.8rem",
               color: "#6b7280",
               whiteSpace: "nowrap",
+              paddingLeft: "8px"
             }}
           >
-            Umbral bajo stock:
+            Bajo stock:
           </span>
           <input
             type="number"
@@ -683,11 +800,12 @@ export default function Productos() {
               setLowStockThreshold(val < 0 ? 0 : val);
             }}
             style={{
-              width: "70px",
-              padding: "6px 8px",
-              borderRadius: "8px",
-              border: "1px solid #d1d5db",
+              width: "60px",
+              padding: "6px 4px",
+              border: "none",
+              background: "transparent",
               fontSize: "0.85rem",
+              textAlign: "center"
             }}
           />
         </div>
@@ -701,6 +819,7 @@ export default function Productos() {
             borderRadius: "8px",
             cursor: "pointer",
           }}
+          title="Recargar"
         >
           🔄
         </button>
@@ -716,6 +835,7 @@ export default function Productos() {
             border: "1px solid #d1d5db",
             cursor: "pointer",
             fontSize: "0.9rem",
+            whiteSpace: "nowrap"
           }}
         >
           {selectionMode ? "Cancelar" : "Seleccionar"}
@@ -733,13 +853,14 @@ export default function Productos() {
               border: "none",
               cursor: selectedIds.length === 0 ? "not-allowed" : "pointer",
               fontSize: "0.9rem",
+              whiteSpace: "nowrap"
             }}
           >
             Eliminar ({selectedIds.length})
           </button>
         )}
 
-        {/* --- Fusión: Botón para Exportar Excel --- */}
+        {/* Botón para Exportar Excel */}
         <button
           onClick={handleExport}
           style={{
@@ -756,7 +877,7 @@ export default function Productos() {
           }}
           title="Exportar a Excel"
         >
-          <span>📊</span> Exportar
+          <span>Exportar</span>
         </button>
 
         <button
@@ -770,22 +891,78 @@ export default function Productos() {
             cursor: "pointer",
             fontSize: "0.9rem",
             fontWeight: 500,
+            whiteSpace: "nowrap"
           }}
         >
           ➕ Nuevo
         </button>
       </div>
 
-      {/* CONTADOR DE RESULTADOS */}
-      <div
+      {/* --- BARRA DE CONTROL DE PAGINACIÓN SUPERIOR --- */}
+      <div 
         style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
           marginBottom: "10px",
-          fontSize: "0.85rem",
-          color: "#6b7280",
+          flexWrap: "wrap",
+          gap: "10px",
+          background: "#f9fafb",
+          padding: "10px",
+          borderRadius: "8px",
+          border: "1px solid #e5e7eb"
         }}
       >
-        Mostrando <strong>{filtered.length}</strong> de{" "}
-        <strong>{items.length}</strong> productos
+        <div style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
+            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+            Mostrando <strong>{itemsPerPage === 'all' ? filtered.length : Math.min(itemsPerPage * currentPage, filtered.length)}</strong> de <strong>{filtered.length}</strong>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>Ver:</span>
+                <select
+                    value={isCustomPagination ? "custom" : itemsPerPage}
+                    onChange={handleItemsPerPageChange}
+                    style={{
+                        padding: "4px 8px",
+                        borderRadius: "6px",
+                        border: "1px solid #d1d5db",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                        backgroundColor: "white"
+                    }}
+                >
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                    <option value="all">Todos</option>
+                    <option value="custom">Otro...</option>
+                </select>
+                
+                {isCustomPagination && (
+                    <input
+                        type="number"
+                        min="1"
+                        value={itemsPerPage}
+                        onChange={(e) => {
+                            const val = Number(e.target.value);
+                            if (val > 0) setItemsPerPage(val);
+                        }}
+                        style={{
+                            width: "60px",
+                            padding: "4px",
+                            borderRadius: "6px",
+                            border: "1px solid #3b82f6",
+                            fontSize: "0.85rem"
+                        }}
+                        placeholder="#"
+                    />
+                )}
+            </div>
+        </div>
+
+        {/* Paginación Arriba */}
+        {renderPaginationControls()}
       </div>
 
       {/* TABLA */}
@@ -812,8 +989,8 @@ export default function Productos() {
                     type="checkbox"
                     onChange={toggleSelectAllVisible}
                     checked={
-                      filtered.length > 0 &&
-                      filtered.every((p) =>
+                      paginatedData.length > 0 &&
+                      paginatedData.every((p) =>
                         selectedIds.includes(p.id_producto)
                       )
                     }
@@ -842,6 +1019,7 @@ export default function Productos() {
                   fontWeight: 600,
                   color: "#6b7280",
                   textTransform: "uppercase",
+                  whiteSpace: "nowrap"
                 }}
               >
                 Código {getSortIcon("id_producto")}
@@ -884,33 +1062,41 @@ export default function Productos() {
                   fontWeight: 600,
                   color: "#6b7280",
                   textTransform: "uppercase",
+                  whiteSpace: "nowrap"
                 }}
               >
                 Zona {getSortIcon("codigo_zona")}
               </th>
+              {/* Encabezados de Fecha ORDENABLES */}
               <th
+                onClick={() => requestSort("fecha_ultimo_ingreso")}
                 style={{
+                  cursor: "pointer",
                   padding: "12px 16px",
                   textAlign: "left",
                   fontSize: "0.75rem",
                   fontWeight: 600,
                   color: "#6b7280",
                   textTransform: "uppercase",
+                  whiteSpace: "nowrap"
                 }}
               >
-                Últ. Ingreso
+                Últ. Ingreso {getSortIcon("fecha_ultimo_ingreso")}
               </th>
               <th
+                onClick={() => requestSort("fecha_ultimo_egreso")}
                 style={{
+                  cursor: "pointer",
                   padding: "12px 16px",
                   textAlign: "left",
                   fontSize: "0.75rem",
                   fontWeight: 600,
                   color: "#6b7280",
                   textTransform: "uppercase",
+                  whiteSpace: "nowrap"
                 }}
               >
-                Últ. Egreso
+                Últ. Egreso {getSortIcon("fecha_ultimo_egreso")}
               </th>
               <th
                 onClick={() => requestSort("precio")}
@@ -968,14 +1154,14 @@ export default function Productos() {
                   <p>Cargando productos...</p>
                 </td>
               </tr>
-            ) : filtered.length === 0 ? (
+            ) : paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={12} style={{ textAlign: "center", padding: "40px" }}>
                   <p style={{ fontWeight: 500 }}>No hay productos</p>
                 </td>
               </tr>
             ) : (
-              filtered.map((row) => {
+              paginatedData.map((row) => {
                 const stock = Number(row.existencias) || 0;
 
                 let stockBg = "transparent";
@@ -1049,24 +1235,37 @@ export default function Productos() {
                         fontSize: "0.9rem",
                         fontWeight: 500,
                         color: "#111",
+                        whiteSpace: "nowrap"
                       }}
                     >
                       {row.id_producto}
                     </td>
+                    {/* CELDA NOMBRE: Responsiva con ellipsis */}
                     <td
+                      title={row.nombre_producto}
                       style={{
                         padding: "12px 16px",
                         fontSize: "0.9rem",
                         color: "#111",
+                        maxWidth: "200px",       // Ancho máximo
+                        whiteSpace: "nowrap",    // No envolver
+                        overflow: "hidden",      // Ocultar exceso
+                        textOverflow: "ellipsis" // Poner ...
                       }}
                     >
                       {row.nombre_producto}
                     </td>
+                    {/* CELDA PROVEEDOR: Responsiva con ellipsis */}
                     <td
+                      title={row.nombre_proveedor}
                       style={{
                         padding: "12px 16px",
                         fontSize: "0.9rem",
                         color: "#6b7280",
+                        maxWidth: "150px",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis"
                       }}
                     >
                       {row.nombre_proveedor}
@@ -1076,6 +1275,7 @@ export default function Productos() {
                         padding: "12px 16px",
                         fontSize: "0.9rem",
                         color: "#6b7280",
+                        whiteSpace: "nowrap"
                       }}
                     >
                       {row.codigo_zona || "Sin asignar"}
@@ -1085,6 +1285,7 @@ export default function Productos() {
                         padding: "12px 16px",
                         fontSize: "0.9rem",
                         color: "#6b7280",
+                        whiteSpace: "nowrap"
                       }}
                     >
                       {row.fecha_ultimo_ingreso}
@@ -1094,6 +1295,7 @@ export default function Productos() {
                         padding: "12px 16px",
                         fontSize: "0.9rem",
                         color: "#6b7280",
+                        whiteSpace: "nowrap"
                       }}
                     >
                       {row.fecha_ultimo_egreso}
@@ -1105,6 +1307,7 @@ export default function Productos() {
                         fontSize: "0.9rem",
                         fontWeight: 500,
                         color: "#111",
+                        whiteSpace: "nowrap"
                       }}
                     >
                       {formatCurrency(row.precio)}
@@ -1122,8 +1325,8 @@ export default function Productos() {
                           display: "inline-flex",
                           alignItems: "center",
                           justifyContent: "flex-end",
-                          minWidth: "56px",
-                          padding: "4px 10px",
+                          minWidth: "40px",
+                          padding: "4px 8px",
                           borderRadius: "999px",
                           backgroundColor: stockBg,
                           color: stockColor,
@@ -1140,6 +1343,7 @@ export default function Productos() {
                           display: "flex",
                           gap: "8px",
                           justifyContent: "center",
+                          minWidth: "180px" // Evita que los botones se monten
                         }}
                       >
                         <button
@@ -1201,6 +1405,12 @@ export default function Productos() {
             )}
           </tbody>
         </table>
+        
+        {/* Paginación Abajo */}
+        <div style={{ padding: "12px 16px", background: "#f9fafb", borderTop: "1px solid #e5e7eb" }}>
+           {renderPaginationControls()}
+        </div>
+
       </div>
 
       {/* MODAL */}
@@ -1538,7 +1748,7 @@ export default function Productos() {
                       📂 Elegir archivo
                     </button>
 
-                    {/* Cámara (Fusión: Botón para tomar foto) */}
+                    {/* Cámara */}
                     <button
                       type="button"
                       onClick={triggerCameraInput}
