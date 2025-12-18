@@ -75,7 +75,7 @@ app.use("/api/auth", authLimiter);
    🩺 Healthcheck
    ========================== */
 
-app.get("/health", (req, res) => {
+app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
     service: "agromat-backend",

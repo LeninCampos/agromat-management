@@ -16,15 +16,15 @@ function getPageTitle(pathname) {
   return "Panel de Administración";
 }
 
-export default function Topbar({ onToggleSidebar = () => {} }) {
+export default function Topbar({ onToggleSidebar = () => { } }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth(); // Usamos el hook del contexto
 
   // Obtenemos los datos del usuario desde el contexto
   // Aseguramos que existan valores por defecto por seguridad
-  const userName = user?.nombre_empleado || user?.nombre || user?.nombre_usuario || "Usuario";
-  const userRole = (user?.rol || "Usuario").toUpperCase();
+  const userName = user?.nombre || user?.nombre_empleado || "Usuario";
+  const userRole = (user?.rol || "Invitado").toUpperCase();
 
   const pageTitle = getPageTitle(location.pathname);
 

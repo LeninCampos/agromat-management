@@ -5,9 +5,8 @@ import Swal from "sweetalert2";
 
 // 👈 usamos el axios configurado
 import api from "./api/axios";
-
-// si así te funcionaba antes, déjalo igual
 import agromatLogo from "./assets/agromat-logo.png";
+import { useAuth } from "./context/AuthContext";
 
 export default function Login() {
   const [correo, setCorreo] = useState("");
@@ -15,6 +14,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,6 +33,7 @@ export default function Login() {
 
       // Guardar token
       localStorage.setItem("token", data.token);
+      login(data.token);
 
       // Guardar usuario si el backend manda datos
       const rawUser = data.empleado || data.usuario || data.user || null;

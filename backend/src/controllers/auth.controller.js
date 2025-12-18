@@ -30,12 +30,18 @@ export const login = async (req, res, next) => {
     const token = jwt.sign(
       payload,
       process.env.JWT_SECRET || "fallback_secret_dev",
-      {
-        expiresIn: process.env.JWT_EXPIRES_IN || "8h"
-      }
+      { expiresIn: process.env.JWT_EXPIRES_IN || "8h" }
     );
 
-    return res.json({ token });
+    // ✅ CAMBIO: Enviar el objeto empleado junto con el token
+    return res.json({
+      token,
+      empleado: {
+        id: empleado.id_empleado,
+        nombre: empleado.nombre_empleado,
+        rol: empleado.rol
+      }
+    });
 
   } catch (err) {
     next(err);
