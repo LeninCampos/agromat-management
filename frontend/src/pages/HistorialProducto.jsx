@@ -74,18 +74,18 @@ export default function HistorialProducto() {
       const entradas =
         Number(
           m.entradas ??
-            m.total_entrada ??
-            m.cantidad_entrada ??
-            m.cantidad_entradas ??
-            0
+          m.total_entrada ??
+          m.cantidad_entrada ??
+          m.cantidad_entradas ??
+          0
         ) || 0;
       const salidas =
         Number(
           m.salidas ??
-            m.total_salida ??
-            m.cantidad_salida ??
-            m.cantidad_salidas ??
-            0
+          m.total_salida ??
+          m.cantidad_salida ??
+          m.cantidad_salidas ??
+          0
         ) || 0;
 
       saldoAcum += entradas - salidas;
@@ -122,6 +122,11 @@ export default function HistorialProducto() {
     if (movimientos.length === 0) return 0;
     return movimientos[movimientos.length - 1].saldoAcumulado;
   }, [movimientos]);
+
+  const valorInventario = useMemo(() => {
+    const precio = Number(producto?.precio || 0);
+    return stockActual * precio;
+  }, [stockActual, producto]);
 
   // Generar puntos para el SVG con mejor escala
   const chartData = useMemo(() => {
@@ -289,6 +294,31 @@ export default function HistorialProducto() {
               </p>
               <p style={{ margin: "4px 0 0", fontSize: "0.75rem", opacity: 0.8 }}>
                 unidades
+              </p>
+            </div>
+            {/* NUEVA CARD: Valor en Existencias */}
+            <div
+              style={{
+                background: "white",
+                borderRadius: "12px",
+                padding: "20px",
+                border: "1px solid #e5e7eb",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "#6b7280" }}>Valor en Existencias</p>
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  fontSize: "1.8rem", // Un poco más pequeño para que quepan cifras grandes
+                  fontWeight: 700,
+                  color: "#111827",
+                }}
+              >
+                ${valorInventario.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+              </p>
+              <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#9ca3af" }}>
+                Precio unit: ${Number(producto?.precio || 0).toFixed(2)}
               </p>
             </div>
 
@@ -786,8 +816,8 @@ export default function HistorialProducto() {
                                     cambio > 0
                                       ? "#10B981"
                                       : cambio < 0
-                                      ? "#EF4444"
-                                      : "#9CA3AF",
+                                        ? "#EF4444"
+                                        : "#9CA3AF",
                                 }}
                               />
                               {m.fecha}
