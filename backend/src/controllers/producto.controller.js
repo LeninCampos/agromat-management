@@ -14,9 +14,14 @@ import {
 
 // Helper para obtener opciones de auditoría
 function getAuditOptions(req) {
+  // Intentamos leer el header 'x-client-time'
+  // Si el frontend no lo envía, quedará null (y se usará solo created_at del server)
+  const clientTimeHeader = req.headers['x-client-time']; 
+  
   return {
     userId: req.empleado?.id || null,
     ipAddress: req.ip || req.connection?.remoteAddress || null,
+    clientTime: clientTimeHeader ? new Date(clientTimeHeader) : null, // ✅ Capturamos la hora
   };
 }
 

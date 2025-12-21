@@ -2,7 +2,9 @@ import { Op, Sequelize } from "sequelize";
 import AuditLog from "../models/AuditLog.js";
 import Empleado from "../models/Empleado.js";
 import Producto from "../models/Producto.js";
-import Cliente from "../models/Cliente.js"; // ✅ AGREGADO: Importar Cliente
+import Cliente from "../models/Cliente.js"; 
+import Proveedor from "../models/Proveedor.js"; // ✅ Importación Agregada
+import Zona from "../models/Zona.js";           // ✅ Importación Agregada
 
 // =====================================================
 // TIPOS DE CAMBIO PREDEFINIDOS
@@ -77,7 +79,7 @@ const TIPOS_CAMBIO = {
 };
 
 // =====================================================
-// Helpers
+// Helpers de Búsqueda y Utilidades
 // =====================================================
 function safeParseJSON(x) {
   if (!x) return null;
@@ -89,58 +91,56 @@ function safeParseJSON(x) {
   }
 }
 
-/**
- * ✅ CORREGIDO: Busca un producto por ID (maneja strings con ceros a la izquierda)
- */
+// ✅ CORREGIDO: Productos usan ID como String (sin parseInt forzado)
 async function findProductoByRegistro(idRegistro) {
   if (!idRegistro) return null;
-
-  // Convertir a string y luego a número para manejar "00107092" -> 107092
   const idStr = String(idRegistro).trim();
-  const id = parseInt(idStr, 10);
-  
-  if (isNaN(id) || id <= 0) return null;
-
-  return Producto.findByPk(id, {
+  return Producto.findByPk(idStr, {
     attributes: ["id_producto", "nombre_producto"],
   });
 }
 
-/**
- * ✅ AGREGADO: Busca un cliente por ID
- */
+// Clientes usan ID Integer
 async function findClienteByRegistro(idRegistro) {
   if (!idRegistro) return null;
-
-  const idStr = String(idRegistro).trim();
-  const id = parseInt(idStr, 10);
-  
+  const id = parseInt(String(idRegistro).trim(), 10);
   if (isNaN(id) || id <= 0) return null;
-
   return Cliente.findByPk(id, {
     attributes: ["id_cliente", "nombre_cliente"],
   });
 }
 
-/**
- * ✅ AGREGADO: Busca un empleado por ID
- */
+// Empleados usan ID Integer
 async function findEmpleadoByRegistro(idRegistro) {
   if (!idRegistro) return null;
-
-  const idStr = String(idRegistro).trim();
-  const id = parseInt(idStr, 10);
-  
+  const id = parseInt(String(idRegistro).trim(), 10);
   if (isNaN(id) || id <= 0) return null;
-
   return Empleado.findByPk(id, {
     attributes: ["id_empleado", "nombre_empleado"],
   });
 }
 
-/**
- * Para búsquedas: busca productos solo por nombre
- */
+// ✅ NUEVO: Proveedores usan ID Integer
+async function findProveedorByRegistro(idRegistro) {
+  if (!idRegistro) return null;
+  const id = parseInt(String(idRegistro).trim(), 10);
+  if (isNaN(id) || id <= 0) return null;
+  return Proveedor.findByPk(id, {
+    attributes: ["id_proveedor", "nombre_proveedor"],
+  });
+}
+
+// ✅ NUEVO: Zonas usan ID Integer
+async function findZonaByRegistro(idRegistro) {
+  if (!idRegistro) return null;
+  const id = parseInt(String(idRegistro).trim(), 10);
+  if (isNaN(id) || id <= 0) return null;
+  return Zona.findByPk(id, {
+    attributes: ["id_zona", "codigo", "descripcion"],
+  });
+}
+
+// Búsqueda de productos por nombre para el filtro avanzado
 async function getMatchingProductoRegistros(busqueda) {
   const term = busqueda.trim();
   if (!term) return [];
@@ -225,6 +225,7 @@ export const getAuditLogs = async (req, res) => {
           ],
         });
 
+        // Búsqueda profunda en JSON
         const jsonSearchSnippet = matchingProductoRegistros
           .map(id => `CAST(datos_anteriores AS CHAR) LIKE '%"id_producto":${id}%' OR CAST(datos_nuevos AS CHAR) LIKE '%"id_producto":${id}%'`)
           .join(" OR ");
@@ -280,128 +281,85 @@ export const getAuditLogs = async (req, res) => {
     });
 
     // =====================================================
-    // ENRIQUECIMIENTO DE DATOS (CORREGIDO Y COMPLETADO)
+    // ENRIQUECIMIENTO DE DATOS (NOMBRES REALES)
     // =====================================================
     const enrichedRows = await Promise.all(
       rows.map(async (row) => {
         const log = row.toJSON();
         const datos = safeParseJSON(log.datos_nuevos) || safeParseJSON(log.datos_anteriores);
 
-        // ✅ CORREGIDO: Enviar fecha ISO para que el frontend la formatee en su timezone local
-        // Agregamos 'Z' para indicar UTC, así el navegador la convierte a hora local
+        // Fecha ISO para el frontend
         const fechaDB = new Date(log.created_at);
-        log.fecha_iso = fechaDB.toISOString(); // Ej: "2025-12-20T19:17:06.000Z"
+        log.fecha_iso = fechaDB.toISOString();
         
-        // Helper interno para formatear strings consistentemente
-        const formatStr = (nombre, id) => {
-            if(!nombre) return null;
-            return id ? `${nombre} (ID: ${id})` : nombre;
-        };
+        // Helper interno
+        const formatStr = (nombre, id) => (nombre ? `${nombre} (ID: ${id})` : `ID: ${id}`);
 
-        // --- PRODUCTOS ---
+        // 1. PRODUCTOS
         if (log.tabla_afectada === "productos") {
-          const producto = await findProductoByRegistro(log.id_registro);
-          if (producto) {
-            log.entidad_nombre = formatStr(producto.nombre_producto, log.id_registro);
+          const item = await findProductoByRegistro(log.id_registro);
+          const nombreReal = item ? item.nombre_producto : (datos?.nombre_producto);
+          
+          if (nombreReal) {
+            log.entidad_nombre = `${nombreReal} (ID: ${log.id_registro})`;
           } else {
-            // Si no está en BD, buscamos en el JSON del historial
-            const nombreJSON = datos?.nombre_producto;
-            log.entidad_nombre = nombreJSON 
-              ? formatStr(nombreJSON, log.id_registro) 
-              : `Producto (ID: ${log.id_registro})`;
+            log.entidad_nombre = `Producto (ID: ${log.id_registro})`;
           }
         }
 
-        // --- CLIENTES --- ✅ CORREGIDO: Buscar en BD
+        // 2. CLIENTES
         else if (log.tabla_afectada === "clientes") {
-          const cliente = await findClienteByRegistro(log.id_registro);
-          if (cliente) {
-            log.entidad_nombre = formatStr(cliente.nombre_cliente, log.id_registro);
-          } else {
-            // Fallback al JSON
-            const nombreJSON = datos?.nombre_cliente || datos?.nombre;
-            log.entidad_nombre = nombreJSON 
-              ? formatStr(nombreJSON, log.id_registro) 
-              : `Cliente (ID: ${log.id_registro})`;
-          }
+          const item = await findClienteByRegistro(log.id_registro);
+          log.entidad_nombre = item 
+            ? formatStr(item.nombre_cliente, log.id_registro) 
+            : (datos?.nombre_cliente || `Cliente (ID: ${log.id_registro})`);
         }
 
-        // --- EMPLEADOS --- ✅ CORREGIDO: Buscar en BD
+        // 3. EMPLEADOS
         else if (log.tabla_afectada === "empleados") {
-          const empleado = await findEmpleadoByRegistro(log.id_registro);
-          if (empleado) {
-            log.entidad_nombre = formatStr(empleado.nombre_empleado, log.id_registro);
-          } else {
-            const nombreJSON = datos?.nombre_empleado || datos?.nombre;
-            log.entidad_nombre = nombreJSON 
-              ? formatStr(nombreJSON, log.id_registro) 
-              : `Empleado (ID: ${log.id_registro})`;
-          }
+          const item = await findEmpleadoByRegistro(log.id_registro);
+          log.entidad_nombre = item 
+            ? formatStr(item.nombre_empleado, log.id_registro) 
+            : (datos?.nombre_empleado || `Empleado (ID: ${log.id_registro})`);
         }
 
-        // --- SEUBICA (Ubicaciones) ---
-        else if (log.tabla_afectada === "seubica") {
-          if (datos?.id_producto) {
-            const producto = await findProductoByRegistro(datos.id_producto);
-            const nombreProd = producto 
-                ? producto.nombre_producto 
-                : (datos.nombre_producto || `Producto ${datos.id_producto}`);
-            
-            log.entidad_nombre = `Ubicación: ${nombreProd} (ID: ${datos.id_producto})`;
-          } else {
-             log.entidad_nombre = `Movimiento de Zona (ID: ${log.id_registro})`;
-          }
+        // 4. PROVEEDORES (NUEVO)
+        else if (log.tabla_afectada === "proveedor") {
+          const item = await findProveedorByRegistro(log.id_registro);
+          log.entidad_nombre = item 
+            ? formatStr(item.nombre_proveedor, log.id_registro) 
+            : (datos?.nombre_proveedor || `Proveedor (ID: ${log.id_registro})`);
         }
 
-        // --- ENVIO DETALLE / CONTIENE ---
-        else if (["envio_detalle", "contiene"].includes(log.tabla_afectada)) {
+        // 5. ZONAS (NUEVO)
+        else if (log.tabla_afectada === "zonas" || log.tabla_afectada === "zona") {
+          const item = await findZonaByRegistro(log.id_registro);
+          const nombre = item ? `${item.codigo}` : (datos?.codigo);
+          log.entidad_nombre = nombre ? `Zona: ${nombre}` : `Zona (ID: ${log.id_registro})`;
+        }
+
+        // 6. UBICACIONES / DETALLES (Relacionados con Productos)
+        else if (["seubica", "contiene", "envio_detalle"].includes(log.tabla_afectada)) {
             if (datos?.id_producto) {
-              const producto = await findProductoByRegistro(datos.id_producto);
-              const nombreProd = producto 
-                ? producto.nombre_producto
-                : `Producto ${datos.id_producto}`;
+              const p = await findProductoByRegistro(datos.id_producto);
+              const prodNombre = p ? p.nombre_producto : `Producto ${datos.id_producto}`;
               
-              const prefijo = log.tabla_afectada === "envio_detalle" ? "Envío" : "Pedido";
-              log.entidad_nombre = `${prefijo}: ${nombreProd} (ID: ${datos.id_producto})`;
+              if (log.tabla_afectada === "seubica") log.entidad_nombre = `Ubicación: ${prodNombre}`;
+              else if (log.tabla_afectada === "contiene") log.entidad_nombre = `Pedido Detalle: ${prodNombre}`;
+              else log.entidad_nombre = `Envío Detalle: ${prodNombre}`;
             } else {
-              const prefijo = log.tabla_afectada === "envio_detalle" ? "Detalle Envío" : "Detalle Pedido";
-              log.entidad_nombre = `${prefijo} (ID: ${log.id_registro})`;
+              if (log.tabla_afectada === "seubica") log.entidad_nombre = `Movimiento de Zona (ID: ${log.id_registro})`;
+              else if (log.tabla_afectada === "contiene") log.entidad_nombre = `Detalle Pedido (ID: ${log.id_registro})`;
+              else log.entidad_nombre = `Detalle Envío (ID: ${log.id_registro})`;
             }
         }
 
-        // --- PEDIDOS ---
-        else if (log.tabla_afectada === "pedidos") {
-          log.entidad_nombre = `Pedido #${log.id_registro}`;
-        }
-
-        // --- ZONAS ---
-        else if (log.tabla_afectada === "zonas") {
-          const codigo = datos?.codigo || datos?.nombre_zona;
-          log.entidad_nombre = codigo 
-            ? `Zona: ${codigo} (ID: ${log.id_registro})` 
-            : `Zona (ID: ${log.id_registro})`;
-        }
-
-        // --- PROVEEDOR ---
-        else if (log.tabla_afectada === "proveedor") {
-            const nombre = datos?.nombre_proveedor || datos?.nombre;
-            log.entidad_nombre = nombre 
-              ? formatStr(nombre, log.id_registro) 
-              : `Proveedor (ID: ${log.id_registro})`;
-        }
-
-        // --- ENVIOS ---
-        else if (log.tabla_afectada === "envios") {
-          log.entidad_nombre = `Envío #${log.id_registro}`;
-        }
-
-        // --- SUMINISTRO / SUMINISTRA ---
-        else if (["suministro", "suministra"].includes(log.tabla_afectada)) {
-          log.entidad_nombre = `Suministro (ID: ${log.id_registro})`;
-        }
-
-        // --- FALLBACK GENÉRICO ---
-        else if (!log.entidad_nombre) {
+        // 7. OTROS
+        else if (log.tabla_afectada === "pedidos") log.entidad_nombre = `Pedido #${log.id_registro}`;
+        else if (log.tabla_afectada === "envios") log.entidad_nombre = `Envío #${log.id_registro}`;
+        else if (["suministro", "suministra"].includes(log.tabla_afectada)) log.entidad_nombre = `Suministro (ID: ${log.id_registro})`;
+        
+        else {
           log.entidad_nombre = `Registro (ID: ${log.id_registro})`;
         }
 
@@ -502,59 +460,38 @@ export const getAuditLogById = async (req, res) => {
 
     const logJSON = log.toJSON();
     const datos = safeParseJSON(logJSON.datos_nuevos) || safeParseJSON(logJSON.datos_anteriores);
-    
-    // ✅ CORREGIDO: Enviar fecha ISO
     const fechaDB = new Date(logJSON.created_at);
     logJSON.fecha_iso = fechaDB.toISOString();
 
-    const formatStr = (nombre, id) => {
-      if(!nombre) return null;
-      return id ? `${nombre} (ID: ${id})` : nombre;
-    };
+    const formatStr = (nombre, id) => (nombre ? `${nombre} (ID: ${id})` : `ID: ${id}`);
 
-    // Si es producto
+    // LOGICA DE NOMBRES EN DETALLE
     if (logJSON.tabla_afectada === "productos") {
         const prod = await findProductoByRegistro(logJSON.id_registro);
-        if(prod) {
-            logJSON.entidad_nombre = formatStr(prod.nombre_producto, logJSON.id_registro);
-        } else if (datos?.nombre_producto) {
-            logJSON.entidad_nombre = formatStr(datos.nombre_producto, logJSON.id_registro);
-        } else {
-            logJSON.entidad_nombre = `Producto (ID: ${logJSON.id_registro})`;
-        }
+        const nombre = prod ? prod.nombre_producto : datos?.nombre_producto;
+        logJSON.entidad_nombre = nombre ? `${nombre} (ID: ${logJSON.id_registro})` : `Producto (ID: ${logJSON.id_registro})`;
     }
-    // Si es cliente
     else if (logJSON.tabla_afectada === "clientes") {
         const cliente = await findClienteByRegistro(logJSON.id_registro);
-        if(cliente) {
-            logJSON.entidad_nombre = formatStr(cliente.nombre_cliente, logJSON.id_registro);
-        } else if (datos?.nombre_cliente || datos?.nombre) {
-            logJSON.entidad_nombre = formatStr(datos.nombre_cliente || datos.nombre, logJSON.id_registro);
-        } else {
-            logJSON.entidad_nombre = `Cliente (ID: ${logJSON.id_registro})`;
-        }
+        logJSON.entidad_nombre = cliente ? formatStr(cliente.nombre_cliente, logJSON.id_registro) : (datos?.nombre_cliente || `Cliente (ID: ${logJSON.id_registro})`);
     }
-    // Si es empleado
     else if (logJSON.tabla_afectada === "empleados") {
         const empleado = await findEmpleadoByRegistro(logJSON.id_registro);
-        if(empleado) {
-            logJSON.entidad_nombre = formatStr(empleado.nombre_empleado, logJSON.id_registro);
-        } else if (datos?.nombre_empleado || datos?.nombre) {
-            logJSON.entidad_nombre = formatStr(datos.nombre_empleado || datos.nombre, logJSON.id_registro);
-        } else {
-            logJSON.entidad_nombre = `Empleado (ID: ${logJSON.id_registro})`;
-        }
+        logJSON.entidad_nombre = empleado ? formatStr(empleado.nombre_empleado, logJSON.id_registro) : (datos?.nombre_empleado || `Empleado (ID: ${logJSON.id_registro})`);
     }
-    // Si tiene id_producto en los datos (ubicación, pedido detalle, etc)
+    else if (logJSON.tabla_afectada === "proveedor") {
+      const item = await findProveedorByRegistro(logJSON.id_registro);
+      logJSON.entidad_nombre = item ? formatStr(item.nombre_proveedor, logJSON.id_registro) : (datos?.nombre_proveedor || `Proveedor (ID: ${logJSON.id_registro})`);
+    }
+    else if (logJSON.tabla_afectada === "zonas" || logJSON.tabla_afectada === "zona") {
+      const item = await findZonaByRegistro(logJSON.id_registro);
+      logJSON.entidad_nombre = item ? `Zona: ${item.codigo}` : `Zona ${logJSON.id_registro}`;
+    }
     else if (datos?.id_producto) {
         const prod = await findProductoByRegistro(datos.id_producto);
-        if(prod) {
-          logJSON.entidad_nombre = formatStr(prod.nombre_producto, datos.id_producto);
-        } else {
-          logJSON.entidad_nombre = `Producto (ID: ${datos.id_producto})`;
-        }
+        logJSON.entidad_nombre = prod ? prod.nombre_producto : `Producto ${datos.id_producto}`;
     }
-
+    
     // Fallback
     if(!logJSON.entidad_nombre) {
          const nombre = datos?.nombre_proveedor || datos?.nombre_zona || datos?.codigo;
@@ -591,42 +528,31 @@ export const getRegistroHistorial = async (req, res) => {
 
     let entidadNombre = null;
 
-    const formatStr = (nombre, id) => {
-      if(!nombre) return null;
-      return id ? `${nombre} (ID: ${id})` : nombre;
-    };
-
+    // Buscar nombre actual en DB para el título
     if (tabla === "productos") {
-      const producto = await findProductoByRegistro(id_registro);
-      if (producto) {
-        entidadNombre = formatStr(producto.nombre_producto, id_registro);
-      } else if (historial.length > 0) {
-         const d = safeParseJSON(historial[0].datos_nuevos) || safeParseJSON(historial[0].datos_anteriores);
-         if(d?.nombre_producto) entidadNombre = formatStr(d.nombre_producto, id_registro);
-      }
+      const p = await findProductoByRegistro(id_registro);
+      if (p) entidadNombre = `${p.nombre_producto} (ID: ${id_registro})`;
     } else if (tabla === "clientes") {
-      const cliente = await findClienteByRegistro(id_registro);
-      if (cliente) {
-        entidadNombre = formatStr(cliente.nombre_cliente, id_registro);
-      } else if (historial.length > 0) {
-        const d = safeParseJSON(historial[0].datos_nuevos) || safeParseJSON(historial[0].datos_anteriores);
-        if(d?.nombre_cliente) entidadNombre = formatStr(d.nombre_cliente, id_registro);
-      }
+      const c = await findClienteByRegistro(id_registro);
+      if (c) entidadNombre = `${c.nombre_cliente} (ID: ${id_registro})`;
     } else if (tabla === "empleados") {
-      const empleado = await findEmpleadoByRegistro(id_registro);
-      if (empleado) {
-        entidadNombre = formatStr(empleado.nombre_empleado, id_registro);
-      } else if (historial.length > 0) {
-        const d = safeParseJSON(historial[0].datos_nuevos) || safeParseJSON(historial[0].datos_anteriores);
-        if(d?.nombre_empleado) entidadNombre = formatStr(d.nombre_empleado, id_registro);
-      }
-    } else if (historial.length > 0) {
-        const d = safeParseJSON(historial[0].datos_nuevos) || safeParseJSON(historial[0].datos_anteriores);
-        entidadNombre = d?.nombre_proveedor || d?.nombre_zona || d?.codigo;
-        if (entidadNombre) entidadNombre = formatStr(entidadNombre, id_registro);
+      const e = await findEmpleadoByRegistro(id_registro);
+      if (e) entidadNombre = `${e.nombre_empleado} (ID: ${id_registro})`;
+    } else if (tabla === "proveedor") {
+      const p = await findProveedorByRegistro(id_registro);
+      if (p) entidadNombre = `${p.nombre_proveedor} (ID: ${id_registro})`;
+    } else if (tabla === "zonas") {
+      const z = await findZonaByRegistro(id_registro);
+      if (z) entidadNombre = `Zona: ${z.codigo}`;
     }
 
-    // ✅ Agregar fecha_iso a cada registro del historial
+    // Fallback con datos del historial si no está en DB (borrado)
+    if (!entidadNombre && historial.length > 0) {
+        const d = safeParseJSON(historial[0].datos_nuevos) || safeParseJSON(historial[0].datos_anteriores);
+        entidadNombre = d?.nombre_producto || d?.nombre_cliente || d?.nombre_proveedor || d?.codigo;
+        if(entidadNombre) entidadNombre = `${entidadNombre} (ID: ${id_registro})`;
+    }
+
     const historialConFecha = historial.map(h => {
       const hJSON = h.toJSON();
       const fechaDB = new Date(hJSON.created_at);

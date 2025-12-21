@@ -7,12 +7,17 @@ const api = axios.create({
   baseURL: `${API_URL}/api`,
 });
 
-// Adjuntar token automáticamente
+// Adjuntar token y fecha del cliente automáticamente
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  // ✅ NUEVO: Agregamos la hora local del usuario en formato ISO
+  // Esto permite al backend saber exactamente cuándo ocurrió la acción desde la perspectiva del usuario
+  config.headers['x-client-time'] = new Date().toISOString();
+
   return config;
 });
 

@@ -35,6 +35,11 @@ const AuditLog = sequelize.define("AuditLog", {
     type: DataTypes.STRING(45),
     allowNull: true
   },
+  // ✅ NUEVO: Hora reportada por el cliente (computadora del usuario)
+  fecha_cliente: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
   created_at: {
     type: DataTypes.DATE,
     allowNull: false,

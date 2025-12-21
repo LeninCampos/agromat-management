@@ -28,6 +28,7 @@ export async function logAuditEvent({
   datosNuevos,
   userId,
   ipAddress,
+  clientTime, // ✅ Recibimos la hora del cliente
 }) {
   try {
     await AuditLog.create({
@@ -38,6 +39,7 @@ export async function logAuditEvent({
       datos_nuevos: sanitizeData(datosNuevos),
       id_empleado: userId || null,
       ip_address: ipAddress || null,
+      fecha_cliente: clientTime || null, // ✅ Guardamos la hora del cliente
     });
   } catch (error) {
     console.error("❌ Error en audit log:", error.message);
@@ -58,6 +60,7 @@ export function setupAuditHooks(model) {
       datosNuevos: instance.toJSON(),
       userId: options.userId,
       ipAddress: options.ipAddress,
+      clientTime: options.clientTime, // ✅ Pasamos la opción
     });
   });
 
@@ -81,6 +84,7 @@ export function setupAuditHooks(model) {
       datosNuevos,
       userId: options.userId,
       ipAddress: options.ipAddress,
+      clientTime: options.clientTime, // ✅ Pasamos la opción
     });
   });
 
@@ -94,6 +98,7 @@ export function setupAuditHooks(model) {
       datosNuevos: null,
       userId: options.userId,
       ipAddress: options.ipAddress,
+      clientTime: options.clientTime, // ✅ Pasamos la opción
     });
   });
 }
