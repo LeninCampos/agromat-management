@@ -2,9 +2,9 @@ import { Op, Sequelize } from "sequelize";
 import AuditLog from "../models/AuditLog.js";
 import Empleado from "../models/Empleado.js";
 import Producto from "../models/Producto.js";
-import Cliente from "../models/Cliente.js"; 
-import Proveedor from "../models/Proveedor.js"; // ✅ Importación Agregada
-import Zona from "../models/Zona.js";           // ✅ Importación Agregada
+import Cliente from "../models/Cliente.js";
+import Proveedor from "../models/Proveedor.js";
+import Zona from "../models/Zona.js";
 
 // =====================================================
 // TIPOS DE CAMBIO PREDEFINIDOS
@@ -91,7 +91,7 @@ function safeParseJSON(x) {
   }
 }
 
-// ✅ CORREGIDO: Productos usan ID como String (sin parseInt forzado)
+// ✅ PRODUCTOS: ID como String (sin parseInt) para soportar códigos como '00123' o 'PROD-A'
 async function findProductoByRegistro(idRegistro) {
   if (!idRegistro) return null;
   const idStr = String(idRegistro).trim();
@@ -100,7 +100,7 @@ async function findProductoByRegistro(idRegistro) {
   });
 }
 
-// Clientes usan ID Integer
+// CLIENTES: ID Integer
 async function findClienteByRegistro(idRegistro) {
   if (!idRegistro) return null;
   const id = parseInt(String(idRegistro).trim(), 10);
@@ -110,7 +110,7 @@ async function findClienteByRegistro(idRegistro) {
   });
 }
 
-// Empleados usan ID Integer
+// EMPLEADOS: ID Integer
 async function findEmpleadoByRegistro(idRegistro) {
   if (!idRegistro) return null;
   const id = parseInt(String(idRegistro).trim(), 10);
@@ -120,7 +120,7 @@ async function findEmpleadoByRegistro(idRegistro) {
   });
 }
 
-// ✅ NUEVO: Proveedores usan ID Integer
+// PROVEEDORES: ID Integer
 async function findProveedorByRegistro(idRegistro) {
   if (!idRegistro) return null;
   const id = parseInt(String(idRegistro).trim(), 10);
@@ -130,7 +130,7 @@ async function findProveedorByRegistro(idRegistro) {
   });
 }
 
-// ✅ NUEVO: Zonas usan ID Integer
+// ZONAS: ID Integer
 async function findZonaByRegistro(idRegistro) {
   if (!idRegistro) return null;
   const id = parseInt(String(idRegistro).trim(), 10);
@@ -140,7 +140,7 @@ async function findZonaByRegistro(idRegistro) {
   });
 }
 
-// Búsqueda de productos por nombre para el filtro avanzado
+// Helper para búsqueda avanzada: obtiene IDs de productos que coincidan por nombre
 async function getMatchingProductoRegistros(busqueda) {
   const term = busqueda.trim();
   if (!term) return [];
@@ -195,65 +195,78 @@ export const getAuditLogs = async (req, res) => {
 
     // 3. Filtro de fechas
     if (fecha_inicio || fecha_fin) {
-        where.created_at = {};
-        if (fecha_inicio) {
-          where.created_at[Op.gte] = new Date(`${fecha_inicio}T00:00:00`); 
-        }
-        if (fecha_fin) {
-          where.created_at[Op.lte] = new Date(`${fecha_fin}T23:59:59`);
-        }
+      where.created_at = {};
+      if (fecha_inicio) {
+        where.created_at[Op.gte] = new Date(`${fecha_inicio}T00:00:00`);
+      }
+      if (fecha_fin) {
+        where.created_at[Op.lte] = new Date(`${fecha_fin}T23:59:59`);
+      }
     }
 
-    // 4. Búsqueda Avanzada
-    if (busqueda && busqueda.trim()) {
-      const term = busqueda.trim().replace(/'/g, "''");
-      
-      const matchingProductoRegistros = await getMatchingProductoRegistros(busqueda);
+    // 4. Búsqueda Avanzada (CORREGIDA Y ROBUSTA)
+    if (busqueda && busqueda.trim().length > 0) {
+      const term = busqueda.trim();
+      const termLike = `%${term}%`;
 
+      // IDs de productos que coinciden con el nombre buscado
+      const matchingIds = await getMatchingProductoRegistros(term);
+
+      // Condiciones de búsqueda general
       const orConditions = [
-        { tabla_afectada: { [Op.like]: `%${term}%` } },
-        { id_registro: { [Op.like]: `%${term}%` } },
-        Sequelize.literal(`CAST(datos_anteriores AS CHAR) LIKE '%${term}%'`),
-        Sequelize.literal(`CAST(datos_nuevos AS CHAR) LIKE '%${term}%'`),
+        { tabla_afectada: { [Op.like]: termLike } },
+        { id_registro: { [Op.like]: termLike } },
+        // Buscar texto dentro de los JSONs
+        Sequelize.literal(`CAST(datos_anteriores AS CHAR) LIKE ${AuditLog.sequelize.escape(termLike)}`),
+        Sequelize.literal(`CAST(datos_nuevos AS CHAR) LIKE ${AuditLog.sequelize.escape(termLike)}`),
       ];
 
-      if (matchingProductoRegistros.length > 0) {
+      // Si hay productos con ese nombre, agregamos búsqueda específica por sus IDs
+      if (matchingIds.length > 0) {
+        // Opción A: Es un registro de la tabla 'productos' con ese ID
         orConditions.push({
           [Op.and]: [
             { tabla_afectada: "productos" },
-            { id_registro: { [Op.in]: matchingProductoRegistros } },
+            { id_registro: { [Op.in]: matchingIds } },
           ],
         });
 
-        // Búsqueda profunda en JSON
-        const jsonSearchSnippet = matchingProductoRegistros
-          .map(id => `CAST(datos_anteriores AS CHAR) LIKE '%"id_producto":${id}%' OR CAST(datos_nuevos AS CHAR) LIKE '%"id_producto":${id}%'`)
-          .join(" OR ");
-        
-        if (jsonSearchSnippet) {
-           orConditions.push(Sequelize.literal(`(${jsonSearchSnippet})`));
+        // Opción B: Es un registro en OTRA tabla que referencia a ese producto en su JSON
+        // (ej: 'envio_detalle' o 'contiene' que tenga "id_producto": "123")
+        const jsonConditions = matchingIds.map((id) => {
+          return `(CAST(datos_anteriores AS CHAR) LIKE '%"id_producto":${id}%' 
+                   OR CAST(datos_anteriores AS CHAR) LIKE '%"id_producto":"${id}"%'
+                   OR CAST(datos_nuevos AS CHAR) LIKE '%"id_producto":${id}%'
+                   OR CAST(datos_nuevos AS CHAR) LIKE '%"id_producto":"${id}"%')`;
+        });
+
+        if (jsonConditions.length > 0) {
+          orConditions.push(Sequelize.literal(`(${jsonConditions.join(" OR ")})`));
         }
       }
 
+      // Aplicamos el filtro de búsqueda con AND respecto a los filtros anteriores
+      // (Es decir: Debe cumplir fecha/tabla Y (coincidir con la búsqueda))
       where[Op.or] = orConditions;
     }
 
     // 5. Filtro por "Tipo de Cambio"
     if (tipo_cambio && TIPOS_CAMBIO[tipo_cambio]) {
-      const tipoCfg = TIPOS_CAMBIO[tipo_cambio];
+      const cfg = TIPOS_CAMBIO[tipo_cambio];
 
-      if (tipoCfg.tablas && tipoCfg.tablas.length > 0) {
-        where.tabla_afectada = { [Op.in]: tipoCfg.tablas };
+      if (cfg.tablas && cfg.tablas.length > 0) {
+        where.tabla_afectada = { [Op.in]: cfg.tablas };
       }
-      if (tipoCfg.accion) {
-        where.accion = tipoCfg.accion;
+      if (cfg.accion) {
+        where.accion = cfg.accion;
       }
-      if (tipoCfg.campos && tipoCfg.campos.length > 0) {
-        const campoConditions = tipoCfg.campos.map((campo) =>
+      if (cfg.campos && cfg.campos.length > 0) {
+        const campoConditions = cfg.campos.map((campo) =>
           Sequelize.literal(
             `(CAST(datos_anteriores AS CHAR) LIKE '%"${campo}":%' OR CAST(datos_nuevos AS CHAR) LIKE '%"${campo}":%')`
           )
         );
+        // Usamos Op.and para asegurar que cumpla el tipo de cambio
         if (!where[Op.and]) where[Op.and] = [];
         where[Op.and].push({ [Op.or]: campoConditions });
       }
@@ -288,77 +301,70 @@ export const getAuditLogs = async (req, res) => {
         const log = row.toJSON();
         const datos = safeParseJSON(log.datos_nuevos) || safeParseJSON(log.datos_anteriores);
 
-        // Fecha ISO para el frontend
+        // Fecha ISO para formateo local en frontend
         const fechaDB = new Date(log.created_at);
         log.fecha_iso = fechaDB.toISOString();
-        
-        // Helper interno
+
+        // Helper de formato
         const formatStr = (nombre, id) => (nombre ? `${nombre} (ID: ${id})` : `ID: ${id}`);
+
+        // --- LÓGICA DE NOMBRES ---
 
         // 1. PRODUCTOS
         if (log.tabla_afectada === "productos") {
           const item = await findProductoByRegistro(log.id_registro);
-          const nombreReal = item ? item.nombre_producto : (datos?.nombre_producto);
-          
-          if (nombreReal) {
-            log.entidad_nombre = `${nombreReal} (ID: ${log.id_registro})`;
-          } else {
-            log.entidad_nombre = `Producto (ID: ${log.id_registro})`;
-          }
+          const nombreReal = item ? item.nombre_producto : datos?.nombre_producto;
+          log.entidad_nombre = nombreReal
+            ? `${nombreReal} (ID: ${log.id_registro})`
+            : `Producto (ID: ${log.id_registro})`;
         }
-
         // 2. CLIENTES
         else if (log.tabla_afectada === "clientes") {
           const item = await findClienteByRegistro(log.id_registro);
-          log.entidad_nombre = item 
-            ? formatStr(item.nombre_cliente, log.id_registro) 
-            : (datos?.nombre_cliente || `Cliente (ID: ${log.id_registro})`);
+          log.entidad_nombre = item
+            ? formatStr(item.nombre_cliente, log.id_registro)
+            : datos?.nombre_cliente || `Cliente (ID: ${log.id_registro})`;
         }
-
         // 3. EMPLEADOS
         else if (log.tabla_afectada === "empleados") {
           const item = await findEmpleadoByRegistro(log.id_registro);
-          log.entidad_nombre = item 
-            ? formatStr(item.nombre_empleado, log.id_registro) 
-            : (datos?.nombre_empleado || `Empleado (ID: ${log.id_registro})`);
+          log.entidad_nombre = item
+            ? formatStr(item.nombre_empleado, log.id_registro)
+            : datos?.nombre_empleado || `Empleado (ID: ${log.id_registro})`;
         }
-
-        // 4. PROVEEDORES (NUEVO)
+        // 4. PROVEEDORES
         else if (log.tabla_afectada === "proveedor") {
           const item = await findProveedorByRegistro(log.id_registro);
-          log.entidad_nombre = item 
-            ? formatStr(item.nombre_proveedor, log.id_registro) 
-            : (datos?.nombre_proveedor || `Proveedor (ID: ${log.id_registro})`);
+          log.entidad_nombre = item
+            ? formatStr(item.nombre_proveedor, log.id_registro)
+            : datos?.nombre_proveedor || `Proveedor (ID: ${log.id_registro})`;
         }
-
-        // 5. ZONAS (NUEVO)
+        // 5. ZONAS
         else if (log.tabla_afectada === "zonas" || log.tabla_afectada === "zona") {
           const item = await findZonaByRegistro(log.id_registro);
-          const nombre = item ? `${item.codigo}` : (datos?.codigo);
+          const nombre = item ? item.codigo : datos?.codigo;
           log.entidad_nombre = nombre ? `Zona: ${nombre}` : `Zona (ID: ${log.id_registro})`;
         }
-
-        // 6. UBICACIONES / DETALLES (Relacionados con Productos)
+        // 6. RELACIONADOS CON PRODUCTOS (Ubicaciones, Detalles)
         else if (["seubica", "contiene", "envio_detalle"].includes(log.tabla_afectada)) {
-            if (datos?.id_producto) {
-              const p = await findProductoByRegistro(datos.id_producto);
-              const prodNombre = p ? p.nombre_producto : `Producto ${datos.id_producto}`;
-              
-              if (log.tabla_afectada === "seubica") log.entidad_nombre = `Ubicación: ${prodNombre}`;
-              else if (log.tabla_afectada === "contiene") log.entidad_nombre = `Pedido Detalle: ${prodNombre}`;
-              else log.entidad_nombre = `Envío Detalle: ${prodNombre}`;
-            } else {
-              if (log.tabla_afectada === "seubica") log.entidad_nombre = `Movimiento de Zona (ID: ${log.id_registro})`;
-              else if (log.tabla_afectada === "contiene") log.entidad_nombre = `Detalle Pedido (ID: ${log.id_registro})`;
-              else log.entidad_nombre = `Detalle Envío (ID: ${log.id_registro})`;
-            }
-        }
+          if (datos?.id_producto) {
+            const p = await findProductoByRegistro(datos.id_producto);
+            const prodNombre = p ? p.nombre_producto : `Producto ${datos.id_producto}`;
 
+            if (log.tabla_afectada === "seubica") log.entidad_nombre = `Ubicación: ${prodNombre}`;
+            else if (log.tabla_afectada === "contiene") log.entidad_nombre = `Pedido Detalle: ${prodNombre}`;
+            else log.entidad_nombre = `Envío Detalle: ${prodNombre}`;
+          } else {
+            if (log.tabla_afectada === "seubica") log.entidad_nombre = `Movimiento de Zona (ID: ${log.id_registro})`;
+            else if (log.tabla_afectada === "contiene") log.entidad_nombre = `Detalle Pedido (ID: ${log.id_registro})`;
+            else log.entidad_nombre = `Detalle Envío (ID: ${log.id_registro})`;
+          }
+        }
         // 7. OTROS
         else if (log.tabla_afectada === "pedidos") log.entidad_nombre = `Pedido #${log.id_registro}`;
         else if (log.tabla_afectada === "envios") log.entidad_nombre = `Envío #${log.id_registro}`;
-        else if (["suministro", "suministra"].includes(log.tabla_afectada)) log.entidad_nombre = `Suministro (ID: ${log.id_registro})`;
-        
+        else if (["suministro", "suministra"].includes(log.tabla_afectada))
+          log.entidad_nombre = `Suministro (ID: ${log.id_registro})`;
         else {
           log.entidad_nombre = `Registro (ID: ${log.id_registro})`;
         }
@@ -421,9 +427,21 @@ export const getCamposDisponibles = async (req, res) => {
     });
 
     const camposPrioritarios = [
-      "stock", "precio", "status", "id_zona", "id_empleado", "id_cliente",
-      "nombre_producto", "nombre_cliente", "nombre_empleado", "direccion",
-      "telefono", "correo", "total", "subtotal", "cantidad"
+      "stock",
+      "precio",
+      "status",
+      "id_zona",
+      "id_empleado",
+      "id_cliente",
+      "nombre_producto",
+      "nombre_cliente",
+      "nombre_empleado",
+      "direccion",
+      "telefono",
+      "correo",
+      "total",
+      "subtotal",
+      "cantidad",
     ];
 
     const todosLosCampos = Array.from(camposSet);
@@ -465,39 +483,41 @@ export const getAuditLogById = async (req, res) => {
 
     const formatStr = (nombre, id) => (nombre ? `${nombre} (ID: ${id})` : `ID: ${id}`);
 
-    // LOGICA DE NOMBRES EN DETALLE
+    // ENRIQUECIMIENTO PARA DETALLE
     if (logJSON.tabla_afectada === "productos") {
-        const prod = await findProductoByRegistro(logJSON.id_registro);
-        const nombre = prod ? prod.nombre_producto : datos?.nombre_producto;
-        logJSON.entidad_nombre = nombre ? `${nombre} (ID: ${logJSON.id_registro})` : `Producto (ID: ${logJSON.id_registro})`;
-    }
-    else if (logJSON.tabla_afectada === "clientes") {
-        const cliente = await findClienteByRegistro(logJSON.id_registro);
-        logJSON.entidad_nombre = cliente ? formatStr(cliente.nombre_cliente, logJSON.id_registro) : (datos?.nombre_cliente || `Cliente (ID: ${logJSON.id_registro})`);
-    }
-    else if (logJSON.tabla_afectada === "empleados") {
-        const empleado = await findEmpleadoByRegistro(logJSON.id_registro);
-        logJSON.entidad_nombre = empleado ? formatStr(empleado.nombre_empleado, logJSON.id_registro) : (datos?.nombre_empleado || `Empleado (ID: ${logJSON.id_registro})`);
-    }
-    else if (logJSON.tabla_afectada === "proveedor") {
+      const prod = await findProductoByRegistro(logJSON.id_registro);
+      const nombre = prod ? prod.nombre_producto : datos?.nombre_producto;
+      logJSON.entidad_nombre = nombre
+        ? `${nombre} (ID: ${logJSON.id_registro})`
+        : `Producto (ID: ${logJSON.id_registro})`;
+    } else if (logJSON.tabla_afectada === "clientes") {
+      const item = await findClienteByRegistro(logJSON.id_registro);
+      logJSON.entidad_nombre = item
+        ? formatStr(item.nombre_cliente, logJSON.id_registro)
+        : datos?.nombre_cliente || `Cliente (ID: ${logJSON.id_registro})`;
+    } else if (logJSON.tabla_afectada === "empleados") {
+      const item = await findEmpleadoByRegistro(logJSON.id_registro);
+      logJSON.entidad_nombre = item
+        ? formatStr(item.nombre_empleado, logJSON.id_registro)
+        : datos?.nombre_empleado || `Empleado (ID: ${logJSON.id_registro})`;
+    } else if (logJSON.tabla_afectada === "proveedor") {
       const item = await findProveedorByRegistro(logJSON.id_registro);
-      logJSON.entidad_nombre = item ? formatStr(item.nombre_proveedor, logJSON.id_registro) : (datos?.nombre_proveedor || `Proveedor (ID: ${logJSON.id_registro})`);
-    }
-    else if (logJSON.tabla_afectada === "zonas" || logJSON.tabla_afectada === "zona") {
+      logJSON.entidad_nombre = item
+        ? formatStr(item.nombre_proveedor, logJSON.id_registro)
+        : datos?.nombre_proveedor || `Proveedor (ID: ${logJSON.id_registro})`;
+    } else if (logJSON.tabla_afectada === "zonas" || logJSON.tabla_afectada === "zona") {
       const item = await findZonaByRegistro(logJSON.id_registro);
       logJSON.entidad_nombre = item ? `Zona: ${item.codigo}` : `Zona ${logJSON.id_registro}`;
+    } else if (datos?.id_producto) {
+      const prod = await findProductoByRegistro(datos.id_producto);
+      logJSON.entidad_nombre = prod ? prod.nombre_producto : `Producto ${datos.id_producto}`;
     }
-    else if (datos?.id_producto) {
-        const prod = await findProductoByRegistro(datos.id_producto);
-        logJSON.entidad_nombre = prod ? prod.nombre_producto : `Producto ${datos.id_producto}`;
-    }
-    
-    // Fallback
-    if(!logJSON.entidad_nombre) {
-         const nombre = datos?.nombre_proveedor || datos?.nombre_zona || datos?.codigo;
-         logJSON.entidad_nombre = nombre 
-           ? formatStr(nombre, logJSON.id_registro)
-           : `Registro (ID: ${logJSON.id_registro})`;
+
+    if (!logJSON.entidad_nombre) {
+      const nombre = datos?.nombre_proveedor || datos?.nombre_zona || datos?.codigo;
+      logJSON.entidad_nombre = nombre
+        ? formatStr(nombre, logJSON.id_registro)
+        : `Registro (ID: ${logJSON.id_registro})`;
     }
 
     res.json({ ok: true, data: logJSON });
@@ -528,7 +548,7 @@ export const getRegistroHistorial = async (req, res) => {
 
     let entidadNombre = null;
 
-    // Buscar nombre actual en DB para el título
+    // Buscar nombre actual en DB
     if (tabla === "productos") {
       const p = await findProductoByRegistro(id_registro);
       if (p) entidadNombre = `${p.nombre_producto} (ID: ${id_registro})`;
@@ -546,14 +566,20 @@ export const getRegistroHistorial = async (req, res) => {
       if (z) entidadNombre = `Zona: ${z.codigo}`;
     }
 
-    // Fallback con datos del historial si no está en DB (borrado)
+    // Fallback: buscar en el historial si fue borrado
     if (!entidadNombre && historial.length > 0) {
-        const d = safeParseJSON(historial[0].datos_nuevos) || safeParseJSON(historial[0].datos_anteriores);
-        entidadNombre = d?.nombre_producto || d?.nombre_cliente || d?.nombre_proveedor || d?.codigo;
-        if(entidadNombre) entidadNombre = `${entidadNombre} (ID: ${id_registro})`;
+      const d = safeParseJSON(historial[0].datos_nuevos) || safeParseJSON(historial[0].datos_anteriores);
+      entidadNombre =
+        d?.nombre_producto ||
+        d?.nombre_cliente ||
+        d?.nombre_empleado ||
+        d?.nombre_proveedor ||
+        d?.codigo;
+
+      if (entidadNombre) entidadNombre = `${entidadNombre} (ID: ${id_registro})`;
     }
 
-    const historialConFecha = historial.map(h => {
+    const historialConFecha = historial.map((h) => {
       const hJSON = h.toJSON();
       const fechaDB = new Date(hJSON.created_at);
       hJSON.fecha_iso = fechaDB.toISOString();
