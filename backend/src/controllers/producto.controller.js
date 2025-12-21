@@ -182,6 +182,9 @@ export const createProducto = async (req, res, next) => {
 /* =========================================================
    PUT /api/productos/:id
 ========================================================= */
+/* =========================================================
+   PUT /api/productos/:id
+========================================================= */
 export const updateProducto = async (req, res, next) => {
   const t = await sequelize.transaction();
   const auditOptions = getAuditOptions(req);
@@ -196,14 +199,55 @@ export const updateProducto = async (req, res, next) => {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    const stockActual = Number(producto.stock ?? 0);
-    const stockNuevo = datos.stock !== undefined ? Number(datos.stock) : stockActual;
-    const delta = stockNuevo - stockActual;
+    let stockNuevo = Number(producto.stock ?? 0);
+    let delta = 0;
 
+    // Solo si se está intentando modificar el stock manualmente
+    if (datos.stock !== undefined) {
+      const stockInput = Number(datos.stock);
+
+      // 1. Calcular el Stock Teórico Real basado en el historial completo (Entradas - Salidas + Ajustes previos)
+      //    Esto asegura que el delta 'puentee' la brecha entre la realidad de los movimientos y el nuevo valor deseado.
+      
+      const entradasRow = await sequelize.query(
+        `SELECT COALESCE(SUM(sm.cantidad), 0) AS total_entradas FROM suministra sm INNER JOIN suministro su ON su.id_suministro = sm.id_suministro WHERE sm.id_producto = ?`,
+        { replacements: [id], type: QueryTypes.SELECT, transaction: t }
+      );
+      const totalEntradas = Number(entradasRow[0]?.total_entradas || 0);
+
+      const salidasRow = await sequelize.query(
+        `SELECT COALESCE(SUM(c.cantidad), 0) AS total_salidas FROM contiene c INNER JOIN pedidos p ON p.id_pedido = c.id_pedido WHERE c.id_producto = ?`,
+        { replacements: [id], type: QueryTypes.SELECT, transaction: t }
+      );
+      const totalSalidas = Number(salidasRow[0]?.total_salidas || 0);
+
+      const ajustesRow = await sequelize.query(
+        `SELECT COALESCE(SUM(a.cantidad), 0) AS total_ajustes FROM ajustes_stock a WHERE a.id_producto = ?`,
+        { replacements: [id], type: QueryTypes.SELECT, transaction: t }
+      );
+      const totalAjustes = Number(ajustesRow[0]?.total_ajustes || 0);
+
+      const stockTeorico = totalEntradas - totalSalidas + totalAjustes;
+
+      // 2. Calculamos el delta necesario para que el historial llegue al valor deseado
+      delta = stockInput - stockTeorico;
+      stockNuevo = stockInput;
+    } else {
+        // Si no se envió stock, mantenemos el actual (o podríamos decidir recalcularlo, pero por seguridad mantenemos el de la DB si es solo un cambio de nombre)
+        if (datos.stock !== undefined) stockNuevo = Number(datos.stock);
+    }
+
+    // 3. Actualizamos el producto
     await producto.update({ ...datos, stock: stockNuevo }, { transaction: t, ...auditOptions });
 
+    // 4. Registramos el ajuste si hubo diferencia real contra el historial
     if (delta !== 0) {
-      await registrarAjusteStock({ t, id_producto: id, delta, motivo: "Ajuste manual en ficha de producto" });
+      await registrarAjusteStock({ 
+        t, 
+        id_producto: id, 
+        delta, 
+        motivo: "Ajuste manual (Corrección de inventario)" 
+      });
     }
 
     if (zona !== undefined) {
@@ -214,13 +258,14 @@ export const updateProducto = async (req, res, next) => {
     }
 
     await t.commit();
-    res.json(producto);
+    
+    // Retornamos el producto actualizado
+    res.json({ ...producto.toJSON(), stock: stockNuevo });
   } catch (err) {
     await t.rollback();
     next(err);
   }
 };
-
 /* =========================================================
    DELETE /api/productos/:id
 ========================================================= */
