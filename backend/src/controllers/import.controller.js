@@ -49,9 +49,16 @@ export const importarSuministroExcel = async (req, res, next) => {
         row["Descripcion"] ||
         row["nombre"] ||
         row["Nombre"] ||
-        "Producto Nuevo";
+        row["NOMBRE"];
 
-      const cantidadRaw = row["Quantity"] || row["Cantidad"];
+      const cantidadRaw = 
+      row["Quantity"] ||
+      row["cantidad"] ||
+      row["CANTIDAD"] ||
+      row["STOCK"] ||
+      row["stock"] ||
+      row["Stock"] ||
+      row["Cantidad"];
 
       // 👇 NUEVO: Detectar columnas de Precio o Costo
       const precioRaw =

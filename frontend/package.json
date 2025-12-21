@@ -13,6 +13,8 @@
     "axios": "^1.13.1",
     "chart.js": "^4.5.1",
     "esbuild": "^0.27.0",
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.2",
     "jwt-decode": "^4.0.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.553.0",
