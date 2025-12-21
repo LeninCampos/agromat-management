@@ -10,11 +10,11 @@ import {
   MapPin,
   LayoutDashboard,
   Archive,
+  ClipboardList,
 } from "lucide-react";
-import agromatLogo from "../assets/agromat-logo.png";
+import axiumLogo from "../assets/agromat-logo.png";
 
 export default function Sidebar({ isCollapsed = false }) {
-  // ✅ 4.2 Reordenamiento lógico del menú
   const links = [
     { name: "Dashboard", icon: <LayoutDashboard size={18} />, to: "/app/dashboard" },
     
@@ -33,6 +33,9 @@ export default function Sidebar({ isCollapsed = false }) {
     // Bloque Admin
     { name: "Empleados", icon: <UserCog size={18} />, to: "/app/empleados" },
     { name: "Zonas", icon: <MapPin size={18} />, to: "/app/zonas" },
+    
+    // Auditoría (Historial Forense)
+    { name: "Auditoría", icon: <ClipboardList size={18} />, to: "/app/auditoria" },
   ];
 
   return (
@@ -52,8 +55,6 @@ export default function Sidebar({ isCollapsed = false }) {
         transition: "padding 0.3s ease",
       }}
     >
-      {/* ... (el resto del componente Sidebar se mantiene igual, logo y footer) ... */}
-      
       <div
         style={{
           display: "flex",
@@ -78,7 +79,7 @@ export default function Sidebar({ isCollapsed = false }) {
           }}
         >
           <img
-            src={agromatLogo}
+            src={axiumLogo}
             alt="Agromat"
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />

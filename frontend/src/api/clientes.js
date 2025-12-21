@@ -1,3 +1,4 @@
+//src/api/clientes.js
 import api from "./axios";
 
 export const getClientes = () => api.get("/clientes");

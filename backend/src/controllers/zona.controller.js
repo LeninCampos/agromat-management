@@ -1,12 +1,18 @@
 // backend/src/controllers/zona.controller.js
 import { Zona, SeUbica } from "../models/index.js";
 
+// Helper para obtener opciones de auditoría
+function getAuditOptions(req) {
+  return {
+    userId: req.empleado?.id || null,
+    ipAddress: req.ip || req.connection?.remoteAddress || null,
+  };
+}
+
 // GET /api/zonas
 export const getAllZonas = async (req, res, next) => {
   try {
-    const zonas = await Zona.findAll({
-      order: [["codigo", "ASC"]],
-    });
+    const zonas = await Zona.findAll({ order: [["codigo", "ASC"]] });
     res.json(zonas);
   } catch (err) {
     next(err);
@@ -27,13 +33,13 @@ export const getZonaById = async (req, res, next) => {
 
 // POST /api/zonas
 export const createZona = async (req, res, next) => {
+  const auditOptions = getAuditOptions(req);
+
   try {
     const { codigo, rack, modulo, piso, descripcion } = req.body;
 
     if (!codigo || !rack || modulo == null || piso == null) {
-      return res
-        .status(400)
-        .json({ error: "codigo, rack, modulo y piso son obligatorios" });
+      return res.status(400).json({ error: "codigo, rack, modulo y piso son obligatorios" });
     }
 
     const nueva = await Zona.create({
@@ -42,7 +48,7 @@ export const createZona = async (req, res, next) => {
       modulo: Number(modulo),
       piso: Number(piso),
       descripcion: descripcion || null,
-    });
+    }, auditOptions);
 
     res.status(201).json(nueva);
   } catch (err) {
@@ -52,6 +58,8 @@ export const createZona = async (req, res, next) => {
 
 // PUT /api/zonas/:id
 export const updateZona = async (req, res, next) => {
+  const auditOptions = getAuditOptions(req);
+
   try {
     const { id } = req.params;
     const { codigo, rack, modulo, piso, descripcion } = req.body;
@@ -65,7 +73,7 @@ export const updateZona = async (req, res, next) => {
       ...(modulo !== undefined && { modulo: Number(modulo) }),
       ...(piso !== undefined && { piso: Number(piso) }),
       ...(descripcion !== undefined && { descripcion: descripcion || null }),
-    });
+    }, auditOptions);
 
     res.json(zona);
   } catch (err) {
@@ -75,22 +83,22 @@ export const updateZona = async (req, res, next) => {
 
 // DELETE /api/zonas/:id
 export const deleteZona = async (req, res, next) => {
+  const auditOptions = getAuditOptions(req);
+
   try {
     const { id } = req.params;
 
-    // ¿Tiene productos ubicados?
     const countUbicaciones = await SeUbica.count({ where: { id_zona: id } });
     if (countUbicaciones > 0) {
       return res.status(409).json({
-        error:
-          "No se puede eliminar la zona porque tiene productos asignados. Mueve o elimina esos productos primero.",
+        error: "No se puede eliminar la zona porque tiene productos asignados. Mueve o elimina esos productos primero.",
       });
     }
 
     const zona = await Zona.findByPk(id);
     if (!zona) return res.status(404).json({ error: "Zona no encontrada" });
 
-    await zona.destroy();
+    await zona.destroy(auditOptions);
     res.json({ ok: true });
   } catch (err) {
     next(err);

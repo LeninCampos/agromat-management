@@ -22,6 +22,12 @@ const Envio = sequelize.define(
       allowNull: false,
     },
 
+    // ✅ NUEVO: Número de remito (copiado del pedido)
+    numero_remito: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+
     id_empleado_responsable: {
       type: DataTypes.INTEGER,
       allowNull: true,
@@ -38,7 +44,6 @@ const Envio = sequelize.define(
       defaultValue: "EN_PREPARACION",
     },
 
-    // 🚚 Nuevos campos de conductor
     nombre_conductor: {
       type: DataTypes.STRING(100),
       allowNull: true,
@@ -54,7 +59,6 @@ const Envio = sequelize.define(
       allowNull: true,
     },
 
-    // Texto libre desde el modal
     observaciones: {
       type: DataTypes.STRING(255),
       allowNull: true,
@@ -71,6 +75,7 @@ const Envio = sequelize.define(
       allowNull: true,
     },
 
+    // Mantenemos por compatibilidad pero usaremos la tabla fotos_envio
     url_imagen: {
       type: DataTypes.STRING(255),
       allowNull: true,

@@ -1,59 +1,78 @@
-// 👇 Asegúrate de agregar "Suministro" aquí
+// backend/src/controllers/proveedor.controller.js
 import { Proveedor, Suministro } from "../models/index.js";
+
+// Helper para obtener opciones de auditoría
+function getAuditOptions(req) {
+  return {
+    userId: req.empleado?.id || null,
+    ipAddress: req.ip || req.connection?.remoteAddress || null,
+  };
+}
 
 export const getAllProveedores = async (req, res, next) => {
   try {
     const rows = await Proveedor.findAll({
-      include: [{
-        model: Suministro, // 👈 Aquí es donde fallaba porque no estaba importado
-        attributes: ['id_suministro']
-      }],
-      order: [["id_proveedor", "ASC"]]
+      include: [{ model: Suministro, attributes: ["id_suministro"] }],
+      order: [["id_proveedor", "ASC"]],
     });
 
-    // Transformamos para enviar el contador simple al frontend
-    const data = rows.map(p => {
+    const data = rows.map((p) => {
       const json = p.toJSON();
       return {
         ...json,
-        total_suministros: json.Suministros ? json.Suministros.length : 0
+        total_suministros: json.Suministros ? json.Suministros.length : 0,
       };
     });
 
     res.json(data);
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
-// ... (resto de funciones: getProveedorById, createProveedor, etc. se mantienen igual)
 export const getProveedorById = async (req, res, next) => {
   try {
     const row = await Proveedor.findByPk(req.params.id);
     if (!row) return res.status(404).json({ error: "Proveedor no encontrado" });
     res.json(row);
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const createProveedor = async (req, res, next) => {
+  const auditOptions = getAuditOptions(req);
+
   try {
-    const created = await Proveedor.create(req.body);
+    const created = await Proveedor.create(req.body, auditOptions);
     res.status(201).json(created);
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const updateProveedor = async (req, res, next) => {
+  const auditOptions = getAuditOptions(req);
+
   try {
     const row = await Proveedor.findByPk(req.params.id);
     if (!row) return res.status(404).json({ error: "Proveedor no encontrado" });
-    await row.update({ ...req.body });
+    await row.update({ ...req.body }, auditOptions);
     res.json(row);
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const deleteProveedor = async (req, res, next) => {
+  const auditOptions = getAuditOptions(req);
+
   try {
     const row = await Proveedor.findByPk(req.params.id);
     if (!row) return res.status(404).json({ error: "Proveedor no encontrado" });
-    await row.destroy();
+    await row.destroy(auditOptions);
     res.json({ ok: true, mensaje: "Proveedor eliminado" });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };

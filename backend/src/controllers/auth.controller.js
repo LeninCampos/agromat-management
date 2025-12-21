@@ -1,4 +1,3 @@
-// backend/src/controllers/auth.controller.js
 import { Empleado } from "../models/index.js";
 import jwt from "jsonwebtoken";
 
@@ -33,7 +32,7 @@ export const login = async (req, res, next) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || "8h" }
     );
 
-    // ✅ CAMBIO: Enviar el objeto empleado junto con el token
+    // Enviar el objeto empleado junto con el token
     return res.json({
       token,
       empleado: {

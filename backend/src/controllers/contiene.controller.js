@@ -1,3 +1,4 @@
+//src/controllers/contiene.controller.js
 import { Contiene, Producto } from "../models/index.js";
 
 export const getAllContiene = async (req, res, next) => {

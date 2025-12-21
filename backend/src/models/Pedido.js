@@ -14,10 +14,9 @@ const Pedido = sequelize.define(
       type: DataTypes.DATEONLY,
       allowNull: false,
     },
-    // ✅ 3.15: Fecha estimada de despacho
     fecha_entrega_estimada: {
       type: DataTypes.DATEONLY,
-      allowNull: true, 
+      allowNull: true,
     },
     hora_pedido: {
       type: DataTypes.TIME,
@@ -35,7 +34,6 @@ const Pedido = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-    // ✅ 3.17: Quién pidió (Persona de contacto específica para este pedido)
     quien_pidio: {
       type: DataTypes.STRING(100),
       allowNull: true,
@@ -44,9 +42,13 @@ const Pedido = sequelize.define(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
-    // ✅ 3.16: Observaciones
     observaciones: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    // ✅ NUEVO: Número de remito
+    numero_remito: {
+      type: DataTypes.STRING(50),
       allowNull: true,
     },
     subtotal: {

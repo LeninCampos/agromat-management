@@ -22,6 +22,7 @@ import suministraRouter from "./routes/suministra.js";
 import contieneRouter from "./routes/contiene.js";
 import authRouter from "./routes/auth.js";
 import uploadRouter from "./routes/upload.js"; // 👈 NUEVO
+import auditRouter from "./routes/audit.js";
 
 
 
@@ -101,6 +102,7 @@ app.use("/api/suministro", suministroRouter);
 app.use("/api/suministra", suministraRouter);
 app.use("/api/contiene", contieneRouter);
 app.use("/api/upload", uploadRouter);
+app.use("/api/audit", auditRouter);
 
 
 /* ==========================

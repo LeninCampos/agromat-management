@@ -12,6 +12,9 @@ import Zona from "./Zona.js";
 import SeUbica from "./SeUbica.js";
 import Suministro from "./Suministro.js";
 import Suministra from "./Suministra.js";
+import FotoEnvio from "./FotoEnvio.js"; // ✅ NUEVO
+import AuditLog from "./AuditLog.js";
+import { setupAuditHooks } from "../services/auditService.js";
 
 // ===============================
 // Productos / Proveedor
@@ -74,6 +77,16 @@ Empleado.hasMany(Envio, {
   foreignKey: "id_empleado_responsable",
 });
 
+// ✅ NUEVO: Fotos de Envío (1 envío tiene muchas fotos)
+Envio.hasMany(FotoEnvio, {
+  foreignKey: "id_envio",
+  as: "fotos",
+  onDelete: "CASCADE",
+});
+FotoEnvio.belongsTo(Envio, {
+  foreignKey: "id_envio",
+});
+
 // ===============================
 // Ubicación de productos (SeUbica)
 // ===============================
@@ -127,6 +140,35 @@ Empleado.hasMany(Suministro, {
   foreignKey: "id_empleado",
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ASOCIACIÓN AUDIT LOG ↔ EMPLEADO
+// ─────────────────────────────────────────────────────────────────────────────
+Empleado.hasMany(AuditLog, { foreignKey: "id_empleado", as: "auditLogs" });
+AuditLog.belongsTo(Empleado, { foreignKey: "id_empleado", as: "empleado" });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIGURAR HOOKS DE AUDITORÍA
+// ─────────────────────────────────────────────────────────────────────────────
+const modelosAuditables = [
+  Cliente,
+  Contiene,
+  Empleado,
+  Envio,
+  Pedido,
+  Producto,
+  Proveedor,
+  SeUbica,
+  Suministra,
+  Suministro,
+  Zona
+];
+
+modelosAuditables.forEach(modelo => {
+  setupAuditHooks(modelo);
+});
+
+console.log("✅ Hooks de auditoría configurados para", modelosAuditables.length, "modelos");
+
 export {
   sequelize,
   Cliente,
@@ -140,4 +182,6 @@ export {
   SeUbica,
   Suministro,
   Suministra,
+  FotoEnvio, // ✅ NUEVO
+  AuditLog,
 };

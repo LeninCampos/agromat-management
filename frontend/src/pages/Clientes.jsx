@@ -1,4 +1,3 @@
-// src/pages/Clientes.jsx
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import {
@@ -10,11 +9,13 @@ import {
 
 const emptyForm = {
   nombre_cliente: "",
-  nombre_contacto: "", // ✅ 2.3
+  nombre_contacto: "",
+  // ✅ NUEVO
+  cuit: "",
   correo: "",
   telefono: "",
   direccion: "",
-  comentarios: "",     // ✅ 2.4
+  comentarios: "",
 };
 
 export default function Clientes() {
@@ -25,26 +26,24 @@ export default function Clientes() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
 
-  // ✅ 2.9 Estado para ordenamiento
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-  // 🔍 FILTRO Y ORDENAMIENTO
   const processedData = useMemo(() => {
     let result = [...items];
     const query = q.trim().toLowerCase();
 
-    // 1. Filtrado (✅ 2.7 y 2.8)
     if (query) {
       result = result.filter(
         (x) =>
           x.nombre_cliente?.toLowerCase().includes(query) ||
           x.nombre_contacto?.toLowerCase().includes(query) ||
           x.correo?.toLowerCase().includes(query) ||
-          x._productos_busqueda?.includes(query) // Busca en productos comprados
+          // ✅ NUEVO: buscar por CUIT también
+          String(x.cuit || "").toLowerCase().includes(query) ||
+          x._productos_busqueda?.includes(query)
       );
     }
 
-    // 2. Ordenamiento (✅ 2.9)
     if (sortConfig.key) {
       result.sort((a, b) => {
         const valA = a[sortConfig.key];
@@ -53,7 +52,7 @@ export default function Clientes() {
         if (typeof valA === 'number' && typeof valB === 'number') {
           return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
         }
-        
+
         const strA = String(valA || "").toLowerCase();
         const strB = String(valB || "").toLowerCase();
         if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -65,7 +64,6 @@ export default function Clientes() {
     return result;
   }, [q, items, sortConfig]);
 
-  // Helper para pedir orden
   const requestSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -79,12 +77,10 @@ export default function Clientes() {
     return sortConfig.direction === 'asc' ? "↑" : "↓";
   };
 
-  // 📦 CARGAR CLIENTES
   const load = async () => {
     setLoading(true);
     try {
       const { data } = await getClientes();
-      // El backend ya trae los campos calculados: ultimo_pedido, pedidos_ultimo_anio
       setItems(data);
     } catch (e) {
       console.error(e);
@@ -109,6 +105,8 @@ export default function Clientes() {
     setForm({
       nombre_cliente: row.nombre_cliente ?? "",
       nombre_contacto: row.nombre_contacto ?? "",
+      // ✅ NUEVO
+      cuit: row.cuit ?? "",
       correo: row.correo ?? "",
       telefono: row.telefono ?? "",
       direccion: row.direccion ?? "",
@@ -123,6 +121,8 @@ export default function Clientes() {
     const payload = {
       nombre_cliente: form.nombre_cliente,
       nombre_contacto: form.nombre_contacto || null,
+      // ✅ NUEVO
+      cuit: form.cuit || null,
       correo_cliente: form.correo || null,
       telefono: form.telefono || null,
       direccion: form.direccion || null,
@@ -188,12 +188,11 @@ export default function Clientes() {
         </button>
       </div>
 
-      {/* BUSCADOR */}
       <div style={{ display: "flex", gap: "10px" }}>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre, producto comprado o correo…"
+          placeholder="Buscar por nombre, CUIT, producto comprado o correo…"
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -214,7 +213,6 @@ export default function Clientes() {
         </button>
       </div>
 
-      {/* TABLA */}
       <div
         style={{
           background: "white",
@@ -232,14 +230,17 @@ export default function Clientes() {
               <th onClick={() => requestSort('nombre_contacto')} style={{ padding: "10px", cursor: "pointer" }}>
                 Contacto {getSortIcon('nombre_contacto')}
               </th>
+              {/* ✅ NUEVO: CUIT (opcional mostrar) */}
+              <th onClick={() => requestSort('cuit')} style={{ padding: "10px", cursor: "pointer" }}>
+                CUIT {getSortIcon('cuit')}
+              </th>
+
               <th onClick={() => requestSort('telefono')} style={{ padding: "10px", cursor: "pointer" }}>
                 Teléfono {getSortIcon('telefono')}
               </th>
-              {/* ✅ 2.5 Columna Fecha Último Pedido */}
               <th onClick={() => requestSort('ultimo_pedido')} style={{ padding: "10px", cursor: "pointer" }}>
                 Últ. Pedido {getSortIcon('ultimo_pedido')}
               </th>
-              {/* ✅ 2.6 Columna Cantidad Anual */}
               <th onClick={() => requestSort('pedidos_ultimo_anio')} style={{ padding: "10px", cursor: "pointer", textAlign: "center" }}>
                 Pedidos (1 año) {getSortIcon('pedidos_ultimo_anio')}
               </th>
@@ -249,9 +250,9 @@ export default function Clientes() {
 
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>Cargando…</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>Cargando…</td></tr>
             ) : processedData.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: "center", padding: "20px" }}>Sin resultados</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>Sin resultados</td></tr>
             ) : (
               processedData.map((row) => (
                 <tr key={row.id_cliente} style={{ borderTop: "1px solid #eee" }}>
@@ -260,12 +261,15 @@ export default function Clientes() {
                     <span style={{fontSize: "0.85em", color:"#666"}}>{row.correo}</span>
                   </td>
                   <td style={{ padding: "10px" }}>{row.nombre_contacto || "-"}</td>
+
+                  {/* ✅ NUEVO */}
+                  <td style={{ padding: "10px" }}>{row.cuit || "-"}</td>
+
                   <td style={{ padding: "10px" }}>{row.telefono}</td>
-                  
                   <td style={{ padding: "10px" }}>{row.ultimo_pedido}</td>
                   <td style={{ padding: "10px", textAlign: "center" }}>
                     <span style={{background: "#e0e7ff", color:"#3730a3", padding:"4px 8px", borderRadius:"12px", fontSize:"0.85rem", fontWeight:"bold"}}>
-                        {row.pedidos_ultimo_anio}
+                      {row.pedidos_ultimo_anio}
                     </span>
                   </td>
 
@@ -294,7 +298,6 @@ export default function Clientes() {
         </table>
       </div>
 
-      {/* MODAL */}
       {modalOpen && (
         <div className="agromat-modal-backdrop">
           <div className="agromat-modal-card">
@@ -307,7 +310,6 @@ export default function Clientes() {
 
             <form onSubmit={save} className="agromat-modal-body">
               <div className="agromat-form-grid">
-                {/* Nombre Cliente */}
                 <div className="agromat-form-field agromat-full-row">
                   <label>Razón Social / Nombre Cliente</label>
                   <input
@@ -320,7 +322,6 @@ export default function Clientes() {
                   />
                 </div>
 
-                {/* ✅ 2.3 Nombre Contacto */}
                 <div className="agromat-form-field">
                   <label>Nombre Contacto</label>
                   <input
@@ -332,7 +333,18 @@ export default function Clientes() {
                   />
                 </div>
 
-                {/* Teléfono */}
+                {/* ✅ NUEVO: CUIT */}
+                <div className="agromat-form-field">
+                  <label>CUIT</label>
+                  <input
+                    type="text"
+                    value={form.cuit}
+                    onChange={(e) => setForm((f) => ({ ...f, cuit: e.target.value }))}
+                    className="agromat-input"
+                    placeholder="20-12345678-3"
+                  />
+                </div>
+
                 <div className="agromat-form-field">
                   <label>Teléfono</label>
                   <input
@@ -344,7 +356,6 @@ export default function Clientes() {
                   />
                 </div>
 
-                {/* Correo */}
                 <div className="agromat-form-field agromat-full-row">
                   <label>Correo</label>
                   <input
@@ -356,7 +367,6 @@ export default function Clientes() {
                   />
                 </div>
 
-                {/* Dirección */}
                 <div className="agromat-form-field agromat-full-row">
                   <label>Dirección</label>
                   <textarea
@@ -368,7 +378,6 @@ export default function Clientes() {
                   />
                 </div>
 
-                {/* ✅ 2.4 Comentarios */}
                 <div className="agromat-form-field agromat-full-row">
                   <label>Comentarios / Notas</label>
                   <textarea

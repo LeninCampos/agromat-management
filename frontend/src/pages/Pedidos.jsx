@@ -1,3 +1,4 @@
+// frontend/src/pages/Pedidos.jsx
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { getPedidos, createPedido, updatePedido, deletePedido } from "../api/pedidos";
@@ -6,10 +7,9 @@ import { getClientes } from "../api/clientes";
 import { getEmpleados } from "../api/empleados";
 import {
   ArrowUp, ArrowDown, ArrowUpDown,
-  CheckCircle, Clock, XCircle, Truck, Package
+  CheckCircle, Clock, XCircle, Truck, Package, FileText
 } from "lucide-react";
 
-// ✅ 3.12 Filtro Estado (Opciones)
 const STATUS_OPTIONS = ["Pendiente", "En proceso", "Completado", "Cancelado"];
 
 const emptyForm = {
@@ -19,21 +19,22 @@ const emptyForm = {
   id_empleado: "",
   id_cliente: "",
   direccion_envio: "",
-  fecha_entrega_estimada: "", // ✅ 3.15
-  quien_pidio: "",            // ✅ 3.17
-  observaciones: "",          // ✅ 3.16
+  fecha_entrega_estimada: "",
+  quien_pidio: "",
+  observaciones: "",
+  numero_remito: "", // ✅ NUEVO
   descuento_total: 0,
   impuesto_total: 0,
   items: [],
 };
 
-// --- Helpers de Fecha/Hora ---
 function formatDate(d) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
 function formatTime(d) {
   return d.toTimeString().slice(0, 5);
 }
@@ -42,34 +43,28 @@ export default function Pedidos() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- Estados para FILTROS (3.9 - 3.12) ---
   const [filters, setFilters] = useState({
     client: "",
     product: "",
     dateStart: "",
     dateEnd: "",
-    status: ""
+    status: "",
+    remito: "", // ✅ NUEVO: filtro por remito
   });
 
-  // --- Estado para ORDENAMIENTO (3.14) ---
   const [sortConfig, setSortConfig] = useState({ key: "id_pedido", direction: "desc" });
-
-  // --- Estado para PAGINACIÓN (3.18) ---
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Modales y formularios
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
 
-  // Datos Auxiliares
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [nuevoItem, setNuevoItem] = useState({ id_producto: "", cantidad: 1, precio_unitario: 0 });
 
-  // Carga inicial
   const load = async () => {
     setLoading(true);
     try {
@@ -82,6 +77,7 @@ export default function Pedidos() {
         quien_pidio: p.quien_pidio || "",
         fecha_entrega_estimada: p.fecha_entrega_estimada || "",
         observaciones: p.observaciones || "",
+        numero_remito: p.numero_remito || "", // ✅ NUEVO
         items: (p.Productos || []).map(prod => ({
           id_producto: prod.id_producto,
           nombre_producto: prod.nombre_producto,
@@ -104,7 +100,6 @@ export default function Pedidos() {
 
   useEffect(() => { load(); }, []);
 
-  // --- LÓGICA DE FILTRADO Y ORDENAMIENTO ---
   const processedItems = useMemo(() => {
     let result = [...items];
 
@@ -128,6 +123,11 @@ export default function Pedidos() {
     if (filters.dateEnd) {
       result = result.filter(x => x.fecha_pedido <= filters.dateEnd);
     }
+    // ✅ NUEVO: Filtro por número de remito
+    if (filters.remito) {
+      const q = filters.remito.toLowerCase();
+      result = result.filter(x => x.numero_remito?.toLowerCase().includes(q));
+    }
 
     if (sortConfig.key) {
       result.sort((a, b) => {
@@ -148,14 +148,12 @@ export default function Pedidos() {
     return result;
   }, [items, filters, sortConfig]);
 
-  // --- PAGINACIÓN ---
   const totalPages = Math.ceil(processedItems.length / itemsPerPage);
   const paginatedItems = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return processedItems.slice(start, start + itemsPerPage);
   }, [processedItems, currentPage]);
 
-  // Manejadores
   const handleSort = (key) => {
     setSortConfig(prev => ({
       key,
@@ -170,7 +168,6 @@ export default function Pedidos() {
       : <ArrowDown size={14} className="text-blue-600" />;
   };
 
-  // --- STATUS ICONS ---
   const getStatusBadge = (status) => {
     const s = status || "Pendiente";
     let color = "bg-gray-100 text-gray-600";
@@ -187,7 +184,6 @@ export default function Pedidos() {
     );
   };
 
-  // --- CRUD Operations ---
   const openCreate = () => {
     const now = new Date();
     setEditingId(null);
@@ -203,6 +199,7 @@ export default function Pedidos() {
       fecha_entrega_estimada: row.fecha_entrega_estimada || "",
       quien_pidio: row.quien_pidio || "",
       observaciones: row.observaciones || "",
+      numero_remito: row.numero_remito || "", // ✅ NUEVO
       items: row.items || []
     });
     setModalOpen(true);
@@ -219,7 +216,8 @@ export default function Pedidos() {
         id_cliente: Number(form.id_cliente),
         descuento_total: Number(form.descuento_total),
         impuesto_total: Number(form.impuesto_total),
-        fecha_entrega_estimada: form.fecha_entrega_estimada || null
+        fecha_entrega_estimada: form.fecha_entrega_estimada || null,
+        numero_remito: form.numero_remito || null, // ✅ NUEVO
       };
 
       if (editingId) {
@@ -233,15 +231,15 @@ export default function Pedidos() {
       load();
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No se pudo guardar", "error");
+      const msg = e.response?.data?.error || "No se pudo guardar";
+      Swal.fire("Error", msg, "error");
     }
   };
 
-  // 🗑️ Función de eliminar recuperada
   const remove = async (row) => {
     const result = await Swal.fire({
       title: "¿Borrar registro?",
-      text: `Se eliminará permanentemente el pedido #${row.id_pedido} de la base de datos. Si solo quieres cancelarlo, edita el estado.`,
+      text: `Se eliminará permanentemente el pedido #${row.id_pedido} de la base de datos.`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Sí, borrar definitivamente",
@@ -290,7 +288,7 @@ export default function Pedidos() {
         </button>
       </div>
 
-      {/* --- BARRA DE FILTROS --- */}
+      {/* BARRA DE FILTROS */}
       <div style={{ background: "white", padding: "15px", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", marginBottom: "20px", display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "flex-end" }}>
 
         <div style={{ flex: 1, minWidth: "150px" }}>
@@ -301,6 +299,12 @@ export default function Pedidos() {
         <div style={{ flex: 1, minWidth: "150px" }}>
           <label className="text-xs font-bold text-gray-500 mb-1 block">Producto</label>
           <input type="text" className="agromat-input" placeholder="Contiene..." value={filters.product} onChange={e => setFilters({ ...filters, product: e.target.value })} />
+        </div>
+
+        {/* ✅ NUEVO: Filtro por remito */}
+        <div style={{ flex: 1, minWidth: "120px" }}>
+          <label className="text-xs font-bold text-gray-500 mb-1 block">Nº Remito</label>
+          <input type="text" className="agromat-input" placeholder="Buscar..." value={filters.remito} onChange={e => setFilters({ ...filters, remito: e.target.value })} />
         </div>
 
         <div style={{ width: "140px" }}>
@@ -323,14 +327,14 @@ export default function Pedidos() {
         </div>
 
         <button
-          onClick={() => setFilters({ client: "", product: "", dateStart: "", dateEnd: "", status: "" })}
+          onClick={() => setFilters({ client: "", product: "", dateStart: "", dateEnd: "", status: "", remito: "" })}
           style={{ padding: "8px 12px", background: "#f3f4f6", border: "1px solid #ddd", borderRadius: "6px", height: "38px", cursor: "pointer" }}
         >
           Limpiar
         </button>
       </div>
 
-      {/* --- TABLA --- */}
+      {/* TABLA */}
       <div style={{ background: "white", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
           <thead style={{ background: "#f9fafb", color: "#555", borderBottom: "2px solid #eee" }}>
@@ -345,6 +349,10 @@ export default function Pedidos() {
                 Cliente {getSortIcon("cliente")}
               </th>
               <th className="p-3 text-left">Quien pidió</th>
+              {/* ✅ NUEVO: Columna Remito */}
+              <th onClick={() => handleSort("numero_remito")} className="p-3 text-center cursor-pointer hover:bg-gray-100">
+                Remito {getSortIcon("numero_remito")}
+              </th>
               <th className="p-3 text-center">Entrega Est.</th>
               <th onClick={() => handleSort("status")} className="p-3 text-center cursor-pointer hover:bg-gray-100">
                 Estado {getSortIcon("status")}
@@ -356,72 +364,85 @@ export default function Pedidos() {
             </tr>
           </thead>
           <tbody>
-            {paginatedItems.map(row => (
-              <tr key={row.id_pedido} style={{ borderTop: "1px solid #eee" }} className="hover:bg-gray-50">
-                <td className="p-3 font-medium">#{row.id_pedido}</td>
-                <td className="p-3 text-gray-600">{row.fecha_pedido}</td>
-                <td className="p-3">
-                  <div className="font-medium">{row.Cliente?.nombre_cliente || "N/A"}</div>
-                  <div className="text-xs text-gray-500 truncate max-w-[200px]">{row.direccion_envio}</div>
-                </td>
-                <td className="p-3 text-gray-600 text-sm">{row.quien_pidio || "-"}</td>
-                <td className="p-3 text-center text-sm text-gray-600">
-                  {row.fecha_entrega_estimada ? (
-                    <span className="flex items-center justify-center gap-1">
-                      <Truck size={12} /> {row.fecha_entrega_estimada}
-                    </span>
-                  ) : "-"}
-                </td>
-                <td className="p-3 text-center">
-                  {getStatusBadge(row.status)}
-                </td>
-                <td className="p-3 text-right font-medium">
-                  ${Number(row.total).toFixed(2)}
-                </td>
-
-                {/* ✅ Acciones restauradas con colores estándar */}
-                <td className="p-3 text-center">
-                  <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-                    <button
-                      onClick={() => openEdit(row)}
-                      style={{
-                        background: "#F59E0B",
-                        color: "white",
-                        padding: "5px 12px",
-                        borderRadius: "999px",
-                        border: "none",
-                        fontSize: "0.8rem",
-                        cursor: "pointer",
-                        fontWeight: 500
-                      }}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => remove(row)}
-                      style={{
-                        background: "#DC2626",
-                        color: "white",
-                        padding: "5px 12px",
-                        borderRadius: "999px",
-                        border: "none",
-                        fontSize: "0.8rem",
-                        cursor: "pointer",
-                        fontWeight: 500
-                      }}
-                      title="Borrar de la base de datos"
-                    >
-                      Borrar
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {loading ? (
+              <tr><td colSpan={9} style={{ textAlign: "center", padding: "40px" }}>Cargando...</td></tr>
+            ) : paginatedItems.length === 0 ? (
+              <tr><td colSpan={9} style={{ textAlign: "center", padding: "40px" }}>Sin resultados</td></tr>
+            ) : (
+              paginatedItems.map(row => (
+                <tr key={row.id_pedido} style={{ borderTop: "1px solid #eee" }} className="hover:bg-gray-50">
+                  <td className="p-3 font-medium">#{row.id_pedido}</td>
+                  <td className="p-3 text-gray-600">{row.fecha_pedido}</td>
+                  <td className="p-3">
+                    <div className="font-medium">{row.Cliente?.nombre_cliente || "N/A"}</div>
+                    <div className="text-xs text-gray-500 truncate max-w-[200px]">{row.direccion_envio}</div>
+                  </td>
+                  <td className="p-3 text-gray-600 text-sm">{row.quien_pidio || "-"}</td>
+                  {/* ✅ NUEVO: Mostrar remito */}
+                  <td className="p-3 text-center">
+                    {row.numero_remito ? (
+                      <span className="flex items-center justify-center gap-1 text-sm font-medium text-purple-700 bg-purple-100 px-2 py-1 rounded">
+                        <FileText size={12} /> {row.numero_remito}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-xs">-</span>
+                    )}
+                  </td>
+                  <td className="p-3 text-center text-sm text-gray-600">
+                    {row.fecha_entrega_estimada ? (
+                      <span className="flex items-center justify-center gap-1">
+                        <Truck size={12} /> {row.fecha_entrega_estimada}
+                      </span>
+                    ) : "-"}
+                  </td>
+                  <td className="p-3 text-center">
+                    {getStatusBadge(row.status)}
+                  </td>
+                  <td className="p-3 text-right font-medium">
+                    ${Number(row.total).toFixed(2)}
+                  </td>
+                  <td className="p-3 text-center">
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                      <button
+                        onClick={() => openEdit(row)}
+                        style={{
+                          background: "#F59E0B",
+                          color: "white",
+                          padding: "5px 12px",
+                          borderRadius: "999px",
+                          border: "none",
+                          fontSize: "0.8rem",
+                          cursor: "pointer",
+                          fontWeight: 500
+                        }}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => remove(row)}
+                        style={{
+                          background: "#DC2626",
+                          color: "white",
+                          padding: "5px 12px",
+                          borderRadius: "999px",
+                          border: "none",
+                          fontSize: "0.8rem",
+                          cursor: "pointer",
+                          fontWeight: 500
+                        }}
+                      >
+                        Borrar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* --- PAGINACIÓN --- */}
+      {/* PAGINACIÓN */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "15px" }}>
         <span className="text-sm text-gray-500">Mostrando {paginatedItems.length} de {processedItems.length} pedidos</span>
         <div style={{ display: "flex", gap: "5px" }}>
@@ -444,10 +465,10 @@ export default function Pedidos() {
         </div>
       </div>
 
-      {/* --- MODAL (Igual que antes) --- */}
+      {/* MODAL */}
       {modalOpen && (
         <div className="agromat-modal-backdrop">
-          <div className="agromat-modal-card" style={{ maxWidth: "800px" }}>
+          <div className="agromat-modal-card" style={{ maxWidth: "850px" }}>
             <div className="agromat-modal-header">
               <h2>{editingId ? "Editar Pedido" : "Nuevo Pedido"}</h2>
               <button onClick={() => setModalOpen(false)} className="agromat-modal-close">✕</button>
@@ -496,7 +517,22 @@ export default function Pedidos() {
                   <label>¿Quién pidió? (Contacto)</label>
                   <input type="text" className="agromat-input" placeholder="Ej. Arq. Pérez" value={form.quien_pidio} onChange={e => setForm({ ...form, quien_pidio: e.target.value })} />
                 </div>
+
+                {/* ✅ NUEVO: Campo Número de Remito */}
                 <div className="agromat-form-field">
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <FileText size={14} /> Nº de Remito
+                  </label>
+                  <input 
+                    type="text" 
+                    className="agromat-input" 
+                    placeholder="Ej. REM-2025-001" 
+                    value={form.numero_remito} 
+                    onChange={e => setForm({ ...form, numero_remito: e.target.value })} 
+                  />
+                </div>
+
+                <div className="agromat-form-field agromat-full-row">
                   <label>Dirección Envío</label>
                   <input type="text" className="agromat-input" value={form.direccion_envio} onChange={e => setForm({ ...form, direccion_envio: e.target.value })} />
                 </div>
