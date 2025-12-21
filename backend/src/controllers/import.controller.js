@@ -12,8 +12,6 @@ export const importarSuministroExcel = async (req, res, next) => {
     const sheetName = workbook.SheetNames[0];
     const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-    // data será un array de objetos: [{ "item code": "00107092", "Quantity": "16 pcs", "Price": 150.50 ... }]
-
     // 👇 Recibimos datos del body
     const { id_proveedor, fecha_llegada, hora_llegada, id_empleado } = req.body;
 
@@ -31,9 +29,12 @@ export const importarSuministroExcel = async (req, res, next) => {
     let productosProcesados = 0;
     let productosCreados = 0;
 
-    // 2️⃣ Iterar filas del Excel
+    // 🔄 PASO PREVIO: Consolidar duplicados en un Map
+    // Esto evita el error "Duplicate entry" si el Excel trae el mismo código varias veces
+    const productosMap = new Map();
+
     for (const row of data) {
-      // Obtener datos del Excel (normalizando nombres de columnas)
+      // Normalización de nombres de columnas
       const codigoRaw =
         row["item code"] ||
         row["Codigo"] ||
@@ -51,16 +52,15 @@ export const importarSuministroExcel = async (req, res, next) => {
         row["Nombre"] ||
         row["NOMBRE"];
 
-      const cantidadRaw = 
-      row["Quantity"] ||
-      row["cantidad"] ||
-      row["CANTIDAD"] ||
-      row["STOCK"] ||
-      row["stock"] ||
-      row["Stock"] ||
-      row["Cantidad"];
+      const cantidadRaw =
+        row["Quantity"] !== undefined ? row["Quantity"] :
+        row["cantidad"] !== undefined ? row["cantidad"] :
+        row["CANTIDAD"] !== undefined ? row["CANTIDAD"] :
+        row["STOCK"] !== undefined ? row["STOCK"] :
+        row["stock"] !== undefined ? row["stock"] :
+        row["Stock"] !== undefined ? row["Stock"] :
+        row["Cantidad"];
 
-      // 👇 NUEVO: Detectar columnas de Precio o Costo
       const precioRaw =
         row["Price"] ||
         row["Precio"] ||
@@ -70,15 +70,20 @@ export const importarSuministroExcel = async (req, res, next) => {
         row["Costo"] ||
         row["Unit Price"];
 
-      if (!codigoRaw || !cantidadRaw) continue;
+      // Validaciones básicas
+      if (!codigoRaw || cantidadRaw === undefined || cantidadRaw === null || String(cantidadRaw).trim() === "") {
+        continue;
+      }
 
       const id_producto = String(codigoRaw).trim();
-      const cantidad = parseInt(String(cantidadRaw).replace(/\D/g, ""), 10);
+      
+      // Parsear cantidad
+      let cantidad = parseInt(String(cantidadRaw).replace(/\D/g, ""), 10);
+      if (isNaN(cantidad)) cantidad = 0;
 
-      // 👇 Lógica de validación del precio
+      // Parsear precio
       let precioValidado = null;
       if (precioRaw !== undefined && precioRaw !== null && String(precioRaw).trim() !== "") {
-        // Limpiamos caracteres no numéricos excepto el punto (por si viene como "$150.00")
         const precioLimpio = String(precioRaw).replace(/[^0-9.]/g, "");
         const parsed = parseFloat(precioLimpio);
         if (!isNaN(parsed)) {
@@ -86,9 +91,35 @@ export const importarSuministroExcel = async (req, res, next) => {
         }
       }
 
-      if (!cantidad) continue;
+      // ⚡ LÓGICA DE AGRUPACIÓN
+      if (productosMap.has(id_producto)) {
+        // Si ya existe en el mapa, sumamos la cantidad y actualizamos datos si es necesario
+        const existente = productosMap.get(id_producto);
+        existente.cantidad += cantidad;
+        // Si encontramos un precio válido en esta fila (y no teníamos uno antes o queremos actualizar), lo guardamos
+        if (precioValidado !== null) {
+          existente.precio = precioValidado;
+        }
+        // Nos quedamos con la descripción más completa si la actual estaba vacía
+        if (!existente.descripcion && descripcionRaw) {
+          existente.descripcion = descripcionRaw;
+        }
+      } else {
+        // Si es nuevo, lo agregamos al mapa
+        productosMap.set(id_producto, {
+          id_producto,
+          descripcion: descripcionRaw,
+          cantidad,
+          precio: precioValidado
+        });
+      }
+    }
 
-      // 3️⃣ Buscar si existe el producto
+    // 2️⃣ Iterar sobre los productos UNIFICADOS (ya sin duplicados)
+    for (const item of productosMap.values()) {
+      const { id_producto, descripcion, cantidad, precio } = item;
+
+      // 3️⃣ Buscar si existe el producto en BD
       let producto = await Producto.findByPk(id_producto, { transaction: t });
 
       if (!producto) {
@@ -96,11 +127,10 @@ export const importarSuministroExcel = async (req, res, next) => {
         producto = await Producto.create(
           {
             id_producto: id_producto,
-            nombre_producto: descripcionRaw,
+            nombre_producto: descripcion || "Producto Importado",
             id_proveedor: id_proveedor,
-            // 👇 CAMBIO: Si hay precio validado úsalo, si no, usa 0
-            precio: precioValidado !== null ? precioValidado : 0,
-            stock: 0,
+            precio: precio !== null ? precio : 0,
+            stock: 0, 
             descripcion: "Importado automáticamente desde Excel",
             imagen_url: null,
           },
@@ -109,17 +139,15 @@ export const importarSuministroExcel = async (req, res, next) => {
         productosCreados++;
       } else {
         // ---- SI YA EXISTE ----
-        // 👇 CAMBIO: Solo actualizamos si el Excel trae un precio válido
-        if (precioValidado !== null) {
+        if (precio !== null) {
           await producto.update(
-            { precio: precioValidado },
+            { precio: precio },
             { transaction: t }
           );
         }
-        // Si precioValidado es null, NO hacemos update, preservando el precio actual.
       }
 
-      // 4️⃣ Registrar el detalle en Suministra
+      // 4️⃣ Registrar en Suministra (Siempre, aunque sea 0, para que salga en la lista)
       await Suministra.create(
         {
           id_suministro: suministro.id_suministro,
@@ -129,8 +157,11 @@ export const importarSuministroExcel = async (req, res, next) => {
         { transaction: t }
       );
 
-      // 5️⃣ Actualizar stock del producto
-      await producto.increment("stock", { by: cantidad, transaction: t });
+      // 5️⃣ Actualizar stock (Solo si cantidad > 0)
+      if (cantidad > 0) {
+        await producto.increment("stock", { by: cantidad, transaction: t });
+      }
+
       productosProcesados++;
     }
 
@@ -139,7 +170,7 @@ export const importarSuministroExcel = async (req, res, next) => {
     res.status(201).json({
       ok: true,
       mensaje: "Proceso finalizado.",
-      detalles: `Se procesaron ${productosProcesados} items. Se crearon ${productosCreados} productos nuevos.`,
+      detalles: `Se procesaron ${productosProcesados} items únicos. Se crearon ${productosCreados} productos nuevos.`,
     });
   } catch (error) {
     if (!t.finished) await t.rollback();
