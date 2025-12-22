@@ -13,6 +13,7 @@ import api from "./axios";
  * @param {string} params.orden - ASC o DESC (default: DESC)
  * @param {string} params.tipo_cambio - Tipo de cambio predefinido
  * @param {string} params.campo_modificado - Campo específico a buscar
+ * @param {string} params.busqueda - Búsqueda general (nombre, ID, código, CUIT)
  * @param {number} params.page - Página
  * @param {number} params.limit - Límite por página
  */
@@ -28,6 +29,7 @@ export const getAuditLogs = (params = {}) => {
   if (params.orden) query.append("orden", params.orden);
   if (params.tipo_cambio) query.append("tipo_cambio", params.tipo_cambio);
   if (params.campo_modificado) query.append("campo_modificado", params.campo_modificado);
+  if (params.busqueda) query.append("busqueda", params.busqueda);
   if (params.page) query.append("page", params.page);
   if (params.limit) query.append("limit", params.limit);
 
@@ -66,3 +68,10 @@ export const getTiposCambio = () => api.get("/audit/tipos-cambio");
  * ✅ NUEVO: Obtener campos disponibles para autocompletado
  */
 export const getCamposDisponibles = () => api.get("/audit/campos-disponibles");
+
+/**
+ * Obtener sugerencias de búsqueda para autocompletado
+ * @param {string} query - Término de búsqueda (mínimo 2 caracteres)
+ */
+export const getSearchSuggestions = (query) =>
+  api.get(`/audit/search-suggestions?q=${encodeURIComponent(query)}`);

@@ -158,6 +158,66 @@ async function getMatchingProductoRegistros(busqueda) {
   return Array.from(new Set(ids));
 }
 
+// Helper para búsqueda avanzada: obtiene IDs de clientes que coincidan por nombre o CUIT
+async function getMatchingClienteRegistros(busqueda) {
+  const term = busqueda.trim();
+  if (!term) return [];
+
+  const clientes = await Cliente.findAll({
+    where: {
+      [Op.or]: [
+        { nombre_cliente: { [Op.like]: `%${term}%` } },
+        { cuit: { [Op.like]: `%${term}%` } },
+      ],
+    },
+    attributes: ["id_cliente"],
+    limit: 50,
+    raw: true,
+  });
+
+  return clientes.map((c) => c.id_cliente).filter(Boolean);
+}
+
+// Helper para búsqueda avanzada: obtiene IDs de zonas que coincidan por código o descripción
+async function getMatchingZonaRegistros(busqueda) {
+  const term = busqueda.trim();
+  if (!term) return [];
+
+  const zonas = await Zona.findAll({
+    where: {
+      [Op.or]: [
+        { codigo: { [Op.like]: `%${term}%` } },
+        { descripcion: { [Op.like]: `%${term}%` } },
+      ],
+    },
+    attributes: ["id_zona"],
+    limit: 50,
+    raw: true,
+  });
+
+  return zonas.map((z) => z.id_zona).filter(Boolean);
+}
+
+// Helper para búsqueda avanzada: obtiene IDs de proveedores que coincidan por nombre o CUIT
+async function getMatchingProveedorRegistros(busqueda) {
+  const term = busqueda.trim();
+  if (!term) return [];
+
+  const proveedores = await Proveedor.findAll({
+    where: {
+      [Op.or]: [
+        { nombre_proveedor: { [Op.like]: `%${term}%` } },
+        { cuit: { [Op.like]: `%${term}%` } },
+      ],
+    },
+    attributes: ["id_proveedor"],
+    limit: 50,
+    raw: true,
+  });
+
+  return proveedores.map((p) => p.id_proveedor).filter(Boolean);
+}
+
 // =====================================================
 // GET /api/audit
 // =====================================================
@@ -204,49 +264,126 @@ export const getAuditLogs = async (req, res) => {
       }
     }
 
-    // 4. Búsqueda Avanzada (CORREGIDA Y ROBUSTA)
+    // 4. Búsqueda Avanzada con Resolución de Términos
     if (busqueda && busqueda.trim().length > 0) {
       const term = busqueda.trim();
       const termLike = `%${term}%`;
 
-      // IDs de productos que coinciden con el nombre buscado
-      const matchingIds = await getMatchingProductoRegistros(term);
+      // PASO 1: Resolver el término en todas las tablas principales
+      const [productosIds, clientesIds, zonasIds, proveedoresIds] = await Promise.all([
+        getMatchingProductoRegistros(term),
+        getMatchingClienteRegistros(term),
+        getMatchingZonaRegistros(term),
+        getMatchingProveedorRegistros(term),
+      ]);
 
-      // Condiciones de búsqueda general
+      // PASO 2: Construir condiciones de búsqueda
       const orConditions = [
+        // Búsqueda básica en campos directos
         { tabla_afectada: { [Op.like]: termLike } },
         { id_registro: { [Op.like]: termLike } },
-        // Buscar texto dentro de los JSONs
-        Sequelize.literal(`CAST(datos_anteriores AS CHAR) LIKE ${AuditLog.sequelize.escape(termLike)}`),
-        Sequelize.literal(`CAST(datos_nuevos AS CHAR) LIKE ${AuditLog.sequelize.escape(termLike)}`),
       ];
 
-      // Si hay productos con ese nombre, agregamos búsqueda específica por sus IDs
-      if (matchingIds.length > 0) {
-        // Opción A: Es un registro de la tabla 'productos' con ese ID
+      // PASO 3: Agregar búsqueda por IDs resueltos
+
+      // 3A. PRODUCTOS
+      if (productosIds.length > 0) {
+        // Logs directos de la tabla 'productos'
         orConditions.push({
           [Op.and]: [
             { tabla_afectada: "productos" },
-            { id_registro: { [Op.in]: matchingIds } },
+            { id_registro: { [Op.in]: productosIds } },
           ],
         });
 
-        // Opción B: Es un registro en OTRA tabla que referencia a ese producto en su JSON
-        // (ej: 'envio_detalle' o 'contiene' que tenga "id_producto": "123")
-        const jsonConditions = matchingIds.map((id) => {
-          return `(CAST(datos_anteriores AS CHAR) LIKE '%"id_producto":${id}%' 
+        // Logs de otras tablas que referencian estos productos en JSON
+        // (seubica, contiene, envio_detalle, etc.)
+        const jsonConditions = productosIds.map((id) => {
+          return `(CAST(datos_anteriores AS CHAR) LIKE '%"id_producto":${id}%'
                    OR CAST(datos_anteriores AS CHAR) LIKE '%"id_producto":"${id}"%'
                    OR CAST(datos_nuevos AS CHAR) LIKE '%"id_producto":${id}%'
                    OR CAST(datos_nuevos AS CHAR) LIKE '%"id_producto":"${id}"%')`;
         });
-
         if (jsonConditions.length > 0) {
           orConditions.push(Sequelize.literal(`(${jsonConditions.join(" OR ")})`));
         }
       }
 
-      // Aplicamos el filtro de búsqueda con AND respecto a los filtros anteriores
-      // (Es decir: Debe cumplir fecha/tabla Y (coincidir con la búsqueda))
+      // 3B. CLIENTES
+      if (clientesIds.length > 0) {
+        // Logs directos de la tabla 'clientes'
+        orConditions.push({
+          [Op.and]: [
+            { tabla_afectada: "clientes" },
+            { id_registro: { [Op.in]: clientesIds } },
+          ],
+        });
+
+        // Logs de otras tablas que referencian estos clientes (ej: pedidos)
+        const jsonConditions = clientesIds.map((id) => {
+          return `(CAST(datos_anteriores AS CHAR) LIKE '%"id_cliente":${id}%'
+                   OR CAST(datos_nuevos AS CHAR) LIKE '%"id_cliente":${id}%')`;
+        });
+        if (jsonConditions.length > 0) {
+          orConditions.push(Sequelize.literal(`(${jsonConditions.join(" OR ")})`));
+        }
+      }
+
+      // 3C. ZONAS
+      if (zonasIds.length > 0) {
+        // Logs directos de la tabla 'zonas'
+        orConditions.push({
+          [Op.and]: [
+            { tabla_afectada: { [Op.in]: ["zonas", "zona"] } },
+            { id_registro: { [Op.in]: zonasIds } },
+          ],
+        });
+
+        // Logs de 'seubica' (movimientos de zona)
+        const jsonConditions = zonasIds.map((id) => {
+          return `(CAST(datos_anteriores AS CHAR) LIKE '%"id_zona":${id}%'
+                   OR CAST(datos_nuevos AS CHAR) LIKE '%"id_zona":${id}%')`;
+        });
+        if (jsonConditions.length > 0) {
+          orConditions.push(Sequelize.literal(`(${jsonConditions.join(" OR ")})`));
+        }
+      }
+
+      // 3D. PROVEEDORES
+      if (proveedoresIds.length > 0) {
+        // Logs directos de la tabla 'proveedor'
+        orConditions.push({
+          [Op.and]: [
+            { tabla_afectada: "proveedor" },
+            { id_registro: { [Op.in]: proveedoresIds } },
+          ],
+        });
+
+        // Logs de otras tablas que referencian proveedores (ej: suministro, productos)
+        const jsonConditions = proveedoresIds.map((id) => {
+          return `(CAST(datos_anteriores AS CHAR) LIKE '%"id_proveedor":${id}%'
+                   OR CAST(datos_nuevos AS CHAR) LIKE '%"id_proveedor":${id}%')`;
+        });
+        if (jsonConditions.length > 0) {
+          orConditions.push(Sequelize.literal(`(${jsonConditions.join(" OR ")})`));
+        }
+      }
+
+      // PASO 4: Fallback - búsqueda de texto en JSON si no hubo coincidencias por ID
+      // (para casos edge: cambios en campos de texto, comentarios, etc.)
+      if (
+        productosIds.length === 0 &&
+        clientesIds.length === 0 &&
+        zonasIds.length === 0 &&
+        proveedoresIds.length === 0
+      ) {
+        orConditions.push(
+          Sequelize.literal(`CAST(datos_anteriores AS CHAR) LIKE ${AuditLog.sequelize.escape(termLike)}`),
+          Sequelize.literal(`CAST(datos_nuevos AS CHAR) LIKE ${AuditLog.sequelize.escape(termLike)}`)
+        );
+      }
+
+      // Aplicar filtro de búsqueda
       where[Op.or] = orConditions;
     }
 
@@ -669,5 +806,138 @@ export const getAuditStats = async (req, res) => {
   } catch (error) {
     console.error("❌ Error en getAuditStats:", error);
     res.status(500).json({ ok: false, error: "Error al obtener estadísticas" });
+  }
+};
+
+// =====================================================
+// GET /api/audit/search-suggestions
+// =====================================================
+export const getSearchSuggestions = async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.trim().length < 2) {
+      return res.json({ ok: true, suggestions: [] });
+    }
+
+    const term = q.trim();
+    const termLike = `%${term}%`;
+
+    // Buscar en paralelo en todas las entidades
+    const [productos, clientes, zonas, proveedores] = await Promise.all([
+      // Productos
+      Producto.findAll({
+        where: {
+          [Op.or]: [
+            { id_producto: { [Op.like]: termLike } },
+            { nombre_producto: { [Op.like]: termLike } },
+          ],
+        },
+        attributes: ["id_producto", "nombre_producto"],
+        limit: 5,
+        raw: true,
+      }),
+
+      // Clientes
+      Cliente.findAll({
+        where: {
+          [Op.or]: [
+            { nombre_cliente: { [Op.like]: termLike } },
+            { cuit: { [Op.like]: termLike } },
+          ],
+        },
+        attributes: ["id_cliente", "nombre_cliente", "cuit"],
+        limit: 5,
+        raw: true,
+      }),
+
+      // Zonas
+      Zona.findAll({
+        where: {
+          [Op.or]: [
+            { codigo: { [Op.like]: termLike } },
+            { descripcion: { [Op.like]: termLike } },
+          ],
+        },
+        attributes: ["id_zona", "codigo", "descripcion"],
+        limit: 5,
+        raw: true,
+      }),
+
+      // Proveedores
+      Proveedor.findAll({
+        where: {
+          [Op.or]: [
+            { nombre_proveedor: { [Op.like]: termLike } },
+            { cuit: { [Op.like]: termLike } },
+          ],
+        },
+        attributes: ["id_proveedor", "nombre_proveedor", "cuit"],
+        limit: 5,
+        raw: true,
+      }),
+    ]);
+
+    // Formatear respuesta
+    const suggestions = [];
+
+    if (productos.length > 0) {
+      suggestions.push({
+        category: "Productos",
+        icon: "📦",
+        items: productos.map((p) => ({
+          type: "producto",
+          id: p.id_producto,
+          label: `${p.nombre_producto} (ID: ${p.id_producto})`,
+          searchTerm: p.nombre_producto,
+        })),
+      });
+    }
+
+    if (clientes.length > 0) {
+      suggestions.push({
+        category: "Clientes",
+        icon: "👤",
+        items: clientes.map((c) => ({
+          type: "cliente",
+          id: c.id_cliente,
+          label: `${c.nombre_cliente} (ID: ${c.id_cliente})`,
+          searchTerm: c.nombre_cliente,
+          cuit: c.cuit,
+        })),
+      });
+    }
+
+    if (zonas.length > 0) {
+      suggestions.push({
+        category: "Zonas",
+        icon: "📍",
+        items: zonas.map((z) => ({
+          type: "zona",
+          id: z.id_zona,
+          label: `${z.codigo}${z.descripcion ? ` - ${z.descripcion}` : ""} (ID: ${z.id_zona})`,
+          searchTerm: z.codigo,
+        })),
+      });
+    }
+
+    if (proveedores.length > 0) {
+      suggestions.push({
+        category: "Proveedores",
+        icon: "🏭",
+        items: proveedores.map((p) => ({
+          type: "proveedor",
+          id: p.id_proveedor,
+          label: `${p.nombre_proveedor} (ID: ${p.id_proveedor})`,
+          searchTerm: p.nombre_proveedor,
+          cuit: p.cuit,
+        })),
+      });
+    }
+
+    res.json({ ok: true, suggestions });
+  } catch (error) {
+    console.error("❌ Error en getSearchSuggestions:", error);
+    res.status(500).json({ ok: false, error: "Error al obtener sugerencias" });
   }
 };

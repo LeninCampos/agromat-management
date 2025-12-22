@@ -8,6 +8,7 @@ import {
   getRegistroHistorial,
   getAuditLogById,
   getTiposCambio,
+  getSearchSuggestions,
 } from "../api/audit";
 
 // =============================
@@ -441,6 +442,39 @@ const S = {
     fontSize: "0.75rem",
     fontWeight: 700,
   },
+
+  // Autocompletado
+  suggestionsDropdown: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    backgroundColor: "white",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+    marginTop: "4px",
+    maxHeight: "300px",
+    overflowY: "auto",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+    zIndex: 1000,
+  },
+  suggestionCategory: {
+    padding: "8px 12px",
+    backgroundColor: "#f5f5f5",
+    fontWeight: 700,
+    fontSize: "0.78rem",
+    color: "#555",
+    borderBottom: "1px solid #e0e0e0",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+  suggestionItem: {
+    padding: "10px 12px",
+    cursor: "pointer",
+    fontSize: "0.88rem",
+    borderBottom: "1px solid #f0f0f0",
+    transition: "background-color 0.15s",
+  },
 };
 
 function toneForStat(kind) {
@@ -625,6 +659,8 @@ export default function HistorialAuditoria() {
   const [ordenFecha, setOrdenFecha] = useState("DESC");
   const [busquedaInput, setBusquedaInput] = useState("");
   const [busquedaBackend, setBusquedaBackend] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [filtros, setFiltros] = useState({
     tabla: "",
@@ -746,6 +782,36 @@ export default function HistorialAuditoria() {
   const handleSearch = (e) => {
     e?.preventDefault();
     setBusquedaBackend(busquedaInput.trim());
+    setFiltros((f) => ({ ...f, page: 1 }));
+    setShowSuggestions(false);
+  };
+
+  const fetchSuggestions = async (term) => {
+    if (term.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      console.log("🔍 Buscando sugerencias para:", term);
+      const { data } = await getSearchSuggestions(term);
+      console.log("📦 Sugerencias recibidas:", data);
+      if (data.ok) {
+        setSuggestions(data.suggestions);
+        setShowSuggestions(data.suggestions.length > 0);
+      }
+    } catch (error) {
+      console.error("❌ Error al obtener sugerencias:", error);
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion) => {
+    setBusquedaInput(suggestion.searchTerm);
+    setBusquedaBackend(suggestion.searchTerm);
+    setShowSuggestions(false);
     setFiltros((f) => ({ ...f, page: 1 }));
   };
 
@@ -910,12 +976,54 @@ export default function HistorialAuditoria() {
         {filtrosVisibles && (
           <form onSubmit={handleSearch}>
             <div style={S.filtersGrid}>
-              <div style={{ ...S.inputWrap, gridColumn: "span 2" }}>
+              <div style={{ ...S.inputWrap, gridColumn: "span 2", position: "relative" }}>
                 <div style={S.label}>🔍 Búsqueda</div>
                 <div style={S.quickSearchWrap}>
                   <span style={S.quickIcon}>⌕</span>
-                  <input value={busquedaInput} onChange={(e) => setBusquedaInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleSearch(e); }} placeholder="Ej: Fertilizante, 12321..." style={{ ...S.control, paddingLeft: 30, ...(focusKey === "busqueda" ? S.controlFocus : null) }} onFocus={() => setFocusKey("busqueda")} onBlur={() => setFocusKey("")} />
+                  <input
+                    value={busquedaInput}
+                    onChange={(e) => {
+                      setBusquedaInput(e.target.value);
+                      fetchSuggestions(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSearch(e);
+                      if (e.key === "Escape") setShowSuggestions(false);
+                    }}
+                    placeholder="Busca por nombre, ID, código, CUIT..."
+                    style={{ ...S.control, paddingLeft: 30, ...(focusKey === "busqueda" ? S.controlFocus : null) }}
+                    onFocus={() => setFocusKey("busqueda")}
+                    onBlur={() => {
+                      setFocusKey("");
+                      setTimeout(() => setShowSuggestions(false), 200);
+                    }}
+                  />
                 </div>
+
+                {/* Dropdown de sugerencias */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div style={S.suggestionsDropdown}>
+                    {suggestions.map((category, idx) => (
+                      <div key={idx}>
+                        <div style={S.suggestionCategory}>
+                          {category.icon} {category.category}
+                        </div>
+                        {category.items.map((item, itemIdx) => (
+                          <div
+                            key={itemIdx}
+                            style={S.suggestionItem}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSuggestionClick(item);
+                            }}
+                          >
+                            {item.label}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div style={S.inputWrap}>
                 <div style={S.label}>Tabla</div>
