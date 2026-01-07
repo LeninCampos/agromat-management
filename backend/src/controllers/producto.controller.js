@@ -400,9 +400,16 @@ export const recalcularStock = async (req, res, next) => {
 
 /* =========================================================
    GET /api/productos/exportar-excel
+   MODIFICADO: Incluye Dólares y Euros en el mismo archivo
 ========================================================= */
 export const exportarProductosExcel = async (req, res, next) => {
   try {
+    // 1. Obtener la tasa del Query String
+    const { tasa } = req.query; 
+    
+    // Usamos la tasa que viene del front (ej: 0.95), o 1 si fallara.
+    const tasaCambio = tasa ? parseFloat(tasa) : 1;
+
     const productos = await Producto.findAll({
       include: [
         { model: Proveedor, attributes: ["nombre_proveedor"] },
@@ -429,30 +436,67 @@ export const exportarProductosExcel = async (req, res, next) => {
       })
     );
 
+    // 2. Construir el JSON con ambas monedas
     const datosExcel = productosConFechas.map(({ producto: p, fecha_ultimo_ingreso, fecha_ultimo_egreso }) => {
       const ubicacion = p.SeUbicas?.[0]?.Zona;
       const ubicacionTexto = ubicacion ? `${ubicacion.codigo} (R:${ubicacion.rack} M:${ubicacion.modulo} P:${ubicacion.piso})` : "Sin asignar";
+      
+      const stock = Number(p.stock);
+      const precioUSD = Number(p.precio);
+      const totalUSD = precioUSD * stock;
+
+      // Conversión a Euros
+      const precioEUR = precioUSD * tasaCambio;
+      const totalEUR = totalUSD * tasaCambio;
+
       return {
         "Código": p.id_producto,
         "Producto": p.nombre_producto,
         "Proveedor": p.Proveedor?.nombre_proveedor || "Sin proveedor",
         "Ubicación": ubicacionTexto,
+        "Stock": stock,
+        // Sección DÓLARES
+        "Precio (USD)": precioUSD,
+        "Total (USD)": totalUSD,
+        // Sección EUROS
+        "Precio (EUR)": precioEUR,
+        "Total (EUR)": totalEUR,
+        
         "Último Ingreso": fecha_ultimo_ingreso,
-        "Última Salida": fecha_ultimo_egreso,
-        "Precio": Number(p.precio),
-        "Stock Actual": Number(p.stock),
+        "Última Salida": fecha_ultimo_egreso
       };
     });
 
     const workBook = XLSX.utils.book_new();
     const workSheet = XLSX.utils.json_to_sheet(datosExcel);
-    workSheet["!cols"] = [{ wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 10 }];
+    
+    // Ajustar anchos de columnas para que se vea bien
+    workSheet["!cols"] = [
+        { wch: 15 }, // Código
+        { wch: 30 }, // Producto
+        { wch: 20 }, // Proveedor
+        { wch: 20 }, // Ubicación
+        { wch: 8 },  // Stock
+        { wch: 12 }, // Precio USD
+        { wch: 15 }, // Total USD
+        { wch: 12 }, // Precio EUR
+        { wch: 15 }, // Total EUR
+        { wch: 15 }, // Ingreso
+        { wch: 15 }  // Salida
+    ];
+
     XLSX.utils.book_append_sheet(workBook, workSheet, "Inventario");
 
     const excelBuffer = XLSX.write(workBook, { bookType: "xlsx", type: "buffer" });
-    res.setHeader("Content-Disposition", "attachment; filename=Inventario.xlsx");
+    
+    // Nombre del archivo (le ponemos la fecha)
+    const dateStr = new Date().toISOString().slice(0,10);
+    const filename = `Inventario_Global_${dateStr}.xlsx`;
+    
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.send(excelBuffer);
+
   } catch (err) {
     console.error("ERROR exportarProductosExcel:", err);
     next(err);

@@ -17,9 +17,14 @@ export const updateProducto = (id, data) => api.put(`/productos/${id}`, data);
 // DELETE eliminar producto (uno)
 export const deleteProducto = (id) => api.delete(`/productos/${id}`);
 
-export const descargarInventarioExcel = () =>
+// MODIFICADO: Ahora acepta moneda y tasa para enviarlos al backend
+export const descargarInventarioExcel = (moneda = "USD", tasa = 1) =>
   api.get("/productos/exportar-excel", {
     responseType: "blob",
+    params: {
+      moneda,
+      tasa,
+    },
   });
 
 // DELETE eliminar productos múltiples
