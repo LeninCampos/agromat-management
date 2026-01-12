@@ -7,10 +7,9 @@ import { getPedidos, createPedido, updatePedido, deletePedido } from "../api/ped
 import { getProductos } from "../api/productos";
 import { getClientes } from "../api/clientes";
 import { getEmpleados } from "../api/empleados";
-import logoAgromat from "../assets/agromat-logo.png"; //
+import logoAgromat from "../assets/agromat-logo.png"; 
 import {
-  ArrowUp, ArrowDown, ArrowUpDown,
-  CheckCircle, Clock, XCircle, Truck, Package, FileText, Download
+  CheckCircle, Clock, XCircle, Package, Download
 } from "lucide-react";
 
 // =============================
@@ -63,6 +62,17 @@ export default function Pedidos() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Estados de Divisa (para nuevo pedido)
+  const [currency, setCurrency] = useState("USD"); // Moneda seleccionada para el NUEVO pedido
+  const [exchangeRate, setExchangeRate] = useState(0.92);
+
+  useEffect(() => {
+    fetch("https://api.frankfurter.app/latest?from=USD&to=EUR")
+      .then(res => res.json())
+      .then(data => { if (data?.rates?.EUR) setExchangeRate(data.rates.EUR); })
+      .catch(console.error);
+  }, []);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -97,14 +107,33 @@ export default function Pedidos() {
 
   useEffect(() => { load(); }, []);
 
+  // Helper para visualizar precios
+  // Si se pasa 'rate' se usa ese (para pedidos históricos), si no, 1 (USD)
+  const formatMoney = (amountUSD, currencyCode, rate = 1) => {
+    const value = currencyCode === 'EUR' ? amountUSD * rate : amountUSD;
+    return Number(value).toLocaleString("es-ES", {
+      style: "currency",
+      currency: currencyCode || 'USD'
+    });
+  };
+
   // =============================
-  // Lógica de PDF
+  // Lógica de PDF (Inteligente)
   // =============================
   const descargarPDF = (pedido) => {
     const doc = new jsPDF();
+    
+    // Usar la moneda y tasa con la que se guardó el pedido
+    const mon = pedido.moneda || 'USD';
+    const tasa = Number(pedido.tasa_cambio) || 1;
+    const simbolo = mon === 'EUR' ? '€' : '$';
 
-    // Encabezado con Logo
-    // Nota: Asegúrate de que la ruta a tu logo sea correcta
+    // Función helper interna para el PDF
+    const fmt = (val) => {
+        const num = mon === 'EUR' ? val * tasa : val;
+        return `${simbolo}${Number(num).toFixed(2)}`;
+    };
+
     doc.addImage(logoAgromat, 'PNG', 15, 10, 25, 25);
     doc.setFontSize(22);
     doc.setTextColor(79, 70, 229);
@@ -112,7 +141,6 @@ export default function Pedidos() {
     doc.setFontSize(10);
     doc.setTextColor(100);
 
-    // Información del Pedido
     doc.setTextColor(0);
     doc.setFontSize(12);
     doc.text(`COTIZACIÓN DE PEDIDO: #${pedido.id_pedido}`, 15, 45);
@@ -120,31 +148,28 @@ export default function Pedidos() {
     doc.text(`Cliente: ${pedido.Cliente?.nombre_cliente || 'N/A'}`, 15, 52);
     doc.text(`Contacto: ${pedido.quien_pidio || '-'}`, 15, 57);
     doc.text(`Fecha: ${pedido.fecha_pedido}`, 150, 45);
-    doc.text(`Vendedor: ${pedido.Empleado?.nombre_empleado || 'N/A'}`, 150, 52);
+    doc.text(`Moneda: ${mon}`, 150, 50); // Mostrar moneda en el PDF
 
-    // Tabla de productos
     const tableBody = pedido.items.map(it => [
       it.id_producto,
       it.nombre_producto,
-      `$${Number(it.precio_unitario).toFixed(2)}`,
+      fmt(it.precio_unitario), // Convertir precio unitario
       it.cantidad,
-      `$${(it.cantidad * it.precio_unitario).toFixed(2)}`
+      fmt(it.cantidad * it.precio_unitario) // Convertir subtotal
     ]);
 
-    // ✅ SOLUCIÓN AL ERROR: Llamar a autoTable directamente pasándole el 'doc'
     autoTable(doc, {
       startY: 65,
-      head: [['Código', 'Producto', 'P. Unitario', 'Cant.', 'Subtotal']],
+      head: [[`Código`, `Producto`, `P. Unitario (${mon})`, `Cant.`, `Subtotal (${mon})`]],
       body: tableBody,
       headStyles: { fillColor: [79, 70, 229] },
       theme: 'striped',
     });
 
-    // Totales
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text(`TOTAL FINAL: $${Number(pedido.total).toFixed(2)}`, 140, finalY);
+    doc.text(`TOTAL FINAL: ${fmt(pedido.total)}`, 140, finalY);
 
     doc.save(`Cotizacion_Agromat_${pedido.id_pedido}.pdf`);
   };
@@ -194,7 +219,15 @@ export default function Pedidos() {
     e.preventDefault();
     if (!form.items.length) return Swal.fire("Error", "Agrega al menos un producto", "warning");
     try {
-      const payload = { ...form, id_empleado: Number(form.id_empleado), id_cliente: Number(form.id_cliente) };
+      // Enviamos la moneda y tasa actual al crear
+      const payload = { 
+          ...form, 
+          id_empleado: Number(form.id_empleado), 
+          id_cliente: Number(form.id_cliente),
+          moneda: currency,
+          tasa: exchangeRate
+      };
+      
       editingId ? await updatePedido(editingId, payload) : await createPedido(payload);
       Swal.fire("Éxito", "Operación completada", "success");
       setModalOpen(false); load();
@@ -203,7 +236,14 @@ export default function Pedidos() {
     }
   };
 
+  // Cálculo del total en tiempo real (en la moneda seleccionada)
   const totalCalculado = form.items.reduce((acc, it) => acc + (it.cantidad * it.precio_unitario), 0);
+  
+  // Si estamos en EUR, el total calculado ya está en EUR visualmente, pero necesitamos saber si mostramos conversión
+  const displayTotalModal = formatMoney(totalCalculado, currency, 1); 
+  // Nota: Aquí usamos rate=1 porque el precio_unitario en el form ya lo vamos a guardar como 'base'.
+  // PERO, para la visualización correcta en el modal:
+  // Si currency es EUR, los precios en el select deben verse en EUR.
 
   return (
     <div style={S.page}>
@@ -216,6 +256,7 @@ export default function Pedidos() {
 
       {/* Barra de Filtros */}
       <div style={S.filterBar}>
+        {/* ... filtros existentes ... */}
         <div style={{ flex: 2, minWidth: "150px" }}>
           <label className="text-xs font-bold text-gray-400 mb-1 block">Cliente / Contacto</label>
           <input type="text" className="agromat-input" placeholder="Buscar..." value={filters.client} onChange={e => setFilters({ ...filters, client: e.target.value })} />
@@ -259,7 +300,13 @@ export default function Pedidos() {
                   <div className="text-xs text-gray-400">{row.quien_pidio}</div>
                 </td>
                 <td style={S.td} className="text-center flex justify-center">{getStatusBadge(row.status)}</td>
-                <td style={S.td} className="text-right font-bold text-gray-900">${Number(row.total).toFixed(2)}</td>
+                
+                {/* Visualización del Total Histórico */}
+                <td style={S.td} className="text-right font-bold text-gray-900">
+                    {/* Usamos el moneda y tasa GUARDADOS en la DB */}
+                    {formatMoney(row.total, row.moneda, row.tasa_cambio)}
+                </td>
+                
                 <td style={S.td}>
                   <div className="flex gap-2 justify-center">
                     <button title="Exportar Cotización" style={S.btnAction("#4F46E5")} onClick={() => descargarPDF(row)}><Download size={14} /></button>
@@ -275,7 +322,7 @@ export default function Pedidos() {
         </table>
       </div>
 
-      {/* Paginación */}
+      {/* Paginación (Sin cambios) */}
       <div className="mt-4 flex justify-between items-center px-2">
         <span className="text-xs font-bold text-gray-400">Total: {processedItems.length} registros</span>
         <div className="flex gap-1">
@@ -285,7 +332,7 @@ export default function Pedidos() {
         </div>
       </div>
 
-      {/* Modal Simplificado */}
+      {/* Modal */}
       {modalOpen && (
         <div className="agromat-modal-backdrop">
           <div className="agromat-modal-card" style={{ maxWidth: "800px" }}>
@@ -299,6 +346,18 @@ export default function Pedidos() {
                 <div className="agromat-form-field"><label>Estado</label><select className="agromat-select" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                 <div className="agromat-form-field"><label>Cliente</label><select className="agromat-select" value={form.id_cliente} onChange={e => setForm({ ...form, id_cliente: e.target.value })} required><option value="">Selecciona...</option>{clientes.map(c => <option key={c.id_cliente} value={c.id_cliente}>{c.nombre_cliente}</option>)}</select></div>
                 <div className="agromat-form-field"><label>Vendedor</label><select className="agromat-select" value={form.id_empleado} onChange={e => setForm({ ...form, id_empleado: e.target.value })} required><option value="">Selecciona...</option>{empleados.map(e => <option key={e.id_empleado} value={e.id_empleado}>{e.nombre_empleado}</option>)}</select></div>
+                
+                {/* SELECTOR DE MONEDA (Solo visible al crear) */}
+                {!editingId && (
+                    <div className="agromat-form-field">
+                        <label>Moneda</label>
+                        <div style={{display: 'flex', gap: '5px'}}>
+                            <button type="button" onClick={() => setCurrency("USD")} style={{padding:'8px', border: currency==='USD' ? '2px solid blue' : '1px solid #ddd', borderRadius: '6px'}}>USD</button>
+                            <button type="button" onClick={() => setCurrency("EUR")} style={{padding:'8px', border: currency==='EUR' ? '2px solid blue' : '1px solid #ddd', borderRadius: '6px'}}>EUR</button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="agromat-form-field"><label>Remito</label><input type="text" className="agromat-input" value={form.numero_remito} onChange={e => setForm({ ...form, numero_remito: e.target.value })} /></div>
                 <div className="agromat-form-field"><label>Contacto</label><input type="text" className="agromat-input" value={form.quien_pidio} onChange={e => setForm({ ...form, quien_pidio: e.target.value })} /></div>
               </div>
@@ -306,26 +365,42 @@ export default function Pedidos() {
               {/* Items */}
               <div className="mt-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
                 <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-bold text-gray-700 text-sm">Productos</h4>
-                  <span className="text-indigo-600 font-black">Subtotal: ${totalCalculado.toFixed(2)}</span>
+                  <h4 className="font-bold text-gray-700 text-sm">Productos ({currency})</h4>
+                  {/* Total visual en la moneda seleccionada */}
+                  <span className="text-indigo-600 font-black">
+                      Subtotal: {formatMoney(totalCalculado, currency, 1)}
+                  </span>
                 </div>
                 <div className="flex gap-2 mb-4">
                   <select className="agromat-select flex-1" value={nuevoItem.id_producto} onChange={e => setNuevoItem({ ...nuevoItem, id_producto: e.target.value })}>
                     <option value="">Buscar producto...</option>
-                    {productos.map(p => <option key={p.id_producto} value={p.id_producto}>{p.nombre_producto} (${p.precio})</option>)}
+                    {productos.map(p => {
+                        // Visualización del precio en el Select
+                        const precioVisual = currency === 'EUR' ? p.precio * exchangeRate : p.precio;
+                        return (
+                            <option key={p.id_producto} value={p.id_producto}>
+                                {p.nombre_producto} ({formatMoney(p.precio, currency, exchangeRate)})
+                            </option>
+                        );
+                    })}
                   </select>
                   <input type="number" className="agromat-input w-20" min="1" value={nuevoItem.cantidad} onChange={e => setNuevoItem({ ...nuevoItem, cantidad: e.target.value })} />
                   <button type="button" className="agromat-btn-primary px-4" onClick={() => {
                     if (!nuevoItem.id_producto) return;
                     const prod = productos.find(p => p.id_producto === nuevoItem.id_producto);
-                    setForm(prev => ({ ...prev, items: [...prev.items, { ...nuevoItem, nombre_producto: prod.nombre_producto, precio_unitario: prod.precio }] }));
+                    
+                    // Al agregar al carrito del formulario, guardamos el precio VISUAL
+                    // El backend se encargará de buscar el precio real en USD
+                    const precioParaForm = currency === 'EUR' ? prod.precio * exchangeRate : prod.precio;
+                    
+                    setForm(prev => ({ ...prev, items: [...prev.items, { ...nuevoItem, nombre_producto: prod.nombre_producto, precio_unitario: precioParaForm }] }));
                     setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 });
                   }}>+</button>
                 </div>
                 <div className="max-h-40 overflow-y-auto">
                   {form.items.map((it, idx) => (
                     <div key={idx} className="flex justify-between py-2 border-b text-xs">
-                      <span>{it.nombre_producto} <b>x{it.cantidad}</b></span>
+                      <span>{it.nombre_producto} <b>x{it.cantidad}</b> ({formatMoney(it.precio_unitario, currency, 1)})</span>
                       <button type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))} className="text-red-500 font-black">✕</button>
                     </div>
                   ))}

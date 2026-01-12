@@ -130,9 +130,13 @@ export const createPedido = async (req, res, next) => {
       fecha_pedido, hora_pedido, status, id_empleado, id_cliente, direccion_envio,
       descuento_total = 0, impuesto_total = 0, items = [],
       quien_pidio, fecha_entrega_estimada, observaciones, numero_remito,
+      moneda, tasa // Recibimos la configuración de divisa
     } = req.body;
 
-    // Verificar si el estado requiere validación y descuento de stock
+    const monedaFinal = moneda || 'USD';
+    const tasaFinal = (monedaFinal === 'EUR' && tasa) ? parseFloat(tasa) : 1;
+
+    // Verificar Stock
     if (debeDescontarStock(status)) {
       try {
         await verificarStockDisponible(items, t);
@@ -142,27 +146,44 @@ export const createPedido = async (req, res, next) => {
       }
     }
 
+    // Crear cabecera con moneda y tasa
     const pedido = await Pedido.create({
       fecha_pedido, hora_pedido, status, id_empleado, id_cliente, direccion_envio,
-      subtotal: 0, descuento_total, impuesto_total, total: 0, last_change: "Pedido creado",
+      subtotal: 0, descuento_total, impuesto_total, total: 0, 
+      last_change: "Pedido creado",
       quien_pidio: quien_pidio || null,
       fecha_entrega_estimada: fecha_entrega_estimada || null,
       observaciones: observaciones || null,
       numero_remito: numero_remito || null,
+      moneda: monedaFinal,
+      tasa_cambio: tasaFinal
     }, { transaction: t, ...auditOptions });
 
-    const lineas = items.map((i) => ({
-      id_pedido: pedido.id_pedido,
-      id_producto: i.id_producto,
-      cantidad: i.cantidad,
-      precio_unitario: i.precio_unitario,
-      subtotal_linea: calcSubtotalLine(i.cantidad, i.precio_unitario),
-    }));
+    // Preparar Items: Forzar uso de precio en USD desde la DB
+    const productIds = items.map(i => i.id_producto);
+    const dbProducts = await Producto.findAll({ 
+        where: { id_producto: productIds },
+        attributes: ['id_producto', 'precio'],
+        transaction: t 
+    });
+
+    const lineas = items.map((i) => {
+      const prodDB = dbProducts.find(p => p.id_producto === i.id_producto);
+      // El precio base SIEMPRE es el de la DB (USD), ignoramos lo que envíe el front como precio
+      const precioBaseUSD = prodDB ? Number(prodDB.precio) : 0;
+      
+      return {
+        id_pedido: pedido.id_pedido,
+        id_producto: i.id_producto,
+        cantidad: i.cantidad,
+        precio_unitario: precioBaseUSD, 
+        subtotal_linea: (precioBaseUSD * Number(i.cantidad)).toFixed(2),
+      };
+    });
 
     if (lineas.length > 0) {
       await Contiene.bulkCreate(lineas, { transaction: t, ...auditOptions });
       
-      // Solo actualizamos stock si el estado NO es pendiente ni cancelado
       if (debeDescontarStock(status)) {
         await actualizarStockProductos(items, 'restar', t, auditOptions);
       }
@@ -199,23 +220,20 @@ export const updatePedido = async (req, res, next) => {
     const newStatus = headerData.status !== undefined ? headerData.status : oldStatus;
     const statusChanged = oldStatus !== newStatus;
 
-    // Actualizar cabecera
+    // Actualizar cabecera (Nota: No permitimos cambiar la moneda o tasa en edición para no romper historial)
     await pedido.update({
       ...headerData,
       numero_remito: headerData.numero_remito !== undefined ? headerData.numero_remito : pedido.numero_remito,
       last_change: `Actualizado el ${new Date().toLocaleString()}`,
     }, { transaction: t, ...auditOptions });
 
-    // CASO 1: Se envían nuevos items (Reemplazo total de items)
     if (items && Array.isArray(items)) {
       const itemsAnteriores = await obtenerItemsPedido(id, t);
       
-      // 1. Restaurar stock de items anteriores SI el estado anterior descontaba stock
       if (debeDescontarStock(oldStatus) && itemsAnteriores.length > 0) {
         await actualizarStockProductos(itemsAnteriores, 'sumar', t, auditOptions);
       }
 
-      // 2. Verificar disponibilidad para nuevos items SI el nuevo estado descuenta stock
       if (debeDescontarStock(newStatus)) {
         try {
             await verificarStockDisponible(items, t);
@@ -225,36 +243,43 @@ export const updatePedido = async (req, res, next) => {
         }
       }
 
-      // 3. Reemplazar items en DB
       await Contiene.destroy({ where: { id_pedido: id }, transaction: t });
       
-      const lineas = items.map((i) => ({
-        id_pedido: id,
-        id_producto: i.id_producto,
-        cantidad: i.cantidad,
-        precio_unitario: i.precio_unitario,
-        subtotal_linea: calcSubtotalLine(i.cantidad, i.precio_unitario),
-      }));
+      // Fetch fresh prices for update
+      const productIds = items.map(i => i.id_producto);
+      const dbProducts = await Producto.findAll({ 
+          where: { id_producto: productIds },
+          attributes: ['id_producto', 'precio'],
+          transaction: t 
+      });
+
+      const lineas = items.map((i) => {
+        const prodDB = dbProducts.find(p => p.id_producto === i.id_producto);
+        const precioBaseUSD = prodDB ? Number(prodDB.precio) : 0;
+        return {
+            id_pedido: id,
+            id_producto: i.id_producto,
+            cantidad: i.cantidad,
+            precio_unitario: precioBaseUSD,
+            subtotal_linea: (precioBaseUSD * Number(i.cantidad)).toFixed(2),
+        };
+      });
 
       if (lineas.length > 0) {
         await Contiene.bulkCreate(lineas, { transaction: t, ...auditOptions });
         
-        // 4. Restar stock de nuevos items SI el nuevo estado lo requiere
         if (debeDescontarStock(newStatus)) {
           await actualizarStockProductos(items, 'restar', t, auditOptions);
         }
       }
 
     } else if (statusChanged) {
-      // CASO 2: Solo cambió el estado, pero los items son los mismos
       const currentItems = await obtenerItemsPedido(id, t);
       
-      // Si antes descontaba y ahora NO (ej: Entregado -> Cancelado) => RESTAURAR STOCK
       if (debeDescontarStock(oldStatus) && !debeDescontarStock(newStatus)) {
         await actualizarStockProductos(currentItems, 'sumar', t, auditOptions);
       }
       
-      // Si antes NO descontaba y ahora SI (ej: Pendiente -> Entregado) => RESTAR STOCK
       else if (!debeDescontarStock(oldStatus) && debeDescontarStock(newStatus)) {
         try {
             await verificarStockDisponible(currentItems, t);
