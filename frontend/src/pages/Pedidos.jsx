@@ -1,5 +1,5 @@
 // frontend/src/pages/Pedidos.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -81,6 +81,13 @@ export default function Pedidos() {
   const [clientes, setClientes] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [nuevoItem, setNuevoItem] = useState({ id_producto: "", cantidad: 1, precio_unitario: 0 });
+
+  // Autocomplete de productos
+  const [productSearch, setProductSearch] = useState("");
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const productDropdownRef = useRef(null);
+  const productInputRef = useRef(null);
 
   const load = async () => {
     setLoading(true);
@@ -239,17 +246,64 @@ export default function Pedidos() {
   // Cálculo del total en tiempo real (en la moneda seleccionada)
   const totalCalculado = form.items.reduce((acc, it) => acc + (it.cantidad * it.precio_unitario), 0);
   
-  // Si estamos en EUR, el total calculado ya está en EUR visualmente, pero necesitamos saber si mostramos conversión
-  const displayTotalModal = formatMoney(totalCalculado, currency, 1); 
-  // Nota: Aquí usamos rate=1 porque el precio_unitario en el form ya lo vamos a guardar como 'base'.
-  // PERO, para la visualización correcta en el modal:
-  // Si currency es EUR, los precios en el select deben verse en EUR.
+  // Autocomplete: productos filtrados por búsqueda (nombre o código)
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return productos.slice(0, 20);
+    const prefixed = [];
+    const contained = [];
+    for (const p of productos) {
+      const nombre = p.nombre_producto.toLowerCase();
+      const codigo = p.id_producto.toLowerCase();
+      if (nombre.startsWith(q) || codigo.startsWith(q)) prefixed.push(p);
+      else if (nombre.includes(q) || codigo.includes(q)) contained.push(p);
+    }
+    return [...prefixed, ...contained].slice(0, 20);
+  }, [productos, productSearch]);
+
+  const selectProduct = useCallback((prod) => {
+    setNuevoItem(prev => ({ ...prev, id_producto: prod.id_producto }));
+    setProductSearch(`${prod.nombre_producto} — ${prod.id_producto}`);
+    setShowProductDropdown(false);
+    setHighlightedIndex(-1);
+  }, []);
+
+  const handleProductKeyDown = useCallback((e) => {
+    if (!showProductDropdown) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev < filteredProducts.length - 1 ? prev + 1 : 0));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : filteredProducts.length - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && filteredProducts[highlightedIndex]) {
+        selectProduct(filteredProducts[highlightedIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setShowProductDropdown(false);
+      setHighlightedIndex(-1);
+    }
+  }, [showProductDropdown, filteredProducts, highlightedIndex, selectProduct]);
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (productDropdownRef.current && !productDropdownRef.current.contains(e.target)) {
+        setShowProductDropdown(false);
+        setHighlightedIndex(-1);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <div style={S.page}>
       <div style={S.header}>
         <h2 style={S.title}>📦 Gestión de Pedidos</h2>
-        <button className="agromat-btn-primary" onClick={() => { setEditingId(null); setForm({ ...emptyForm, fecha_pedido: new Date().toISOString().split('T')[0], hora_pedido: new Date().toTimeString().slice(0, 5) }); setModalOpen(true); }}>
+        <button className="agromat-btn-primary" onClick={() => { setEditingId(null); setForm({ ...emptyForm, fecha_pedido: new Date().toISOString().split('T')[0], hora_pedido: new Date().toTimeString().slice(0, 5) }); setProductSearch(""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>
           + Nuevo Pedido
         </button>
       </div>
@@ -310,7 +364,7 @@ export default function Pedidos() {
                 <td style={S.td}>
                   <div className="flex gap-2 justify-center">
                     <button title="Exportar Cotización" style={S.btnAction("#4F46E5")} onClick={() => descargarPDF(row)}><Download size={14} /></button>
-                    <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setModalOpen(true); }}>Editar</button>
+                    <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setProductSearch(""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>Editar</button>
                     <button style={S.btnAction("#DC2626")} onClick={() => {
                       Swal.fire({ title: '¿Eliminar?', icon: 'warning', showCancelButton: true }).then(r => r.isConfirmed && deletePedido(row.id_pedido).then(() => load()));
                     }}>Borrar</button>
@@ -372,29 +426,72 @@ export default function Pedidos() {
                   </span>
                 </div>
                 <div className="flex gap-2 mb-4">
-                  <select className="agromat-select flex-1" value={nuevoItem.id_producto} onChange={e => setNuevoItem({ ...nuevoItem, id_producto: e.target.value })}>
-                    <option value="">Buscar producto...</option>
-                    {productos.map(p => {
-                        // Visualización del precio en el Select
-                        const precioVisual = currency === 'EUR' ? p.precio * exchangeRate : p.precio;
-                        return (
-                            <option key={p.id_producto} value={p.id_producto}>
-                                {p.nombre_producto} ({formatMoney(p.precio, currency, exchangeRate)})
-                            </option>
-                        );
-                    })}
-                  </select>
+                  {/* Autocomplete de productos */}
+                  <div ref={productDropdownRef} style={{ position: "relative", flex: 1 }}>
+                    <input
+                      ref={productInputRef}
+                      type="text"
+                      className="agromat-input"
+                      style={{ width: "100%" }}
+                      placeholder="Buscar producto por nombre o código..."
+                      value={productSearch}
+                      onChange={e => {
+                        setProductSearch(e.target.value);
+                        setShowProductDropdown(true);
+                        setHighlightedIndex(-1);
+                        // Limpiar selección si el usuario edita el texto
+                        if (nuevoItem.id_producto) setNuevoItem(prev => ({ ...prev, id_producto: "" }));
+                      }}
+                      onFocus={() => setShowProductDropdown(true)}
+                      onKeyDown={handleProductKeyDown}
+                      autoComplete="off"
+                    />
+                    {showProductDropdown && (
+                      <div style={{
+                        position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+                        background: "white", border: "1px solid #e5e7eb", borderRadius: "10px",
+                        boxShadow: "0 4px 16px rgba(0,0,0,0.10)", marginTop: "4px",
+                        maxHeight: "240px", overflowY: "auto"
+                      }}>
+                        {filteredProducts.length === 0 ? (
+                          <div style={{ padding: "12px 16px", color: "#9CA3AF", fontStyle: "italic", fontSize: "0.85rem" }}>
+                            No se encontraron productos
+                          </div>
+                        ) : filteredProducts.map((p, idx) => (
+                          <div
+                            key={p.id_producto}
+                            style={{
+                              padding: "10px 14px", cursor: "pointer", fontSize: "0.85rem",
+                              display: "flex", justifyContent: "space-between", alignItems: "center",
+                              background: idx === highlightedIndex ? "#EEF2FF" : "transparent",
+                              borderBottom: idx < filteredProducts.length - 1 ? "1px solid #f3f4f6" : "none"
+                            }}
+                            onMouseEnter={() => setHighlightedIndex(idx)}
+                            onMouseDown={(e) => { e.preventDefault(); selectProduct(p); }}
+                          >
+                            <span>
+                              <span style={{ fontWeight: 700, color: "#1F2937" }}>{p.nombre_producto}</span>
+                              <span style={{ color: "#9CA3AF", marginLeft: "6px" }}>— {p.id_producto}</span>
+                            </span>
+                            <span style={{ fontWeight: 600, color: "#4F46E5", fontSize: "0.8rem", whiteSpace: "nowrap", marginLeft: "12px" }}>
+                              {formatMoney(p.precio, currency, exchangeRate)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <input type="number" className="agromat-input w-20" min="1" value={nuevoItem.cantidad} onChange={e => setNuevoItem({ ...nuevoItem, cantidad: e.target.value })} />
                   <button type="button" className="agromat-btn-primary px-4" onClick={() => {
                     if (!nuevoItem.id_producto) return;
                     const prod = productos.find(p => p.id_producto === nuevoItem.id_producto);
-                    
-                    // Al agregar al carrito del formulario, guardamos el precio VISUAL
-                    // El backend se encargará de buscar el precio real en USD
+                    if (!prod) return;
+
                     const precioParaForm = currency === 'EUR' ? prod.precio * exchangeRate : prod.precio;
-                    
+
                     setForm(prev => ({ ...prev, items: [...prev.items, { ...nuevoItem, nombre_producto: prod.nombre_producto, precio_unitario: precioParaForm }] }));
                     setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 });
+                    setProductSearch("");
                   }}>+</button>
                 </div>
                 <div className="max-h-40 overflow-y-auto">
