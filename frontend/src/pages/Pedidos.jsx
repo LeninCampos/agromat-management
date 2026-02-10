@@ -62,14 +62,14 @@ export default function Pedidos() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Estados de Divisa (para nuevo pedido)
-  const [currency, setCurrency] = useState("USD"); // Moneda seleccionada para el NUEVO pedido
-  const [exchangeRate, setExchangeRate] = useState(0.92);
+  // Estados de Divisa (para nuevo pedido) - Base: EUR
+  const [currency, setCurrency] = useState("EUR");
+  const [exchangeRate, setExchangeRate] = useState(1.09); // Tasa EUR→USD
 
   useEffect(() => {
-    fetch("https://api.frankfurter.app/latest?from=USD&to=EUR")
+    fetch("https://api.frankfurter.app/latest?from=EUR&to=USD")
       .then(res => res.json())
-      .then(data => { if (data?.rates?.EUR) setExchangeRate(data.rates.EUR); })
+      .then(data => { if (data?.rates?.USD) setExchangeRate(data.rates.USD); })
       .catch(console.error);
   }, []);
 
@@ -114,13 +114,13 @@ export default function Pedidos() {
 
   useEffect(() => { load(); }, []);
 
-  // Helper para visualizar precios
-  // Si se pasa 'rate' se usa ese (para pedidos históricos), si no, 1 (USD)
-  const formatMoney = (amountUSD, currencyCode, rate = 1) => {
-    const value = currencyCode === 'EUR' ? amountUSD * rate : amountUSD;
+  // Helper para visualizar precios (base EUR)
+  // Si se pasa 'rate' se usa ese (para pedidos históricos), si no, 1 (EUR)
+  const formatMoney = (amountEUR, currencyCode, rate = 1) => {
+    const value = currencyCode === 'USD' ? amountEUR * rate : amountEUR;
     return Number(value).toLocaleString("es-ES", {
       style: "currency",
-      currency: currencyCode || 'USD'
+      currency: currencyCode || 'EUR'
     });
   };
 
@@ -130,14 +130,14 @@ export default function Pedidos() {
   const descargarPDF = (pedido) => {
     const doc = new jsPDF();
     
-    // Usar la moneda y tasa con la que se guardó el pedido
-    const mon = pedido.moneda || 'USD';
+    // Usar la moneda y tasa con la que se guardó el pedido (base EUR)
+    const mon = pedido.moneda || 'EUR';
     const tasa = Number(pedido.tasa_cambio) || 1;
-    const simbolo = mon === 'EUR' ? '€' : '$';
+    const simbolo = mon === 'USD' ? '$' : '€';
 
     // Función helper interna para el PDF
     const fmt = (val) => {
-        const num = mon === 'EUR' ? val * tasa : val;
+        const num = mon === 'USD' ? val * tasa : val;
         return `${simbolo}${Number(num).toFixed(2)}`;
     };
 
@@ -226,16 +226,21 @@ export default function Pedidos() {
     e.preventDefault();
     if (!form.items.length) return Swal.fire("Error", "Agrega al menos un producto", "warning");
     try {
-      // Enviamos la moneda y tasa actual al crear
-      const payload = { 
-          ...form, 
-          id_empleado: Number(form.id_empleado), 
+      const payload = {
+          ...form,
+          id_empleado: Number(form.id_empleado),
           id_cliente: Number(form.id_cliente),
-          moneda: currency,
-          tasa: exchangeRate
       };
-      
-      editingId ? await updatePedido(editingId, payload) : await createPedido(payload);
+
+      if (editingId) {
+        // Al editar, NO enviamos moneda/tasa para no corromper historial
+        await updatePedido(editingId, payload);
+      } else {
+        // Al crear, sí enviamos la moneda y tasa actual
+        payload.moneda = currency;
+        payload.tasa = exchangeRate;
+        await createPedido(payload);
+      }
       Swal.fire("Éxito", "Operación completada", "success");
       setModalOpen(false); load();
     } catch (e) {
@@ -364,7 +369,7 @@ export default function Pedidos() {
                 <td style={S.td}>
                   <div className="flex gap-2 justify-center">
                     <button title="Exportar Cotización" style={S.btnAction("#4F46E5")} onClick={() => descargarPDF(row)}><Download size={14} /></button>
-                    <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setProductSearch(""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>Editar</button>
+                    <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setCurrency(row.moneda || 'EUR'); setProductSearch(""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>Editar</button>
                     <button style={S.btnAction("#DC2626")} onClick={() => {
                       Swal.fire({ title: '¿Eliminar?', icon: 'warning', showCancelButton: true }).then(r => r.isConfirmed && deletePedido(row.id_pedido).then(() => load()));
                     }}>Borrar</button>
@@ -406,8 +411,8 @@ export default function Pedidos() {
                     <div className="agromat-form-field">
                         <label>Moneda</label>
                         <div style={{display: 'flex', gap: '5px'}}>
-                            <button type="button" onClick={() => setCurrency("USD")} style={{padding:'8px', border: currency==='USD' ? '2px solid blue' : '1px solid #ddd', borderRadius: '6px'}}>USD</button>
                             <button type="button" onClick={() => setCurrency("EUR")} style={{padding:'8px', border: currency==='EUR' ? '2px solid blue' : '1px solid #ddd', borderRadius: '6px'}}>EUR</button>
+                            <button type="button" onClick={() => setCurrency("USD")} style={{padding:'8px', border: currency==='USD' ? '2px solid blue' : '1px solid #ddd', borderRadius: '6px'}}>USD</button>
                         </div>
                     </div>
                 )}
@@ -481,13 +486,13 @@ export default function Pedidos() {
                       </div>
                     )}
                   </div>
-                  <input type="number" className="agromat-input w-20" min="1" value={nuevoItem.cantidad} onChange={e => setNuevoItem({ ...nuevoItem, cantidad: e.target.value })} />
+                  <input type="number" className="agromat-input w-20" min="1" value={nuevoItem.cantidad} onChange={e => setNuevoItem({ ...nuevoItem, cantidad: parseInt(e.target.value) || 1 })} />
                   <button type="button" className="agromat-btn-primary px-4" onClick={() => {
                     if (!nuevoItem.id_producto) return;
                     const prod = productos.find(p => p.id_producto === nuevoItem.id_producto);
                     if (!prod) return;
 
-                    const precioParaForm = currency === 'EUR' ? prod.precio * exchangeRate : prod.precio;
+                    const precioParaForm = currency === 'USD' ? prod.precio * exchangeRate : prod.precio;
 
                     setForm(prev => ({ ...prev, items: [...prev.items, { ...nuevoItem, nombre_producto: prod.nombre_producto, precio_unitario: precioParaForm }] }));
                     setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 });

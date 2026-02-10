@@ -133,8 +133,8 @@ export const createPedido = async (req, res, next) => {
       moneda, tasa // Recibimos la configuración de divisa
     } = req.body;
 
-    const monedaFinal = moneda || 'USD';
-    const tasaFinal = (monedaFinal === 'EUR' && tasa) ? parseFloat(tasa) : 1;
+    const monedaFinal = moneda || 'EUR';
+    const tasaFinal = (monedaFinal === 'USD' && tasa) ? parseFloat(tasa) : 1;
 
     // Verificar Stock
     if (debeDescontarStock(status)) {
@@ -159,25 +159,25 @@ export const createPedido = async (req, res, next) => {
       tasa_cambio: tasaFinal
     }, { transaction: t, ...auditOptions });
 
-    // Preparar Items: Forzar uso de precio en USD desde la DB
+    // Preparar Items: Forzar uso de precio en EUR desde la DB
     const productIds = items.map(i => i.id_producto);
-    const dbProducts = await Producto.findAll({ 
+    const dbProducts = await Producto.findAll({
         where: { id_producto: productIds },
         attributes: ['id_producto', 'precio'],
-        transaction: t 
+        transaction: t
     });
 
     const lineas = items.map((i) => {
       const prodDB = dbProducts.find(p => p.id_producto === i.id_producto);
-      // El precio base SIEMPRE es el de la DB (USD), ignoramos lo que envíe el front como precio
-      const precioBaseUSD = prodDB ? Number(prodDB.precio) : 0;
-      
+      // El precio base SIEMPRE es el de la DB (EUR), ignoramos lo que envíe el front como precio
+      const precioBaseEUR = prodDB ? Number(prodDB.precio) : 0;
+
       return {
         id_pedido: pedido.id_pedido,
         id_producto: i.id_producto,
         cantidad: i.cantidad,
-        precio_unitario: precioBaseUSD, 
-        subtotal_linea: (precioBaseUSD * Number(i.cantidad)).toFixed(2),
+        precio_unitario: precioBaseEUR,
+        subtotal_linea: (precioBaseEUR * Number(i.cantidad)).toFixed(2),
       };
     });
 
@@ -208,7 +208,8 @@ export const updatePedido = async (req, res, next) => {
 
   try {
     const { id } = req.params;
-    const { items, ...headerData } = req.body;
+    // Excluir moneda/tasa del update para no corromper historial
+    const { items, moneda, tasa, tasa_cambio, ...headerData } = req.body;
 
     const pedido = await Pedido.findByPk(id, { transaction: t });
     if (!pedido) {
@@ -245,23 +246,23 @@ export const updatePedido = async (req, res, next) => {
 
       await Contiene.destroy({ where: { id_pedido: id }, transaction: t });
       
-      // Fetch fresh prices for update
+      // Fetch fresh prices for update (EUR from DB)
       const productIds = items.map(i => i.id_producto);
-      const dbProducts = await Producto.findAll({ 
+      const dbProducts = await Producto.findAll({
           where: { id_producto: productIds },
           attributes: ['id_producto', 'precio'],
-          transaction: t 
+          transaction: t
       });
 
       const lineas = items.map((i) => {
         const prodDB = dbProducts.find(p => p.id_producto === i.id_producto);
-        const precioBaseUSD = prodDB ? Number(prodDB.precio) : 0;
+        const precioBaseEUR = prodDB ? Number(prodDB.precio) : 0;
         return {
             id_pedido: id,
             id_producto: i.id_producto,
             cantidad: i.cantidad,
-            precio_unitario: precioBaseUSD,
-            subtotal_linea: (precioBaseUSD * Number(i.cantidad)).toFixed(2),
+            precio_unitario: precioBaseEUR,
+            subtotal_linea: (precioBaseEUR * Number(i.cantidad)).toFixed(2),
         };
       });
 
@@ -369,9 +370,12 @@ export const addPedidoItem = async (req, res, next) => {
         }
     }
 
+    // Usar precio de BD (EUR) en vez de confiar en el body
+    const precioBaseEUR = Number(producto.precio) || 0;
     await Contiene.create({
-      id_pedido: id, id_producto, cantidad, precio_unitario,
-      subtotal_linea: calcSubtotalLine(cantidad, precio_unitario),
+      id_pedido: id, id_producto, cantidad,
+      precio_unitario: precioBaseEUR,
+      subtotal_linea: calcSubtotalLine(cantidad, precioBaseEUR),
     }, { transaction: t, ...auditOptions });
 
     // Actualizar stock solo si el estado lo requiere
