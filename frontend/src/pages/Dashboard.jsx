@@ -209,7 +209,7 @@ export default function Dashboard() {
                           <td style={{ padding: "8px", fontWeight: 500 }}>#{p.id_pedido}</td>
                           <td style={{ padding: "8px", color: "#6b7280" }}>{p.fecha_pedido}</td>
                           <td style={{ padding: "8px" }}>{p.Cliente?.nombre_cliente || "N/A"}</td>
-                          <td style={{ padding: "8px", textAlign: "right" }}>${Number(p.total).toFixed(2)}</td>
+                          <td style={{ padding: "8px", textAlign: "right" }}>€{Number(p.total).toFixed(2)}</td>
                           <td style={{ padding: "8px", textAlign: "center" }}>
                             <StatusBadge status={p.status} />
                           </td>

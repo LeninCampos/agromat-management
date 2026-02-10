@@ -22,8 +22,8 @@ export default function Suministros() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados de Tasa de Cambio (Nuevo)
-  const [exchangeRate, setExchangeRate] = useState(0.92);
+  // Estados de Tasa de Cambio (EUR→USD)
+  const [exchangeRate, setExchangeRate] = useState(1.09);
 
   // Modal registro
   const [modalOpen, setModalOpen] = useState(false);
@@ -73,11 +73,11 @@ export default function Suministros() {
 
   useEffect(() => { load(); }, []);
 
-  // Obtener tasa de cambio actual (Igual que en Productos.jsx)
+  // Obtener tasa de cambio actual EUR→USD
   useEffect(() => {
-    fetch("https://api.frankfurter.app/latest?from=USD&to=EUR")
+    fetch("https://api.frankfurter.app/latest?from=EUR&to=USD")
       .then((res) => res.json())
-      .then((data) => { if (data?.rates?.EUR) setExchangeRate(data.rates.EUR); })
+      .then((data) => { if (data?.rates?.USD) setExchangeRate(data.rates.USD); })
       .catch((err) => console.error("Error tasa cambio:", err));
   }, []);
 
@@ -171,19 +171,19 @@ export default function Suministros() {
           <label style="display:block; margin-bottom: 4px; font-weight:600;">Moneda del Excel</label>
           <div style="display:flex; gap: 15px; margin-bottom: 10px;">
             <label style="cursor:pointer; display:flex; alignItems:center; gap:5px;">
-                <input type="radio" name="swal-moneda" value="USD" checked onchange="document.getElementById('div-tasa').style.display='none'">
-                🇺🇸 Dólares (USD)
+                <input type="radio" name="swal-moneda" value="EUR" checked onchange="document.getElementById('div-tasa').style.display='none'">
+                🇪🇺 Euros (EUR)
             </label>
             <label style="cursor:pointer; display:flex; alignItems:center; gap:5px;">
-                <input type="radio" name="swal-moneda" value="EUR" onchange="document.getElementById('div-tasa').style.display='block'">
-                🇪🇺 Euros (EUR)
+                <input type="radio" name="swal-moneda" value="USD" onchange="document.getElementById('div-tasa').style.display='block'">
+                🇺🇸 Dólares (USD)
             </label>
           </div>
 
           <div id="div-tasa" style="display:none; background:#f9fafb; padding:10px; border-radius:8px; margin-bottom:10px;">
-             <label style="display:block; font-size:0.8rem;">Tasa de Cambio (1 USD = X EUR)</label>
+             <label style="display:block; font-size:0.8rem;">Tasa de Cambio (1 EUR = X USD)</label>
              <input id="swal-tasa" type="number" step="0.001" class="swal2-input" style="width:100%; margin:5px 0 0 0;" value="${exchangeRate}">
-             <small style="color:#666;">Se convertirán los precios a USD automáticamente.</small>
+             <small style="color:#666;">Se convertirán los precios a EUR automáticamente.</small>
           </div>
 
           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
@@ -236,8 +236,65 @@ export default function Suministros() {
           headers: { "Content-Type": "multipart/form-data" }
         });
 
-        Swal.fire("Éxito", res.data.mensaje, "success");
-        if (res.data.alertas) Swal.fire("Atención", res.data.alertas, "warning");
+        const { resumen, erroresUbicacion } = res.data;
+
+        // Construir HTML del resumen detallado
+        let htmlResumen = `
+          <div style="text-align:left; font-size:0.9rem;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+              <div style="background:#ecfdf5; padding:10px; border-radius:8px; text-align:center;">
+                <div style="font-size:1.4rem; font-weight:bold; color:#059669;">${resumen?.productosProcesados || 0}</div>
+                <div style="font-size:0.8rem; color:#555;">Productos procesados</div>
+              </div>
+              <div style="background:#eff6ff; padding:10px; border-radius:8px; text-align:center;">
+                <div style="font-size:1.4rem; font-weight:bold; color:#2563eb;">${resumen?.productosCreados || 0}</div>
+                <div style="font-size:0.8rem; color:#555;">Productos nuevos</div>
+              </div>
+              <div style="background:#f0fdf4; padding:10px; border-radius:8px; text-align:center;">
+                <div style="font-size:1.4rem; font-weight:bold; color:#16a34a;">${resumen?.ubicacionesAsignadas || 0}</div>
+                <div style="font-size:0.8rem; color:#555;">Ubicaciones asignadas</div>
+              </div>
+              <div style="background:${resumen?.totalErroresUbicacion ? '#fef2f2' : '#f9fafb'}; padding:10px; border-radius:8px; text-align:center;">
+                <div style="font-size:1.4rem; font-weight:bold; color:${resumen?.totalErroresUbicacion ? '#dc2626' : '#888'};">${resumen?.totalErroresUbicacion || 0}</div>
+                <div style="font-size:0.8rem; color:#555;">Errores ubicación</div>
+              </div>
+            </div>`;
+
+        if (erroresUbicacion && erroresUbicacion.length > 0) {
+          htmlResumen += `
+            <details style="margin-top:8px; background:#fef2f2; padding:10px; border-radius:8px;">
+              <summary style="cursor:pointer; font-weight:600; color:#dc2626; font-size:0.85rem;">
+                Ver errores de ubicación (${erroresUbicacion.length})
+              </summary>
+              <div style="margin-top:8px; max-height:150px; overflow-y:auto;">
+                <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+                  <thead><tr style="background:#fecaca;">
+                    <th style="padding:4px 6px; text-align:left;">Fila</th>
+                    <th style="padding:4px 6px; text-align:left;">Producto</th>
+                    <th style="padding:4px 6px; text-align:left;">Error</th>
+                  </tr></thead>
+                  <tbody>${erroresUbicacion.map(e =>
+                    `<tr style="border-bottom:1px solid #fecaca;">
+                      <td style="padding:4px 6px;">${e.fila}</td>
+                      <td style="padding:4px 6px;">${e.id_producto}</td>
+                      <td style="padding:4px 6px;">${e.errores.join('; ')}</td>
+                    </tr>`
+                  ).join('')}</tbody>
+                </table>
+              </div>
+            </details>`;
+        }
+
+        htmlResumen += `</div>`;
+
+        Swal.fire({
+          title: 'Importación Exitosa',
+          html: htmlResumen,
+          icon: 'success',
+          confirmButtonText: 'Aceptar',
+          width: 500
+        });
+
         load();
       } catch (error) {
         console.error(error);
@@ -375,7 +432,7 @@ export default function Suministros() {
               <div style={{ maxHeight: "300px", overflowY: "auto", border: "1px solid #eee", borderRadius: "8px" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
                   <thead style={{ background: "#f3f4f6", position: "sticky", top: 0 }}>
-                    <tr><th style={{ padding: "8px", textAlign: "left" }}>Foto</th><th style={{ padding: "8px", textAlign: "left" }}>ID Prod.</th><th style={{ padding: "8px", textAlign: "left" }}>Producto</th><th style={{ padding: "8px", textAlign: "right" }}>Cantidad</th></tr>
+                    <tr><th style={{ padding: "8px", textAlign: "left" }}>Foto</th><th style={{ padding: "8px", textAlign: "left" }}>ID Prod.</th><th style={{ padding: "8px", textAlign: "left" }}>Producto</th><th style={{ padding: "8px", textAlign: "center" }}>Ubicación</th><th style={{ padding: "8px", textAlign: "right" }}>Cantidad</th></tr>
                   </thead>
                   <tbody>
                     {selectedSuministro.Suministras && selectedSuministro.Suministras.length > 0 ? (
@@ -384,10 +441,17 @@ export default function Suministros() {
                           <td style={{ padding: "8px" }}>{item.Producto?.imagen_url ? <img src={item.Producto.imagen_url} alt="prod" style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "6px", background: "#f3f4f6" }} /> : <span style={{ color: "#999", fontSize: "0.8rem" }}>Sin foto</span>}</td>
                           <td style={{ padding: "8px" }}>{item.id_producto}</td>
                           <td style={{ padding: "8px" }}>{item.Producto?.nombre_producto || "Producto no encontrado"}</td>
+                          <td style={{ padding: "8px", textAlign: "center" }}>
+                            {item.Producto?.SeUbicas?.[0]?.Zona ? (
+                              <span style={{ background: "#e0f2fe", color: "#0369a1", padding: "2px 8px", borderRadius: "10px", fontSize: "0.8rem", fontWeight: "bold" }}>
+                                {item.Producto.SeUbicas[0].Zona.codigo}
+                              </span>
+                            ) : <span style={{ color: "#999", fontSize: "0.8rem" }}>-</span>}
+                          </td>
                           <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold" }}>{item.cantidad}</td>
                         </tr>
                       ))
-                    ) : (<tr><td colSpan={4} style={{ padding: "15px", textAlign: "center" }}>Sin detalles.</td></tr>)}
+                    ) : (<tr><td colSpan={5} style={{ padding: "15px", textAlign: "center" }}>Sin detalles.</td></tr>)}
                   </tbody>
                 </table>
               </div>

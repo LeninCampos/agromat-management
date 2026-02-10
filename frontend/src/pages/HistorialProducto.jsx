@@ -315,10 +315,10 @@ export default function HistorialProducto() {
                   color: "#111827",
                 }}
               >
-                ${valorInventario.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                €{valorInventario.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
               </p>
               <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#9ca3af" }}>
-                Precio unit: ${Number(producto?.precio || 0).toFixed(2)}
+                Precio unit: €{Number(producto?.precio || 0).toFixed(2)}
               </p>
             </div>
 

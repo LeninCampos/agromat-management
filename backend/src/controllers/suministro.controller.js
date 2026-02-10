@@ -6,6 +6,8 @@ import {
   Suministra,
   Producto,
   Empleado,
+  SeUbica,
+  Zona,
 } from "../models/index.js";
 
 // Helper para obtener opciones de auditoría
@@ -29,7 +31,11 @@ export const getAllSuministros = async (req, res, next) => {
         { model: Empleado, attributes: ["id_empleado", "nombre_empleado"] },
         {
           model: Suministra,
-          include: [{ model: Producto, attributes: ["id_producto", "nombre_producto", "imagen_url"] }],
+          include: [{
+            model: Producto,
+            attributes: ["id_producto", "nombre_producto", "imagen_url"],
+            include: [{ model: SeUbica, as: "SeUbicas", include: [{ model: Zona, as: "Zona" }] }]
+          }],
         },
       ],
       order: [["id_suministro", "DESC"]],
@@ -48,7 +54,11 @@ export const getSuministroById = async (req, res, next) => {
         { model: Empleado, attributes: ["id_empleado", "nombre_empleado"] },
         {
           model: Suministra,
-          include: [{ model: Producto, attributes: ["id_producto", "nombre_producto", "imagen_url"] }],
+          include: [{
+            model: Producto,
+            attributes: ["id_producto", "nombre_producto", "imagen_url"],
+            include: [{ model: SeUbica, as: "SeUbicas", include: [{ model: Zona, as: "Zona" }] }]
+          }],
         },
       ],
     });

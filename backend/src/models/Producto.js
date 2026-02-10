@@ -23,7 +23,7 @@ const Producto = sequelize.define(
       allowNull: false,
     },
     precio: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.DECIMAL(10, 2), // Precio base en EUR
       allowNull: false,
     },
     stock: {

@@ -302,7 +302,7 @@ export default function Envios() {
                       Pedido #{row.id_pedido}<br />
                       <span style={{ fontSize: "0.82em", color: "#6b7280" }}>
                         {row.Pedido?.Cliente?.nombre_cliente || ""}
-                        {row.Pedido?.total != null && ` ($${Number(row.Pedido.total).toFixed(2)})`}
+                        {row.Pedido?.total != null && ` (€${Number(row.Pedido.total).toFixed(2)})`}
                       </span>
                     </td>
                     <td style={{ padding: "10px" }}>

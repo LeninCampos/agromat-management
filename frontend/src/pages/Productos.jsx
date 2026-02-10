@@ -53,14 +53,14 @@ export default function Productos() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados de Moneda
-  const [currency, setCurrency] = useState("USD");
-  const [exchangeRate, setExchangeRate] = useState(0.92);
+  // Estados de Moneda (Base: EUR)
+  const [currency, setCurrency] = useState("EUR");
+  const [exchangeRate, setExchangeRate] = useState(1.09); // Tasa EUR→USD
 
   useEffect(() => {
-    fetch("https://api.frankfurter.app/latest?from=USD&to=EUR")
+    fetch("https://api.frankfurter.app/latest?from=EUR&to=USD")
       .then((res) => res.json())
-      .then((data) => { if (data?.rates?.EUR) setExchangeRate(data.rates.EUR); })
+      .then((data) => { if (data?.rates?.USD) setExchangeRate(data.rates.USD); })
       .catch((err) => console.error("Error tasa cambio:", err));
   }, []);
 
@@ -94,10 +94,10 @@ export default function Productos() {
   // Helpers
   const formatCurrency = (value) => {
     const num = Number(value || 0);
-    if (currency === "EUR") {
-      return (num * exchangeRate).toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
+    if (currency === "USD") {
+      return (num * exchangeRate).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
     }
-    return num.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
+    return num.toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
   };
 
   const stats = useMemo(() => {
@@ -110,7 +110,7 @@ export default function Productos() {
       else if (stock > 0 && stock <= lowStockThreshold) bajoStock++;
       valor += stock * precio;
     }
-    if (currency === "EUR") valor *= exchangeRate;
+    if (currency === "USD") valor *= exchangeRate;
     return { total, sinStock, bajoStock, valor };
   }, [items, lowStockThreshold, currency, exchangeRate]);
 
@@ -300,11 +300,11 @@ export default function Productos() {
       <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginBottom: "1.5rem" }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Buscar..." style={{ flex: 1, minWidth: "200px", padding: "10px 14px", borderRadius: "8px", border: "1px solid #ddd" }} />
         <div style={{ display: "flex", border: "1px solid #ddd", borderRadius: "8px", overflow: "hidden" }}>
-          {["USD", "EUR"].map(m => (
+          {["EUR", "USD"].map(m => (
             <button key={m} onClick={() => setCurrency(m)} style={{ padding: "10px 14px", border: "none", background: currency === m ? "#eff6ff" : "white", color: currency === m ? "#1d4ed8" : "#6b7280", fontWeight: currency === m ? "bold" : "normal", cursor: "pointer" }}>{m === "USD" ? "🇺🇸" : "🇪🇺"} {m}</button>
           ))}
         </div>
-        {currency === "EUR" && <input type="number" step="0.01" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} placeholder="Tasa" style={{ width: "70px", padding: "10px", borderRadius: "8px", border: "1px solid #ddd" }} />}
+        {currency === "USD" && <input type="number" step="0.01" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} placeholder="Tasa" style={{ width: "70px", padding: "10px", borderRadius: "8px", border: "1px solid #ddd" }} />}
         
         <select value={filterZona} onChange={(e) => setFilterZona(e.target.value)} style={{ padding: "10px 14px", borderRadius: "8px", border: "1px solid #ddd", backgroundColor: "white" }}>
           <option value="">🗺️ Zonas</option>
@@ -413,7 +413,7 @@ export default function Productos() {
                   <option value="">Zona (Opcional)</option>
                   {zonas.map(z => <option key={z.id_zona} value={z.id_zona}>{z.codigo}</option>)}
                 </select>
-                <input type="number" placeholder="Precio (USD)" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})} style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px" }} />
+                <input type="number" placeholder="Precio (EUR)" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})} style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px" }} />
                 <input type="number" placeholder="Stock" value={form.existencias} onChange={e => setForm({...form, existencias: e.target.value})} style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px" }} />
                 <div style={{ gridColumn: "1 / -1", display: "flex", gap: "10px", alignItems: "center" }}>
                    <button type="button" onClick={() => fileInputRef.current.click()} style={{ padding: "8px", border: "1px solid #ddd", borderRadius: "6px", cursor: "pointer" }}>📂 Archivo</button>

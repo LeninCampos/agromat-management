@@ -50,14 +50,14 @@ const Pedido = sequelize.define(
       type: DataTypes.STRING(50),
       allowNull: true,
     },
-    // ✅ NUEVO: Moneda y Tasa para historial
+    // Moneda y Tasa para historial (Base: EUR)
     moneda: {
-      type: DataTypes.STRING(3), // 'USD' o 'EUR'
+      type: DataTypes.STRING(3), // 'EUR' o 'USD'
       allowNull: false,
-      defaultValue: 'USD'
+      defaultValue: 'EUR'
     },
     tasa_cambio: {
-      type: DataTypes.DECIMAL(10, 4), // Ej: 0.9200
+      type: DataTypes.DECIMAL(10, 4), // Tasa EUR→USD. Ej: 1.0870
       allowNull: false,
       defaultValue: 1.0000
     },

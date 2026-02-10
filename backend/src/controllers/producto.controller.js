@@ -442,12 +442,12 @@ export const exportarProductosExcel = async (req, res, next) => {
       const ubicacionTexto = ubicacion ? `${ubicacion.codigo} (R:${ubicacion.rack} M:${ubicacion.modulo} P:${ubicacion.piso})` : "Sin asignar";
       
       const stock = Number(p.stock);
-      const precioUSD = Number(p.precio);
-      const totalUSD = precioUSD * stock;
+      const precioEUR = Number(p.precio); // BD almacena EUR
+      const totalEUR = precioEUR * stock;
 
-      // Conversión a Euros
-      const precioEUR = precioUSD * tasaCambio;
-      const totalEUR = totalUSD * tasaCambio;
+      // Conversión a Dólares (tasa es EUR→USD)
+      const precioUSD = precioEUR * tasaCambio;
+      const totalUSD = totalEUR * tasaCambio;
 
       return {
         "Código": p.id_producto,
@@ -455,13 +455,13 @@ export const exportarProductosExcel = async (req, res, next) => {
         "Proveedor": p.Proveedor?.nombre_proveedor || "Sin proveedor",
         "Ubicación": ubicacionTexto,
         "Stock": stock,
-        // Sección DÓLARES
-        "Precio (USD)": precioUSD,
-        "Total (USD)": totalUSD,
-        // Sección EUROS
+        // Sección EUROS (base)
         "Precio (EUR)": precioEUR,
         "Total (EUR)": totalEUR,
-        
+        // Sección DÓLARES (conversión)
+        "Precio (USD)": precioUSD,
+        "Total (USD)": totalUSD,
+
         "Último Ingreso": fecha_ultimo_ingreso,
         "Última Salida": fecha_ultimo_egreso
       };
@@ -477,10 +477,10 @@ export const exportarProductosExcel = async (req, res, next) => {
         { wch: 20 }, // Proveedor
         { wch: 20 }, // Ubicación
         { wch: 8 },  // Stock
-        { wch: 12 }, // Precio USD
-        { wch: 15 }, // Total USD
         { wch: 12 }, // Precio EUR
         { wch: 15 }, // Total EUR
+        { wch: 12 }, // Precio USD
+        { wch: 15 }, // Total USD
         { wch: 15 }, // Ingreso
         { wch: 15 }  // Salida
     ];
