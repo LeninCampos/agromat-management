@@ -12,19 +12,22 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-// ✅ helper: CUIT = 11 dígitos, aceptando que el usuario ponga guiones/espacios
+// helper: CUIT = 11 dígitos, aceptando que el usuario ponga guiones/espacios
 const normalizeDigits = (v) => String(v ?? "").replace(/\D/g, "");
 
 export const validateClienteCreate = [
   body("nombre_cliente")
-    .notEmpty().withMessage("Nombre obligatorio")
+    .optional({ nullable: true, checkFalsy: true })
     .isLength({ max: 100 }),
+
+  body("codigo_cliente")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 50 }).withMessage("Máximo 50 caracteres"),
 
   body("nombre_contacto")
     .optional({ nullable: true, checkFalsy: true })
     .isLength({ max: 100 }).withMessage("Máximo 100 caracteres"),
 
-  // ✅ CUIT: si viene, lo normalizamos y validamos 11 dígitos
   body("cuit")
     .optional({ nullable: true, checkFalsy: true })
     .custom((value) => {
@@ -33,18 +36,37 @@ export const validateClienteCreate = [
       return true;
     }),
 
-  // ✅ comentarios puede ser null o string
   body("comentarios")
     .optional({ nullable: true, checkFalsy: true })
     .isString().withMessage("Comentarios inválidos"),
 
   body("telefono")
-    .notEmpty().withMessage("Teléfono obligatorio")
+    .optional({ nullable: true, checkFalsy: true })
     .matches(telefonoRegex).withMessage("Teléfono inválido"),
 
+  body("fax")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 20 }).withMessage("Máximo 20 caracteres"),
+
   body("direccion")
-    .notEmpty().withMessage("Dirección obligatoria")
+    .optional({ nullable: true, checkFalsy: true })
     .isLength({ max: 150 }),
+
+  body("codigo_postal")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 20 }).withMessage("Máximo 20 caracteres"),
+
+  body("localidad")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 100 }).withMessage("Máximo 100 caracteres"),
+
+  body("zona")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 100 }).withMessage("Máximo 100 caracteres"),
+
+  body("provincia")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 100 }).withMessage("Máximo 100 caracteres"),
 
   body("correo_cliente")
     .optional({ nullable: true, checkFalsy: true })
@@ -59,6 +81,10 @@ export const validateClienteUpdate = [
     .notEmpty()
     .isLength({ max: 100 }),
 
+  body("codigo_cliente")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 50 }),
+
   body("nombre_contacto")
     .optional({ nullable: true, checkFalsy: true })
     .isLength({ max: 100 }),
@@ -76,14 +102,32 @@ export const validateClienteUpdate = [
     .isString().withMessage("Comentarios inválidos"),
 
   body("telefono")
-    .optional({ nullable: true })
-    .notEmpty()
+    .optional({ nullable: true, checkFalsy: true })
     .matches(telefonoRegex),
 
+  body("fax")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 20 }),
+
   body("direccion")
-    .optional({ nullable: true })
-    .notEmpty()
+    .optional({ nullable: true, checkFalsy: true })
     .isLength({ max: 150 }),
+
+  body("codigo_postal")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 20 }),
+
+  body("localidad")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 100 }),
+
+  body("zona")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 100 }),
+
+  body("provincia")
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 100 }),
 
   body("correo_cliente")
     .optional({ nullable: true, checkFalsy: true })
