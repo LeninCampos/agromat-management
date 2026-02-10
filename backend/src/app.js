@@ -28,6 +28,7 @@ import auditRouter from "./routes/audit.js";
 
 
 const app = express();
+app.set("trust proxy", 1);
 
 /* ==========================
    🔐 CORS CONFIG
