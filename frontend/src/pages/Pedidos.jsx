@@ -9,7 +9,7 @@ import { getClientes } from "../api/clientes";
 import { getEmpleados } from "../api/empleados";
 import logoAgromat from "../assets/agromat-logo.png"; 
 import {
-  CheckCircle, Clock, XCircle, Package, Download
+  CheckCircle, Clock, XCircle, Package, Download, Eye
 } from "lucide-react";
 
 // =============================
@@ -150,60 +150,197 @@ export default function Pedidos() {
   };
 
   // =============================
-  // Lógica de PDF (Inteligente)
+  // Lógica de PDF (Cotización profesional)
   // =============================
+  const IVA_RATE = 0.21;
+
   const descargarPDF = (pedido) => {
     const doc = new jsPDF();
-    
-    // Usar la moneda y tasa con la que se guardó el pedido (base EUR)
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginLeft = 15;
+    const marginRight = 15;
+
+    // Moneda y tasa histórica del pedido
     const mon = pedido.moneda || 'EUR';
     const tasa = Number(pedido.tasa_cambio) || 1;
-    const simbolo = mon === 'USD' ? '$' : '€';
 
-    // Función helper interna para el PDF
     const fmt = (val) => {
-        const num = mon === 'USD' ? val * tasa : val;
-        return `${simbolo}${Number(num).toFixed(2)}`;
+      const num = mon === 'USD' ? val * tasa : val;
+      return Number(num).toLocaleString('es-ES', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }) + (mon === 'USD' ? ' $' : ' \u20ac');
     };
 
-    doc.addImage(logoAgromat, 'PNG', 15, 10, 25, 25);
-    doc.setFontSize(22);
-    doc.setTextColor(79, 70, 229);
-    doc.text("AGROMAT", 45, 22);
+    // ── Header: Logo (aspect ratio correcto) + meta derecha ──
+    const logoW = 50;
+    const logoH = 25; // ratio original ~2:1 (1018×514)
+    doc.addImage(logoAgromat, 'PNG', marginLeft, 10, logoW, logoH);
+
+    // Meta alineada a la derecha
     doc.setFontSize(10);
     doc.setTextColor(100);
+    doc.text(`Fecha: ${pedido.fecha_pedido}`, pageWidth - marginRight, 16, { align: 'right' });
+    doc.text(`Moneda: ${mon}`, pageWidth - marginRight, 22, { align: 'right' });
 
-    doc.setTextColor(0);
-    doc.setFontSize(12);
-    doc.text(`COTIZACIÓN DE PEDIDO: #${pedido.id_pedido}`, 15, 45);
+    // Línea separadora bajo header
+    const headerEndY = 38;
+    doc.setDrawColor(79, 70, 229);
+    doc.setLineWidth(0.6);
+    doc.line(marginLeft, headerEndY, pageWidth - marginRight, headerEndY);
+
+    // ── Título de cotización ──
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(79, 70, 229);
+    doc.text(`COTIZACIÓN DE PEDIDO #${pedido.id_pedido}`, marginLeft, headerEndY + 9);
+
+    // ── Datos del cliente ──
     doc.setFontSize(10);
-    doc.text(`Cliente: ${pedido.Cliente?.nombre_cliente || 'N/A'}`, 15, 52);
-    doc.text(`Contacto: ${pedido.quien_pidio || '-'}`, 15, 57);
-    doc.text(`Fecha: ${pedido.fecha_pedido}`, 150, 45);
-    doc.text(`Moneda: ${mon}`, 150, 50); // Mostrar moneda en el PDF
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60);
+    const clientY = headerEndY + 17;
+    doc.text(`Cliente: ${pedido.Cliente?.nombre_cliente || 'N/A'}`, marginLeft, clientY);
+    doc.text(`Contacto: ${pedido.quien_pidio || '-'}`, marginLeft, clientY + 6);
+
+    // ── Tabla de productos ──
+    const tableStartY = clientY + 14;
 
     const tableBody = pedido.items.map(it => [
       it.id_producto,
       it.nombre_producto,
-      fmt(it.precio_unitario), // Convertir precio unitario
+      fmt(it.precio_unitario),
       it.cantidad,
-      fmt(it.cantidad * it.precio_unitario) // Convertir subtotal
+      fmt(it.cantidad * it.precio_unitario)
     ]);
 
     autoTable(doc, {
-      startY: 65,
-      head: [[`Código`, `Producto`, `P. Unitario (${mon})`, `Cant.`, `Subtotal (${mon})`]],
+      startY: tableStartY,
+      head: [['Código', 'Producto', `P. Unitario (${mon})`, 'Cant.', `Subtotal (${mon})`]],
       body: tableBody,
-      headStyles: { fillColor: [79, 70, 229] },
+      headStyles: {
+        fillColor: [79, 70, 229],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 9,
+      },
+      bodyStyles: { fontSize: 9 },
+      alternateRowStyles: { fillColor: [245, 245, 255] },
+      columnStyles: {
+        0: { cellWidth: 28 },
+        2: { halign: 'right' },
+        3: { halign: 'center', cellWidth: 18 },
+        4: { halign: 'right' },
+      },
       theme: 'striped',
+      margin: { left: marginLeft, right: marginRight },
     });
 
-    const finalY = doc.lastAutoTable.finalY + 10;
+    // ── Bloque de totales con IVA ──
+    const totalsSectionY = doc.lastAutoTable.finalY + 12;
+
+    // Calcular totales desde los items (siempre en moneda base EUR, luego convertir)
+    const totalSinIva = pedido.items.reduce(
+      (acc, it) => acc + (Number(it.cantidad) * Number(it.precio_unitario)), 0
+    );
+    const iva = totalSinIva * IVA_RATE;
+    const totalConIva = totalSinIva + iva;
+
+    const totalsX = pageWidth - marginRight;
+    const labelX = totalsX - 60;
+
+    // Total sin IVA
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60);
+    doc.text('Total sin IVA:', labelX, totalsSectionY, { align: 'right' });
+    doc.text(fmt(totalSinIva), totalsX, totalsSectionY, { align: 'right' });
+
+    // IVA (21%)
+    doc.text('IVA (21%):', labelX, totalsSectionY + 7, { align: 'right' });
+    doc.text(fmt(iva), totalsX, totalsSectionY + 7, { align: 'right' });
+
+    // Línea separadora antes del total con IVA
+    doc.setDrawColor(79, 70, 229);
+    doc.setLineWidth(0.4);
+    doc.line(labelX - 5, totalsSectionY + 11, totalsX, totalsSectionY + 11);
+
+    // Total con IVA (destacado)
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text(`TOTAL FINAL: ${fmt(pedido.total)}`, 140, finalY);
+    doc.setTextColor(79, 70, 229);
+    doc.text('Total con IVA:', labelX, totalsSectionY + 18, { align: 'right' });
+    doc.text(fmt(totalConIva), totalsX, totalsSectionY + 18, { align: 'right' });
 
     doc.save(`Cotizacion_Agromat_${pedido.id_pedido}.pdf`);
+  };
+
+  // =============================
+  // Preview de detalles del pedido
+  // =============================
+  const verDetalles = (pedido) => {
+    const mon = pedido.moneda || 'EUR';
+    const tasa = Number(pedido.tasa_cambio) || 1;
+    const fmtHTML = (val) => {
+      const num = mon === 'USD' ? val * tasa : val;
+      return Number(num).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        + (mon === 'USD' ? ' $' : ' €');
+    };
+
+    const totalSinIva = pedido.items.reduce(
+      (acc, it) => acc + (Number(it.cantidad) * Number(it.precio_unitario)), 0
+    );
+    const iva = totalSinIva * IVA_RATE;
+    const totalConIva = totalSinIva + iva;
+
+    const itemsHTML = pedido.items.map(it =>
+      `<tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px">${it.id_producto}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px">${it.nombre_producto}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;font-size:13px">${fmtHTML(it.precio_unitario)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;font-size:13px">${it.cantidad}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;font-size:13px">${fmtHTML(it.cantidad * it.precio_unitario)}</td>
+      </tr>`
+    ).join('');
+
+    Swal.fire({
+      title: `Pedido #${pedido.id_pedido}`,
+      width: 700,
+      html: `
+        <div style="text-align:left;font-size:14px;color:#333">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin-bottom:16px;padding:12px;background:#f9fafb;border-radius:8px">
+            <div><strong>Cliente:</strong> ${pedido.Cliente?.nombre_cliente || 'N/A'}</div>
+            <div><strong>Contacto:</strong> ${pedido.quien_pidio || '-'}</div>
+            <div><strong>Fecha:</strong> ${pedido.fecha_pedido}</div>
+            <div><strong>Estado:</strong> ${pedido.status}</div>
+            <div><strong>Moneda:</strong> ${mon}</div>
+            <div><strong>N° Remito:</strong> ${pedido.numero_remito || '-'}</div>
+            <div><strong>Dirección envío:</strong> ${pedido.direccion_envio || '-'}</div>
+            <div><strong>Entrega estimada:</strong> ${pedido.fecha_entrega_estimada || '-'}</div>
+          </div>
+          ${pedido.observaciones ? `<div style="margin-bottom:12px;padding:8px 12px;background:#fffbeb;border-left:3px solid #F59E0B;border-radius:4px;font-size:13px"><strong>Observaciones:</strong> ${pedido.observaciones}</div>` : ''}
+          <table style="width:100%;border-collapse:collapse;margin-bottom:12px">
+            <thead>
+              <tr style="background:#4F46E5;color:white">
+                <th style="padding:8px;text-align:left;font-size:12px;border-radius:6px 0 0 0">Código</th>
+                <th style="padding:8px;text-align:left;font-size:12px">Producto</th>
+                <th style="padding:8px;text-align:right;font-size:12px">P. Unit.</th>
+                <th style="padding:8px;text-align:center;font-size:12px">Cant.</th>
+                <th style="padding:8px;text-align:right;font-size:12px;border-radius:0 6px 0 0">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>${itemsHTML}</tbody>
+          </table>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;padding-top:8px;border-top:2px solid #e5e7eb">
+            <div style="font-size:13px;color:#666">Total sin IVA: <strong>${fmtHTML(totalSinIva)}</strong></div>
+            <div style="font-size:13px;color:#666">IVA (21%): <strong>${fmtHTML(iva)}</strong></div>
+            <div style="font-size:16px;font-weight:bold;color:#4F46E5;margin-top:4px">Total con IVA: ${fmtHTML(totalConIva)}</div>
+          </div>
+        </div>
+      `,
+      showCloseButton: true,
+      showConfirmButton: false,
+    });
   };
 
   const processedItems = useMemo(() => {
@@ -435,6 +572,7 @@ export default function Pedidos() {
                 
                 <td style={S.td}>
                   <div className="flex gap-2 justify-center">
+                    <button title="Detalles del Pedido" style={S.btnAction("#6366F1")} onClick={() => verDetalles(row)}><Eye size={14} /></button>
                     <button title="Exportar Cotización" style={S.btnAction("#4F46E5")} onClick={() => descargarPDF(row)}><Download size={14} /></button>
                     <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setCurrency(row.moneda || 'EUR'); setProductSearch(""); setClientSearch(row.Cliente?.nombre_cliente || ""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>Editar</button>
                     <button style={S.btnAction("#DC2626")} onClick={() => {
