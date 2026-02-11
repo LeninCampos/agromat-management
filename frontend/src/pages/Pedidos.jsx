@@ -47,6 +47,25 @@ const S = {
 
 const STATUS_OPTIONS = ["Pendiente", "En proceso", "Completado", "Cancelado"];
 
+// Normalizar texto: minúsculas + sin acentos
+const normalize = (str) =>
+  (str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+// Matching tokenizado: devuelve score (0 = no match, mayor = mejor)
+const matchCliente = (nombre, contacto, query) => {
+  const tokens = normalize(query).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return 1;
+  const fullText = normalize(nombre) + " " + normalize(contacto);
+  if (!tokens.every(t => fullText.includes(t))) return 0;
+  const words = normalize(nombre).split(/\s+/);
+  let prefixScore = 0;
+  for (const t of tokens) if (words.some(w => w.startsWith(t))) prefixScore++;
+  let orderScore = 0, lastIdx = -1;
+  const n = normalize(nombre);
+  for (const t of tokens) { const i = n.indexOf(t); if (i > lastIdx) { orderScore++; lastIdx = i; } }
+  return 1 + prefixScore * 2 + orderScore;
+};
+
 const emptyForm = {
   fecha_pedido: "", hora_pedido: "", status: "Pendiente",
   id_empleado: "", id_cliente: "", direccion_envio: "",
@@ -88,6 +107,12 @@ export default function Pedidos() {
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const productDropdownRef = useRef(null);
   const productInputRef = useRef(null);
+
+  // Autocomplete de cliente
+  const [clientSearch, setClientSearch] = useState("");
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [highlightedClientIndex, setHighlightedClientIndex] = useState(-1);
+  const clientDropdownRef = useRef(null);
 
   const load = async () => {
     setLoading(true);
@@ -224,6 +249,7 @@ export default function Pedidos() {
 
   const save = async (e) => {
     e.preventDefault();
+    if (!form.id_cliente) return Swal.fire("Error", "Selecciona un cliente", "warning");
     if (!form.items.length) return Swal.fire("Error", "Agrega al menos un producto", "warning");
     try {
       const payload = {
@@ -266,11 +292,29 @@ export default function Pedidos() {
     return [...prefixed, ...contained].slice(0, 20);
   }, [productos, productSearch]);
 
+  // Autocomplete: clientes filtrados por búsqueda tokenizada
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.trim();
+    if (!q) return clientes.slice(0, 20);
+    return clientes
+      .map(c => ({ ...c, _score: matchCliente(c.nombre_cliente, c.nombre_contacto, q) }))
+      .filter(c => c._score > 0)
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 20);
+  }, [clientes, clientSearch]);
+
   const selectProduct = useCallback((prod) => {
     setNuevoItem(prev => ({ ...prev, id_producto: prod.id_producto }));
     setProductSearch(`${prod.nombre_producto} — ${prod.id_producto}`);
     setShowProductDropdown(false);
     setHighlightedIndex(-1);
+  }, []);
+
+  const selectClient = useCallback((cliente) => {
+    setForm(prev => ({ ...prev, id_cliente: String(cliente.id_cliente) }));
+    setClientSearch(cliente.nombre_cliente || "");
+    setShowClientDropdown(false);
+    setHighlightedClientIndex(-1);
   }, []);
 
   const handleProductKeyDown = useCallback((e) => {
@@ -292,12 +336,35 @@ export default function Pedidos() {
     }
   }, [showProductDropdown, filteredProducts, highlightedIndex, selectProduct]);
 
+  const handleClientKeyDown = useCallback((e) => {
+    if (!showClientDropdown) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedClientIndex(prev => (prev < filteredClients.length - 1 ? prev + 1 : 0));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedClientIndex(prev => (prev > 0 ? prev - 1 : filteredClients.length - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightedClientIndex >= 0 && filteredClients[highlightedClientIndex]) {
+        selectClient(filteredClients[highlightedClientIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setShowClientDropdown(false);
+      setHighlightedClientIndex(-1);
+    }
+  }, [showClientDropdown, filteredClients, highlightedClientIndex, selectClient]);
+
   // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (productDropdownRef.current && !productDropdownRef.current.contains(e.target)) {
         setShowProductDropdown(false);
         setHighlightedIndex(-1);
+      }
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target)) {
+        setShowClientDropdown(false);
+        setHighlightedClientIndex(-1);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -308,7 +375,7 @@ export default function Pedidos() {
     <div style={S.page}>
       <div style={S.header}>
         <h2 style={S.title}>📦 Gestión de Pedidos</h2>
-        <button className="agromat-btn-primary" onClick={() => { setEditingId(null); setForm({ ...emptyForm, fecha_pedido: new Date().toISOString().split('T')[0], hora_pedido: new Date().toTimeString().slice(0, 5) }); setProductSearch(""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>
+        <button className="agromat-btn-primary" onClick={() => { setEditingId(null); setForm({ ...emptyForm, fecha_pedido: new Date().toISOString().split('T')[0], hora_pedido: new Date().toTimeString().slice(0, 5) }); setProductSearch(""); setClientSearch(""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>
           + Nuevo Pedido
         </button>
       </div>
@@ -369,7 +436,7 @@ export default function Pedidos() {
                 <td style={S.td}>
                   <div className="flex gap-2 justify-center">
                     <button title="Exportar Cotización" style={S.btnAction("#4F46E5")} onClick={() => descargarPDF(row)}><Download size={14} /></button>
-                    <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setCurrency(row.moneda || 'EUR'); setProductSearch(""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>Editar</button>
+                    <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setCurrency(row.moneda || 'EUR'); setProductSearch(""); setClientSearch(row.Cliente?.nombre_cliente || ""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>Editar</button>
                     <button style={S.btnAction("#DC2626")} onClick={() => {
                       Swal.fire({ title: '¿Eliminar?', icon: 'warning', showCancelButton: true }).then(r => r.isConfirmed && deletePedido(row.id_pedido).then(() => load()));
                     }}>Borrar</button>
@@ -403,7 +470,59 @@ export default function Pedidos() {
               <div className="agromat-form-grid">
                 <div className="agromat-form-field"><label>Fecha</label><input type="date" className="agromat-input" value={form.fecha_pedido} onChange={e => setForm({ ...form, fecha_pedido: e.target.value })} required /></div>
                 <div className="agromat-form-field"><label>Estado</label><select className="agromat-select" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                <div className="agromat-form-field"><label>Cliente</label><select className="agromat-select" value={form.id_cliente} onChange={e => setForm({ ...form, id_cliente: e.target.value })} required><option value="">Selecciona...</option>{clientes.map(c => <option key={c.id_cliente} value={c.id_cliente}>{c.nombre_cliente}</option>)}</select></div>
+                <div className="agromat-form-field">
+                  <label>Cliente</label>
+                  <div ref={clientDropdownRef} style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      className="agromat-input"
+                      placeholder="Buscar cliente por nombre..."
+                      value={clientSearch}
+                      onChange={e => {
+                        setClientSearch(e.target.value);
+                        setShowClientDropdown(true);
+                        setHighlightedClientIndex(-1);
+                        if (form.id_cliente) setForm(prev => ({ ...prev, id_cliente: "" }));
+                      }}
+                      onFocus={() => setShowClientDropdown(true)}
+                      onKeyDown={handleClientKeyDown}
+                      autoComplete="off"
+                      style={!form.id_cliente && clientSearch ? { borderColor: "#F59E0B" } : {}}
+                    />
+                    {showClientDropdown && (
+                      <div style={{
+                        position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+                        background: "white", border: "1px solid #e5e7eb", borderRadius: "10px",
+                        boxShadow: "0 4px 16px rgba(0,0,0,0.10)", marginTop: "4px",
+                        maxHeight: "240px", overflowY: "auto"
+                      }}>
+                        {filteredClients.length === 0 ? (
+                          <div style={{ padding: "12px 16px", color: "#9CA3AF", fontStyle: "italic", fontSize: "0.85rem" }}>
+                            Sin resultados
+                          </div>
+                        ) : filteredClients.map((c, idx) => (
+                          <div
+                            key={c.id_cliente}
+                            style={{
+                              padding: "10px 14px", cursor: "pointer", fontSize: "0.85rem",
+                              display: "flex", justifyContent: "space-between", alignItems: "center",
+                              background: idx === highlightedClientIndex ? "#EEF2FF" : "transparent",
+                              borderBottom: idx < filteredClients.length - 1 ? "1px solid #f3f4f6" : "none"
+                            }}
+                            onMouseEnter={() => setHighlightedClientIndex(idx)}
+                            onMouseDown={(e) => { e.preventDefault(); selectClient(c); }}
+                          >
+                            <span>
+                              <span style={{ fontWeight: 700, color: "#1F2937" }}>{c.nombre_cliente}</span>
+                              {c.nombre_contacto && <span style={{ color: "#9CA3AF", marginLeft: "6px", fontSize: "0.8rem" }}>— {c.nombre_contacto}</span>}
+                            </span>
+                            {c.localidad && <span style={{ color: "#9CA3AF", fontSize: "0.8rem" }}>{c.localidad}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="agromat-form-field"><label>Vendedor</label><select className="agromat-select" value={form.id_empleado} onChange={e => setForm({ ...form, id_empleado: e.target.value })} required><option value="">Selecciona...</option>{empleados.map(e => <option key={e.id_empleado} value={e.id_empleado}>{e.nombre_empleado}</option>)}</select></div>
                 
                 {/* SELECTOR DE MONEDA (Solo visible al crear) */}

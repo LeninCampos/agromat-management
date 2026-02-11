@@ -25,7 +25,7 @@ const emptyForm = {
   comentarios: "",
 };
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [25, 50, 100, "Todos"];
 
 export default function Clientes() {
   const { user } = useAuth();
@@ -36,6 +36,7 @@ export default function Clientes() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
 
@@ -83,14 +84,16 @@ export default function Clientes() {
     return result;
   }, [q, items, sortConfig]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
+  const showAll = pageSize === "Todos";
+  const totalPages = showAll ? 1 : Math.max(1, Math.ceil(filteredData.length / pageSize));
   const paginatedData = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filteredData.slice(start, start + PAGE_SIZE);
-  }, [filteredData, page]);
+    if (showAll) return filteredData;
+    const start = (page - 1) * pageSize;
+    return filteredData.slice(start, start + pageSize);
+  }, [filteredData, page, pageSize, showAll]);
 
-  // Reset page when filter changes
-  useEffect(() => { setPage(1); }, [q, sortConfig]);
+  // Reset page when filter/pageSize changes
+  useEffect(() => { setPage(1); }, [q, sortConfig, pageSize]);
 
   const requestSort = (key) => {
     let direction = "asc";
@@ -425,8 +428,27 @@ export default function Clientes() {
         )}
       </div>
 
-      {/* Pagination */}
-      {renderPagination()}
+      {/* Pagination + Page Size */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", padding: "12px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", color: "#64748b" }}>
+          <span>Mostrar:</span>
+          {PAGE_SIZE_OPTIONS.map(opt => (
+            <button
+              key={opt}
+              onClick={() => setPageSize(opt)}
+              style={{
+                padding: "5px 12px", borderRadius: "6px", border: "1px solid #e2e8f0",
+                background: pageSize === opt ? "#4F46E5" : "white",
+                color: pageSize === opt ? "white" : "#475569",
+                cursor: "pointer", fontSize: "0.85rem", fontWeight: pageSize === opt ? 600 : 400
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+        <div>{renderPagination()}</div>
+      </div>
 
       {/* ─── Modal Crear/Editar ─── */}
       {modalOpen && (

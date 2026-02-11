@@ -1,5 +1,5 @@
 // frontend/src/pages/Envios.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import {
   getEnvios,
@@ -32,6 +32,10 @@ function getDireccionFromEnvioRow(row) {
   return (dirPedido?.trim() || dirCliente?.trim() || "").trim();
 }
 
+// Normalizar texto: minúsculas + sin acentos
+const normalize = (str) =>
+  (str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 export default function Envios() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +46,12 @@ export default function Envios() {
 
   const [pedidos, setPedidos] = useState([]);
   const [empleados, setEmpleados] = useState([]);
+
+  // Autocomplete de pedido (búsqueda por cliente)
+  const [pedidoSearch, setPedidoSearch] = useState("");
+  const [showPedidoDropdown, setShowPedidoDropdown] = useState(false);
+  const [highlightedPedidoIndex, setHighlightedPedidoIndex] = useState(-1);
+  const pedidoDropdownRef = useRef(null);
 
   // Estados para fotos
   const [fotosModal, setFotosModal] = useState(false);
@@ -60,6 +70,48 @@ export default function Envios() {
         x.numero_remito?.toLowerCase().includes(query)
     );
   }, [q, items]);
+
+  // Autocomplete: pedidos filtrados por búsqueda (cliente, número, remito)
+  const filteredPedidos = useMemo(() => {
+    const q2 = pedidoSearch.trim();
+    if (!q2) return pedidos.slice(0, 20);
+    const tokens = normalize(q2).split(/\s+/).filter(Boolean);
+    if (!tokens.length) return pedidos.slice(0, 20);
+    return pedidos
+      .filter(p => {
+        const text = normalize(
+          `${p.Cliente?.nombre_cliente || ""} ${p.id_pedido} ${p.fecha_pedido} ${p.status} ${p.numero_remito || ""}`
+        );
+        return tokens.every(t => text.includes(t));
+      })
+      .slice(0, 20);
+  }, [pedidos, pedidoSearch]);
+
+  const selectPedido = useCallback((ped) => {
+    setForm(prev => ({ ...prev, id_pedido: String(ped.id_pedido) }));
+    setPedidoSearch(`#${ped.id_pedido} — ${ped.Cliente?.nombre_cliente || "Sin cliente"}`);
+    setShowPedidoDropdown(false);
+    setHighlightedPedidoIndex(-1);
+  }, []);
+
+  const handlePedidoKeyDown = useCallback((e) => {
+    if (!showPedidoDropdown) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedPedidoIndex(prev => (prev < filteredPedidos.length - 1 ? prev + 1 : 0));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedPedidoIndex(prev => (prev > 0 ? prev - 1 : filteredPedidos.length - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightedPedidoIndex >= 0 && filteredPedidos[highlightedPedidoIndex]) {
+        selectPedido(filteredPedidos[highlightedPedidoIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setShowPedidoDropdown(false);
+      setHighlightedPedidoIndex(-1);
+    }
+  }, [showPedidoDropdown, filteredPedidos, highlightedPedidoIndex, selectPedido]);
 
   const load = async () => {
     setLoading(true);
@@ -85,6 +137,18 @@ export default function Envios() {
     load();
   }, []);
 
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (pedidoDropdownRef.current && !pedidoDropdownRef.current.contains(e.target)) {
+        setShowPedidoDropdown(false);
+        setHighlightedPedidoIndex(-1);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   useEffect(() => {
     if (!form.id_pedido) return;
     const pedidoSel = pedidos.find(
@@ -100,11 +164,13 @@ export default function Envios() {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setPedidoSearch("");
     setModalOpen(true);
   };
 
   const openEdit = (row) => {
     setEditingId(row.id_envio);
+    setPedidoSearch(`#${row.id_pedido} — ${row.Pedido?.Cliente?.nombre_cliente || "Sin cliente"}`);
     const direccion = getDireccionFromEnvioRow(row);
     setForm({
       codigo: row.codigo,
@@ -355,15 +421,57 @@ export default function Envios() {
             <label style={{ display: "block", marginBottom: 4 }}>Código del despacho</label>
             <input type="text" value={form.codigo} onChange={(e) => setForm((f) => ({ ...f, codigo: e.target.value }))} placeholder="Ej: EN-2025-001" required={!editingId} style={{ width: "100%", marginBottom: 10, padding: 8, borderRadius: 8, border: "1px solid #d1d5db" }} />
 
-            <label style={{ display: "block", marginBottom: 4 }}>Pedido</label>
-            <select value={form.id_pedido} onChange={(e) => setForm((f) => ({ ...f, id_pedido: e.target.value }))} required disabled={!!editingId} style={{ width: "100%", marginBottom: 10, padding: 8, borderRadius: 8, border: "1px solid #d1d5db", background: editingId ? "#f3f4f6" : "white" }}>
-              <option value="">-- Selecciona pedido --</option>
-              {pedidos.map((p) => (
-                <option key={p.id_pedido} value={p.id_pedido}>
-                  #{p.id_pedido} - {p.fecha_pedido} ({p.status}) {p.numero_remito ? `- Remito: ${p.numero_remito}` : ""}
-                </option>
-              ))}
-            </select>
+            <label style={{ display: "block", marginBottom: 4 }}>Pedido {!editingId && <span style={{ fontSize: "0.75rem", color: "#9CA3AF" }}>(busca por cliente, #pedido o remito)</span>}</label>
+            <div ref={pedidoDropdownRef} style={{ position: "relative", marginBottom: 10 }}>
+              <input
+                type="text"
+                placeholder="Buscar pedido por cliente, número..."
+                value={pedidoSearch}
+                onChange={e => {
+                  setPedidoSearch(e.target.value);
+                  setShowPedidoDropdown(true);
+                  setHighlightedPedidoIndex(-1);
+                  if (form.id_pedido) setForm(prev => ({ ...prev, id_pedido: "" }));
+                }}
+                onFocus={() => !editingId && setShowPedidoDropdown(true)}
+                onKeyDown={handlePedidoKeyDown}
+                readOnly={!!editingId}
+                autoComplete="off"
+                style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid #d1d5db", background: editingId ? "#f3f4f6" : "white" }}
+              />
+              {showPedidoDropdown && !editingId && (
+                <div style={{
+                  position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+                  background: "white", border: "1px solid #e5e7eb", borderRadius: "10px",
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.10)", marginTop: "4px",
+                  maxHeight: "260px", overflowY: "auto"
+                }}>
+                  {filteredPedidos.length === 0 ? (
+                    <div style={{ padding: "12px 16px", color: "#9CA3AF", fontStyle: "italic", fontSize: "0.85rem" }}>
+                      Sin resultados
+                    </div>
+                  ) : filteredPedidos.map((p, idx) => (
+                    <div
+                      key={p.id_pedido}
+                      style={{
+                        padding: "10px 14px", cursor: "pointer", fontSize: "0.85rem",
+                        background: idx === highlightedPedidoIndex ? "#EEF2FF" : "transparent",
+                        borderBottom: idx < filteredPedidos.length - 1 ? "1px solid #f3f4f6" : "none"
+                      }}
+                      onMouseEnter={() => setHighlightedPedidoIndex(idx)}
+                      onMouseDown={(e) => { e.preventDefault(); selectPedido(p); }}
+                    >
+                      <div style={{ fontWeight: 700, color: "#1F2937" }}>
+                        {p.Cliente?.nombre_cliente || "Sin cliente"}
+                      </div>
+                      <div style={{ color: "#6B7280", fontSize: "0.8rem", marginTop: 2 }}>
+                        #{p.id_pedido} — {p.fecha_pedido} ({p.status}) {p.numero_remito ? `· Remito: ${p.numero_remito}` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <label style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: 4 }}><FileText size={14} /> Nº de Remito</label>
             <input type="text" value={form.numero_remito} readOnly style={{ width: "100%", marginBottom: 10, padding: 8, borderRadius: 8, border: "1px solid #e5e7eb", background: "#f9fafb", color: form.numero_remito ? "#7c3aed" : "#9ca3af", fontWeight: form.numero_remito ? 600 : 400 }} placeholder="Se copia del pedido" />
