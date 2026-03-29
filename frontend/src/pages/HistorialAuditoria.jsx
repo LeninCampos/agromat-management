@@ -767,15 +767,23 @@ export default function HistorialAuditoria() {
     try {
       const { data } = await getRegistroHistorial(tabla, idRegistro);
       setTimelineData(data.data || []);
-      setTimelineInfo({ 
-        tabla, 
-        id: idRegistro, 
-        nombre: data.entidad_nombre || entidadNombre || `#${idRegistro}` 
+      setTimelineInfo({
+        tabla,
+        id: idRegistro,
+        nombre: data.entidad_nombre || entidadNombre || `#${idRegistro}`
       });
       setTimelineOpen(true);
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No se pudo cargar el historial", "error");
+      // Fallback: mostrar los registros que ya tenemos filtrados del listado actual
+      const fallbackData = logs.filter(l => l.tabla_afectada === tabla && String(l.id_registro) === String(idRegistro));
+      if (fallbackData.length > 0) {
+        setTimelineData(fallbackData);
+        setTimelineInfo({ tabla, id: idRegistro, nombre: entidadNombre || `#${idRegistro}` });
+        setTimelineOpen(true);
+      } else {
+        Swal.fire("Error", "No se pudo cargar el historial", "error");
+      }
     }
   };
 

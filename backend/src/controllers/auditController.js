@@ -5,6 +5,8 @@ import Producto from "../models/Producto.js";
 import Cliente from "../models/Cliente.js";
 import Proveedor from "../models/Proveedor.js";
 import Zona from "../models/Zona.js";
+import Pedido from "../models/Pedido.js";
+import Envio from "../models/Envio.js";
 
 // =====================================================
 // TIPOS DE CAMBIO PREDEFINIDOS
@@ -137,6 +139,26 @@ async function findZonaByRegistro(idRegistro) {
   if (isNaN(id) || id <= 0) return null;
   return Zona.findByPk(id, {
     attributes: ["id_zona", "codigo", "descripcion"],
+  });
+}
+
+// PEDIDOS: ID Integer
+async function findPedidoByRegistro(idRegistro) {
+  if (!idRegistro) return null;
+  const id = parseInt(String(idRegistro).trim(), 10);
+  if (isNaN(id) || id <= 0) return null;
+  return Pedido.findByPk(id, {
+    attributes: ["id_pedido", "status"],
+  });
+}
+
+// ENVIOS: ID Integer
+async function findEnvioByRegistro(idRegistro) {
+  if (!idRegistro) return null;
+  const id = parseInt(String(idRegistro).trim(), 10);
+  if (isNaN(id) || id <= 0) return null;
+  return Envio.findByPk(id, {
+    attributes: ["id_envio", "codigo", "status"],
   });
 }
 
@@ -645,6 +667,12 @@ export const getAuditLogById = async (req, res) => {
     } else if (logJSON.tabla_afectada === "zonas" || logJSON.tabla_afectada === "zona") {
       const item = await findZonaByRegistro(logJSON.id_registro);
       logJSON.entidad_nombre = item ? `Zona: ${item.codigo}` : `Zona ${logJSON.id_registro}`;
+    } else if (logJSON.tabla_afectada === "pedidos") {
+      const item = await findPedidoByRegistro(logJSON.id_registro);
+      logJSON.entidad_nombre = item ? `Pedido #${logJSON.id_registro}` : `Pedido #${logJSON.id_registro} (eliminado)`;
+    } else if (logJSON.tabla_afectada === "envios") {
+      const item = await findEnvioByRegistro(logJSON.id_registro);
+      logJSON.entidad_nombre = item ? `Envío #${logJSON.id_registro} (${item.codigo || ''})` : `Envío #${logJSON.id_registro} (eliminado)`;
     } else if (datos?.id_producto) {
       const prod = await findProductoByRegistro(datos.id_producto);
       logJSON.entidad_nombre = prod ? prod.nombre_producto : `Producto ${datos.id_producto}`;
@@ -701,6 +729,12 @@ export const getRegistroHistorial = async (req, res) => {
     } else if (tabla === "zonas") {
       const z = await findZonaByRegistro(id_registro);
       if (z) entidadNombre = `Zona: ${z.codigo}`;
+    } else if (tabla === "pedidos") {
+      const p = await findPedidoByRegistro(id_registro);
+      if (p) entidadNombre = `Pedido #${id_registro}`;
+    } else if (tabla === "envios") {
+      const e = await findEnvioByRegistro(id_registro);
+      if (e) entidadNombre = `Envío #${id_registro} (${e.codigo || ''})`;
     }
 
     // Fallback: buscar en el historial si fue borrado
