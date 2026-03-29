@@ -43,14 +43,10 @@ async function deleteProductoById(id, t, auditOptions = {}) {
 ========================================================= */
 async function registrarAjusteStock({ t, id_producto, delta, motivo }) {
   if (!delta || delta === 0) return;
-  try {
-    await sequelize.query(
-      `INSERT INTO ajustes_stock (id_producto, fecha, hora, cantidad, motivo) VALUES (?, CURDATE(), CURTIME(), ?, ?)`,
-      { replacements: [id_producto, delta, motivo], type: QueryTypes.INSERT, transaction: t }
-    );
-  } catch (err) {
-    console.error("ERROR registrarAjusteStock:", err.message);
-  }
+  await sequelize.query(
+    `INSERT INTO ajustes_stock (id_producto, fecha, hora, cantidad, motivo) VALUES (?, CURDATE(), CURTIME(), ?, ?)`,
+    { replacements: [id_producto, delta, motivo], type: QueryTypes.INSERT, transaction: t }
+  );
 }
 
 /* =========================================================
@@ -76,7 +72,7 @@ export async function recalcularStockProducto(id_producto, t) {
   const totalAjustes = Number(ajustesRow[0]?.total_ajustes || 0);
 
   const nuevoStock = totalEntradas - totalSalidas + totalAjustes;
-  await Producto.update({ stock: nuevoStock >= 0 ? nuevoStock : 0 }, { where: { id_producto }, transaction: t });
+  await Producto.update({ stock: nuevoStock }, { where: { id_producto }, transaction: t });
   return nuevoStock;
 }
 
@@ -149,7 +145,8 @@ export const createProducto = async (req, res, next) => {
     let productoFinal;
 
     if (existente) {
-      const nuevoStock = Number(existente.stock ?? 0) + Number(datos.stock ?? 0);
+      const stockAgregado = Number(datos.stock ?? 0);
+      const nuevoStock = Number(existente.stock ?? 0) + stockAgregado;
       await existente.update({
         stock: nuevoStock,
         precio: datos.precio,
@@ -158,6 +155,17 @@ export const createProducto = async (req, res, next) => {
         id_proveedor: datos.id_proveedor,
         imagen_url: datos.imagen_url,
       }, { transaction: t, ...auditOptions });
+
+      // Registrar el ajuste para que el historial refleje el cambio
+      if (stockAgregado !== 0) {
+        await registrarAjusteStock({
+          t,
+          id_producto: datos.id_producto,
+          delta: stockAgregado,
+          motivo: "Stock agregado al crear producto existente",
+        });
+      }
+
       productoFinal = existente;
     } else {
       productoFinal = await Producto.create(datos, { transaction: t, ...auditOptions });
@@ -232,9 +240,6 @@ export const updateProducto = async (req, res, next) => {
       // 2. Calculamos el delta necesario para que el historial llegue al valor deseado
       delta = stockInput - stockTeorico;
       stockNuevo = stockInput;
-    } else {
-        // Si no se envió stock, mantenemos el actual (o podríamos decidir recalcularlo, pero por seguridad mantenemos el de la DB si es solo un cambio de nombre)
-        if (datos.stock !== undefined) stockNuevo = Number(datos.stock);
     }
 
     // 3. Actualizamos el producto
@@ -395,6 +400,63 @@ export const recalcularStock = async (req, res, next) => {
     console.error("ERROR recalcularStock:", err);
     await t.rollback();
     return res.status(500).json({ error: "Error al recalcular stock" });
+  }
+};
+
+/* =========================================================
+   POST /api/productos/reconciliar-stock
+   Genera ajustes_stock para cerrar discrepancias existentes
+========================================================= */
+export const reconciliarStock = async (req, res, next) => {
+  const t = await sequelize.transaction();
+  try {
+    const productos = await Producto.findAll({ transaction: t });
+    const reconciliados = [];
+
+    for (const producto of productos) {
+      const id = producto.id_producto;
+      const stockActual = Number(producto.stock ?? 0);
+
+      const [entRow] = await sequelize.query(
+        `SELECT COALESCE(SUM(sm.cantidad), 0) AS total FROM suministra sm INNER JOIN suministro su ON su.id_suministro = sm.id_suministro WHERE sm.id_producto = ?`,
+        { replacements: [id], type: QueryTypes.SELECT, transaction: t }
+      );
+      const [salRow] = await sequelize.query(
+        `SELECT COALESCE(SUM(c.cantidad), 0) AS total FROM contiene c INNER JOIN pedidos p ON p.id_pedido = c.id_pedido WHERE c.id_producto = ?`,
+        { replacements: [id], type: QueryTypes.SELECT, transaction: t }
+      );
+      const [ajuRow] = await sequelize.query(
+        `SELECT COALESCE(SUM(a.cantidad), 0) AS total FROM ajustes_stock a WHERE a.id_producto = ?`,
+        { replacements: [id], type: QueryTypes.SELECT, transaction: t }
+      );
+
+      const totalEntradas = Number(entRow?.total || 0);
+      const totalSalidas = Number(salRow?.total || 0);
+      const totalAjustes = Number(ajuRow?.total || 0);
+      const stockTeorico = totalEntradas - totalSalidas + totalAjustes;
+      const delta = stockActual - stockTeorico;
+
+      if (delta !== 0) {
+        await registrarAjusteStock({
+          t,
+          id_producto: id,
+          delta,
+          motivo: "Reconciliación inicial — ajuste automático para igualar stock con historial",
+        });
+        reconciliados.push({ id_producto: id, stock: stockActual, stock_teorico: stockTeorico, ajuste: delta });
+      }
+    }
+
+    await t.commit();
+    return res.json({
+      ok: true,
+      message: `Reconciliación completada. ${reconciliados.length} productos ajustados de ${productos.length} totales.`,
+      reconciliados,
+    });
+  } catch (err) {
+    console.error("ERROR reconciliarStock:", err);
+    await t.rollback();
+    return res.status(500).json({ error: "Error al reconciliar stock" });
   }
 };
 

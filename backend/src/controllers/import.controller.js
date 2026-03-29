@@ -6,8 +6,18 @@ const RACKS_VALIDOS = ['A', 'B', 'C'];
 const LARGO_MIN = 1, LARGO_MAX = 6;
 const PISO_MIN = 1, PISO_MAX = 3;
 
+function getAuditOptions(req) {
+  const clientTimeHeader = req.headers['x-client-time'];
+  return {
+    userId: req.empleado?.id || null,
+    ipAddress: req.ip || req.connection?.remoteAddress || null,
+    clientTime: clientTimeHeader ? new Date(clientTimeHeader) : null,
+  };
+}
+
 export const importarSuministroExcel = async (req, res, next) => {
   const t = await sequelize.transaction();
+  const auditOptions = getAuditOptions(req);
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No se subió archivo" });
@@ -28,7 +38,7 @@ export const importarSuministroExcel = async (req, res, next) => {
         id_proveedor,
         id_empleado,
       },
-      { transaction: t }
+      { transaction: t, ...auditOptions }
     );
 
     let productosProcesados = 0;
@@ -161,14 +171,14 @@ export const importarSuministroExcel = async (req, res, next) => {
             descripcion: "Importado automáticamente desde Excel",
             imagen_url: null,
           },
-          { transaction: t }
+          { transaction: t, ...auditOptions }
         );
         productosCreados++;
       } else {
         if (precio !== null) {
           await producto.update(
             { precio: precio },
-            { transaction: t }
+            { transaction: t, ...auditOptions }
           );
         }
       }
@@ -179,11 +189,11 @@ export const importarSuministroExcel = async (req, res, next) => {
           id_producto,
           cantidad,
         },
-        { transaction: t }
+        { transaction: t, ...auditOptions }
       );
 
       if (cantidad > 0) {
-        await producto.increment("stock", { by: cantidad, transaction: t });
+        await producto.increment("stock", { by: cantidad, transaction: t, ...auditOptions });
       }
 
       // 📍 Asignar ubicación si existe y es válida
@@ -197,17 +207,19 @@ export const importarSuministroExcel = async (req, res, next) => {
             piso: ubicacion.piso,
             descripcion: `Rack ${ubicacion.rack}, Módulo ${ubicacion.modulo}, Piso ${ubicacion.piso}`
           },
-          transaction: t
+          transaction: t,
+          ...auditOptions
         });
 
         // Reemplazar ubicación anterior del producto (1 producto = 1 zona)
         await SeUbica.destroy({
           where: { id_producto },
-          transaction: t
+          transaction: t,
+          ...auditOptions
         });
         await SeUbica.create(
           { id_producto, id_zona: zona.id_zona },
-          { transaction: t }
+          { transaction: t, ...auditOptions }
         );
 
         ubicacionesAsignadas++;

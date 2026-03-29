@@ -25,10 +25,10 @@ function calcSubtotalLine(cantidad, precio_unitario) {
   return (Number(cantidad) * Number(precio_unitario)).toFixed(2);
 }
 
-async function recalcTotales(id_pedido, descuento_total = 0, impuesto_total = 0, t) {
+async function recalcTotales(id_pedido, descuento_total = 0, impuesto_total = 0, t, auditOptions = {}) {
   const subtotal = (await Contiene.sum("subtotal_linea", { where: { id_pedido }, transaction: t })) || 0;
   const total = Number(subtotal) - Number(descuento_total) + Number(impuesto_total);
-  await Pedido.update({ subtotal, descuento_total, impuesto_total, total }, { where: { id_pedido }, transaction: t });
+  await Pedido.update({ subtotal, descuento_total, impuesto_total, total }, { where: { id_pedido }, transaction: t, ...auditOptions });
   return { subtotal, descuento_total, impuesto_total, total };
 }
 
@@ -189,7 +189,7 @@ export const createPedido = async (req, res, next) => {
       }
     }
 
-    const tot = await recalcTotales(pedido.id_pedido, descuento_total, impuesto_total, t);
+    const tot = await recalcTotales(pedido.id_pedido, descuento_total, impuesto_total, t, auditOptions);
 
     await t.commit();
     res.status(201).json({ ...pedido.toJSON(), ...tot });
@@ -292,7 +292,7 @@ export const updatePedido = async (req, res, next) => {
       }
     }
 
-    const tot = await recalcTotales(pedido.id_pedido, headerData.descuento_total ?? pedido.descuento_total, headerData.impuesto_total ?? pedido.impuesto_total, t);
+    const tot = await recalcTotales(pedido.id_pedido, headerData.descuento_total ?? pedido.descuento_total, headerData.impuesto_total ?? pedido.impuesto_total, t, auditOptions);
 
     await t.commit();
     res.json({ ...pedido.toJSON(), ...tot });
@@ -383,7 +383,7 @@ export const addPedidoItem = async (req, res, next) => {
         await producto.update({ stock: stockDisponible - cantidadSolicitada }, { transaction: t, ...auditOptions });
     }
     
-    await recalcTotales(id, pedido.descuento_total, pedido.impuesto_total, t);
+    await recalcTotales(id, pedido.descuento_total, pedido.impuesto_total, t, auditOptions);
 
     await t.commit();
     res.json({ ok: true, message: "Item agregado" });
@@ -421,7 +421,7 @@ export const deletePedidoItem = async (req, res, next) => {
     }
 
     await item.destroy({ transaction: t, ...auditOptions });
-    await recalcTotales(id, pedido.descuento_total, pedido.impuesto_total, t);
+    await recalcTotales(id, pedido.descuento_total, pedido.impuesto_total, t, auditOptions);
 
     await t.commit();
     res.json({ ok: true, message: "Item eliminado" });

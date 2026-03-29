@@ -14,6 +14,7 @@ import {
   bulkDeleteProductos,
   getMovimientosProducto,
   recalcularStock,
+  reconciliarStock,
   exportarProductosExcel,
 } from "../controllers/producto.controller.js";
 
@@ -26,6 +27,7 @@ router.get("/:id", getProductoById);
 
 router.post("/", verificarAuth, validateProductoCreate, createProducto);
 router.post("/recalcular-stock", verificarAuth, recalcularStock);
+router.post("/reconciliar-stock", verificarAuth, reconciliarStock);
 
 router.put("/:id", verificarAuth, validateProductoUpdate, updateProducto);
 router.delete("/:id", verificarAuth, deleteProducto);

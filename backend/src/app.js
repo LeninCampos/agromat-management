@@ -5,6 +5,7 @@ import cors from "cors";
 
 import rateLimit from "express-rate-limit";
 
+import { QueryTypes } from "sequelize";
 import sequelize from "./config/db.js";   // única conexión
 import "./models/index.js";               // carga asociaciones
 
@@ -131,6 +132,64 @@ const PORT = process.env.PORT || 4000;
   try {
     await sequelize.authenticate();
     console.log("Conectado a MariaDB");
+
+    // Asegurar que la tabla ajustes_stock existe
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS ajustes_stock (
+        id_ajuste    INT AUTO_INCREMENT PRIMARY KEY,
+        id_producto  VARCHAR(255) NOT NULL,
+        fecha        DATE NOT NULL,
+        hora         TIME,
+        cantidad     DECIMAL(14,2) NOT NULL DEFAULT 0,
+        motivo       VARCHAR(500),
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("Tabla ajustes_stock verificada");
+
+    // Reconciliación automática: cerrar discrepancias existentes (solo la primera vez que haya)
+    const [countRow] = await sequelize.query(
+      `SELECT COUNT(*) AS total FROM ajustes_stock WHERE motivo LIKE 'Reconciliación inicial%'`,
+      { type: QueryTypes.SELECT }
+    );
+    if (Number(countRow?.total || 0) === 0) {
+      console.log("Ejecutando reconciliación inicial de stock...");
+      const [productos] = await sequelize.query(
+        `SELECT id_producto, stock FROM productos`,
+        { type: QueryTypes.SELECT }
+      ).then(rows => [rows]);
+
+      let ajustados = 0;
+      for (const prod of productos) {
+        const id = prod.id_producto;
+        const stockActual = Number(prod.stock ?? 0);
+
+        const [entRow] = await sequelize.query(
+          `SELECT COALESCE(SUM(sm.cantidad), 0) AS total FROM suministra sm INNER JOIN suministro su ON su.id_suministro = sm.id_suministro WHERE sm.id_producto = ?`,
+          { replacements: [id], type: QueryTypes.SELECT }
+        );
+        const [salRow] = await sequelize.query(
+          `SELECT COALESCE(SUM(c.cantidad), 0) AS total FROM contiene c INNER JOIN pedidos p ON p.id_pedido = c.id_pedido WHERE c.id_producto = ?`,
+          { replacements: [id], type: QueryTypes.SELECT }
+        );
+        const [ajuRow] = await sequelize.query(
+          `SELECT COALESCE(SUM(a.cantidad), 0) AS total FROM ajustes_stock a WHERE a.id_producto = ?`,
+          { replacements: [id], type: QueryTypes.SELECT }
+        );
+
+        const stockTeorico = Number(entRow?.total || 0) - Number(salRow?.total || 0) + Number(ajuRow?.total || 0);
+        const delta = stockActual - stockTeorico;
+
+        if (delta !== 0) {
+          await sequelize.query(
+            `INSERT INTO ajustes_stock (id_producto, fecha, hora, cantidad, motivo) VALUES (?, CURDATE(), CURTIME(), ?, ?)`,
+            { replacements: [id, delta, "Reconciliación inicial — ajuste automático para igualar stock con historial"] }
+          );
+          ajustados++;
+        }
+      }
+      console.log(`Reconciliación completada: ${ajustados} productos ajustados de ${productos.length} totales`);
+    }
 
     app.listen(PORT, () => {
       console.log(`Servidor escuchando en http://localhost:${PORT}`);
