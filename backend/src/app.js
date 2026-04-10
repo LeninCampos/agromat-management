@@ -147,48 +147,67 @@ const PORT = process.env.PORT || 4000;
     `);
     console.log("Tabla ajustes_stock verificada");
 
-    // Reconciliación automática: cerrar discrepancias existentes (solo la primera vez que haya)
-    const [countRow] = await sequelize.query(
-      `SELECT COUNT(*) AS total FROM ajustes_stock WHERE motivo LIKE 'Reconciliación inicial%'`,
-      { type: QueryTypes.SELECT }
-    );
-    if (Number(countRow?.total || 0) === 0) {
-      console.log("Ejecutando reconciliación inicial de stock...");
-      const [productos] = await sequelize.query(
-        `SELECT id_producto, stock FROM productos`,
+    // Reconciliación automática: cerrar discrepancias existentes (solo la primera vez).
+    // Envuelta en su propio try/catch para que un fallo NO impida arrancar el servidor.
+    // Toda la reconciliación va en una transacción: o se aplica completa, o nada.
+    try {
+      const [countRow] = await sequelize.query(
+        `SELECT COUNT(*) AS total FROM ajustes_stock WHERE motivo LIKE 'Reconciliación inicial%'`,
         { type: QueryTypes.SELECT }
-      ).then(rows => [rows]);
+      );
 
-      let ajustados = 0;
-      for (const prod of productos) {
-        const id = prod.id_producto;
-        const stockActual = Number(prod.stock ?? 0);
-
-        const [entRow] = await sequelize.query(
-          `SELECT COALESCE(SUM(sm.cantidad), 0) AS total FROM suministra sm INNER JOIN suministro su ON su.id_suministro = sm.id_suministro WHERE sm.id_producto = ?`,
-          { replacements: [id], type: QueryTypes.SELECT }
-        );
-        const [salRow] = await sequelize.query(
-          `SELECT COALESCE(SUM(c.cantidad), 0) AS total FROM contiene c INNER JOIN pedidos p ON p.id_pedido = c.id_pedido WHERE c.id_producto = ?`,
-          { replacements: [id], type: QueryTypes.SELECT }
-        );
-        const [ajuRow] = await sequelize.query(
-          `SELECT COALESCE(SUM(a.cantidad), 0) AS total FROM ajustes_stock a WHERE a.id_producto = ?`,
-          { replacements: [id], type: QueryTypes.SELECT }
-        );
-
-        const stockTeorico = Number(entRow?.total || 0) - Number(salRow?.total || 0) + Number(ajuRow?.total || 0);
-        const delta = stockActual - stockTeorico;
-
-        if (delta !== 0) {
-          await sequelize.query(
-            `INSERT INTO ajustes_stock (id_producto, fecha, hora, cantidad, motivo) VALUES (?, CURDATE(), CURTIME(), ?, ?)`,
-            { replacements: [id, delta, "Reconciliación inicial — ajuste automático para igualar stock con historial"] }
+      if (Number(countRow?.total || 0) === 0) {
+        console.log("Ejecutando reconciliación inicial de stock...");
+        const tReconcile = await sequelize.transaction();
+        try {
+          const productos = await sequelize.query(
+            `SELECT id_producto, stock FROM productos`,
+            { type: QueryTypes.SELECT, transaction: tReconcile }
           );
-          ajustados++;
+
+          let ajustados = 0;
+          for (const prod of productos) {
+            const id = prod.id_producto;
+            const stockActual = Number(prod.stock ?? 0);
+
+            const [entRow] = await sequelize.query(
+              `SELECT COALESCE(SUM(sm.cantidad), 0) AS total FROM suministra sm INNER JOIN suministro su ON su.id_suministro = sm.id_suministro WHERE sm.id_producto = ?`,
+              { replacements: [id], type: QueryTypes.SELECT, transaction: tReconcile }
+            );
+            const [salRow] = await sequelize.query(
+              `SELECT COALESCE(SUM(c.cantidad), 0) AS total FROM contiene c INNER JOIN pedidos p ON p.id_pedido = c.id_pedido WHERE c.id_producto = ?`,
+              { replacements: [id], type: QueryTypes.SELECT, transaction: tReconcile }
+            );
+            const [ajuRow] = await sequelize.query(
+              `SELECT COALESCE(SUM(a.cantidad), 0) AS total FROM ajustes_stock a WHERE a.id_producto = ?`,
+              { replacements: [id], type: QueryTypes.SELECT, transaction: tReconcile }
+            );
+
+            const stockTeorico = Number(entRow?.total || 0) - Number(salRow?.total || 0) + Number(ajuRow?.total || 0);
+            const delta = stockActual - stockTeorico;
+
+            if (delta !== 0) {
+              await sequelize.query(
+                `INSERT INTO ajustes_stock (id_producto, fecha, hora, cantidad, motivo) VALUES (?, CURDATE(), CURTIME(), ?, ?)`,
+                {
+                  replacements: [id, delta, "Reconciliación inicial — ajuste automático para igualar stock con historial"],
+                  transaction: tReconcile,
+                }
+              );
+              ajustados++;
+            }
+          }
+
+          await tReconcile.commit();
+          console.log(`Reconciliación completada: ${ajustados} productos ajustados de ${productos.length} totales`);
+        } catch (errReconcile) {
+          await tReconcile.rollback();
+          throw errReconcile;
         }
       }
-      console.log(`Reconciliación completada: ${ajustados} productos ajustados de ${productos.length} totales`);
+    } catch (errReconcile) {
+      console.error("Reconciliación inicial falló (el servidor arrancará igualmente):", errReconcile.message);
+      console.error("Podés ejecutarla manualmente con POST /api/productos/reconciliar-stock");
     }
 
     app.listen(PORT, () => {
