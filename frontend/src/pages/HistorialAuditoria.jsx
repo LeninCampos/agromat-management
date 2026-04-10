@@ -700,7 +700,7 @@ export default function HistorialAuditoria() {
 
       const porEmpleado = data.estadisticas?.por_empleado || [];
       const empList = porEmpleado.map((e) => ({
-        id: e.id_empleado,
+        id: e.id_empleado == null ? "sistema" : String(e.id_empleado),
         nombre: e.nombre_empleado || `Empleado ${e.id_empleado}`,
       }));
       setEmpleados(empList);

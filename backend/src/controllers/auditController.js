@@ -268,10 +268,14 @@ export const getAuditLogs = async (req, res) => {
 
     // 2. Filtro de empleado
     if (id_empleado) {
-      if (id_empleado === "null" || id_empleado === "sistema") {
+      const normalized = String(id_empleado).trim().toLowerCase();
+      if (normalized === "null" || normalized === "sistema") {
         where.id_empleado = null;
       } else {
-        where.id_empleado = parseInt(id_empleado);
+        const parsed = parseInt(id_empleado, 10);
+        if (!Number.isNaN(parsed)) {
+          where.id_empleado = parsed;
+        }
       }
     }
 
