@@ -3,6 +3,7 @@ import { Router } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   getAllEnvios,
   getEnvioById,
@@ -66,13 +67,13 @@ router.get("/", getAllEnvios);
 router.get("/:id", getEnvioById);
 
 // Crear nuevo envío
-router.post("/", createEnvio);
+router.post("/", verificarAuth, createEnvio);
 
 // Actualizar envío
-router.put("/:id", updateEnvio);
+router.put("/:id", verificarAuth, updateEnvio);
 
 // Eliminar envío
-router.delete("/:id", deleteEnvio);
+router.delete("/:id", verificarAuth, deleteEnvio);
 
 // =====================================================
 // ✅ NUEVO: Rutas para fotos múltiples
@@ -82,9 +83,9 @@ router.delete("/:id", deleteEnvio);
 router.get("/:id/fotos", getFotosEnvio);
 
 // Subir múltiples fotos a un envío
-router.post("/:id/fotos", upload.array("fotos", 10), uploadFotosEnvio);
+router.post("/:id/fotos", verificarAuth, upload.array("fotos", 10), uploadFotosEnvio);
 
 // Eliminar una foto específica
-router.delete("/:id/fotos/:fotoId", deleteFotoEnvio);
+router.delete("/:id/fotos/:fotoId", verificarAuth, deleteFotoEnvio);
 
 export default router;

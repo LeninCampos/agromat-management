@@ -1,5 +1,6 @@
 // backend/src/routes/pedidos.js
 import { Router } from "express";
+import { verificarAuth } from "../middleware/verificarAuth.js";
 import {
   getAllPedidos,
   getPedidoById,
@@ -17,12 +18,12 @@ router.get("/", getAllPedidos);
 router.get("/:id", getPedidoById);
 
 // Crear
-router.post("/", createPedido);
+router.post("/", verificarAuth, createPedido);
 
 // Actualizar
-router.put("/:id", updatePedido);
+router.put("/:id", verificarAuth, updatePedido);
 
 // Eliminar
-router.delete("/:id", deletePedido);
+router.delete("/:id", verificarAuth, deletePedido);
 
 export default router;
