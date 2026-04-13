@@ -77,6 +77,12 @@ El sistema se divide en **11 módulos** accesibles desde un panel administrativo
 | **Historial de Producto** | Timeline completa de movimientos de un producto + gráfico SVG custom (sin librerías externas) mostrando evolución de stock. |
 | **Auditoría** | Log forense de toda operación CRUD: tabla afectada, acción, datos anteriores, datos nuevos, usuario, IP y timestamp del cliente. Los campos sensibles (`password`, `token`, `secret`) se sanitizan a `[REDACTED]`. |
 
+### Capturas
+
+![Historial de inventario](./screenshots/agromat_historial.png)
+![Gestión de pedidos](./screenshots/agromat_pedidos.png)
+![Auditoría](./screenshots/agromat_auditoria.png)
+
 ---
 
 ## Features destacadas
