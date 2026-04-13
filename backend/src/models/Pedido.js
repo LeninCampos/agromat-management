@@ -50,6 +50,15 @@ const Pedido = sequelize.define(
       type: DataTypes.STRING(50),
       allowNull: true,
     },
+    // Facturación manual externa
+    numero_factura: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    fecha_facturacion: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     // Moneda y Tasa para historial (Base: EUR)
     moneda: {
       type: DataTypes.STRING(3), // 'EUR' o 'USD'

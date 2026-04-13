@@ -71,12 +71,16 @@ const emptyForm = {
   id_empleado: "", id_cliente: "", direccion_envio: "",
   fecha_entrega_estimada: "", quien_pidio: "", observaciones: "",
   numero_remito: "", descuento_total: 0, impuesto_total: 0, items: [],
+  numero_factura: "", fecha_facturacion: "",
 };
+
+// Helper: un pedido está facturado si tiene numero_factura no vacío
+const estaFacturado = (p) => !!(p && p.numero_factura && String(p.numero_factura).trim() !== "");
 
 export default function Pedidos() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ client: "", product: "", dateStart: "", dateEnd: "", status: "", remito: "" });
+  const [filters, setFilters] = useState({ client: "", product: "", dateStart: "", dateEnd: "", status: "", remito: "", facturacion: "" });
   const [sortConfig, setSortConfig] = useState({ key: "id_pedido", direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -315,6 +319,8 @@ export default function Pedidos() {
             <div><strong>Estado:</strong> ${pedido.status}</div>
             <div><strong>Moneda:</strong> ${mon}</div>
             <div><strong>N° Remito:</strong> ${pedido.numero_remito || '-'}</div>
+            <div><strong>N° Factura:</strong> ${pedido.numero_factura ? `<span style="color:#065F46;font-weight:700">${pedido.numero_factura}</span>` : '<span style="color:#9CA3AF">Sin facturar</span>'}</div>
+            <div><strong>Fecha facturación:</strong> ${pedido.fecha_facturacion ? String(pedido.fecha_facturacion).slice(0, 10) : '-'}</div>
             <div><strong>Dirección envío:</strong> ${pedido.direccion_envio || '-'}</div>
             <div><strong>Entrega estimada:</strong> ${pedido.fecha_entrega_estimada || '-'}</div>
           </div>
@@ -346,11 +352,29 @@ export default function Pedidos() {
   const processedItems = useMemo(() => {
     let result = [...items];
     if (filters.client) {
-      const q = filters.client.toLowerCase();
-      result = result.filter(x => x.Cliente?.nombre_cliente?.toLowerCase().includes(q) || x.quien_pidio?.toLowerCase().includes(q));
+      const q = filters.client;
+      result = result
+        .map(x => ({
+          _row: x,
+          _score: matchCliente(
+            x.Cliente?.nombre_cliente,
+            // matchCliente compone fullText = nombre + " " + contacto,
+            // así que pasamos contacto del cliente + quien_pidio para matchear ambos.
+            `${x.Cliente?.nombre_contacto || ""} ${x.quien_pidio || ""}`,
+            q
+          ),
+        }))
+        .filter(o => o._score > 0)
+        .sort((a, b) => b._score - a._score)
+        .map(o => o._row);
     }
     if (filters.status) result = result.filter(x => x.status === filters.status);
     if (filters.remito) result = result.filter(x => x.numero_remito?.toLowerCase().includes(filters.remito.toLowerCase()));
+    if (filters.dateStart) result = result.filter(x => x.fecha_pedido && x.fecha_pedido >= filters.dateStart);
+    if (filters.dateEnd) result = result.filter(x => x.fecha_pedido && x.fecha_pedido <= filters.dateEnd);
+    if (filters.facturacion === "facturados") result = result.filter(x => estaFacturado(x));
+    else if (filters.facturacion === "sin_facturar") result = result.filter(x => !estaFacturado(x));
+    else if (filters.facturacion === "completados_sin_facturar") result = result.filter(x => x.status === "Completado" && !estaFacturado(x));
 
     if (sortConfig.key) {
       result.sort((a, b) => {
@@ -368,6 +392,41 @@ export default function Pedidos() {
   }, [processedItems, currentPage]);
 
   const totalPages = Math.ceil(processedItems.length / itemsPerPage);
+
+  // =============================
+  // Totalizadores sobre los pedidos filtrados
+  // =============================
+  const summary = useMemo(() => {
+    const acc = {
+      count: 0,
+      total: 0,
+      porStatus: {}, // { [status]: { count, total } }
+      facturados: { count: 0, total: 0 },
+      sinFacturar: { count: 0, total: 0 },
+      completadosSinFacturar: 0,
+    };
+    for (const p of processedItems) {
+      const t = Number(p.total) || 0;
+      acc.count++;
+      acc.total += t;
+      const s = p.status || "Pendiente";
+      if (!acc.porStatus[s]) acc.porStatus[s] = { count: 0, total: 0 };
+      acc.porStatus[s].count++;
+      acc.porStatus[s].total += t;
+      if (estaFacturado(p)) {
+        acc.facturados.count++;
+        acc.facturados.total += t;
+      } else {
+        acc.sinFacturar.count++;
+        acc.sinFacturar.total += t;
+        if (p.status === "Completado") acc.completadosSinFacturar++;
+      }
+    }
+    return acc;
+  }, [processedItems]);
+
+  // Formateador simple para EUR (moneda por defecto del resumen)
+  const fmtEUR = (v) => Number(v || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 
   const getStatusBadge = (s = "Pendiente") => {
     const meta = {
@@ -393,6 +452,11 @@ export default function Pedidos() {
           ...form,
           id_empleado: Number(form.id_empleado),
           id_cliente: Number(form.id_cliente),
+          // Facturación: normalizar vacíos a null para que el backend los limpie.
+          numero_factura: form.numero_factura && String(form.numero_factura).trim() !== ""
+            ? String(form.numero_factura).trim()
+            : null,
+          fecha_facturacion: form.fecha_facturacion ? form.fecha_facturacion : null,
       };
 
       if (editingId) {
@@ -535,7 +599,88 @@ export default function Pedidos() {
             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        <button className="agromat-btn-secondary" style={{ height: "38px" }} onClick={() => setFilters({ client: "", product: "", dateStart: "", dateEnd: "", status: "", remito: "" })}>Limpiar</button>
+        <div style={{ width: "140px" }}>
+          <label className="text-xs font-bold text-gray-400 mb-1 block">Desde</label>
+          <input type="date" className="agromat-input" value={filters.dateStart} onChange={e => setFilters({ ...filters, dateStart: e.target.value })} />
+        </div>
+        <div style={{ width: "140px" }}>
+          <label className="text-xs font-bold text-gray-400 mb-1 block">Hasta</label>
+          <input type="date" className="agromat-input" value={filters.dateEnd} onChange={e => setFilters({ ...filters, dateEnd: e.target.value })} />
+        </div>
+        <div style={{ width: "170px" }}>
+          <label className="text-xs font-bold text-gray-400 mb-1 block">Facturación</label>
+          <select className="agromat-select" value={filters.facturacion} onChange={e => setFilters({ ...filters, facturacion: e.target.value })}>
+            <option value="">Todos</option>
+            <option value="facturados">Facturados</option>
+            <option value="sin_facturar">Sin facturar</option>
+            <option value="completados_sin_facturar">Completados sin facturar</option>
+          </select>
+        </div>
+        <button
+          type="button"
+          className="agromat-btn-secondary"
+          style={{
+            height: "38px",
+            background: filters.facturacion === "completados_sin_facturar" ? "#F59E0B" : undefined,
+            color: filters.facturacion === "completados_sin_facturar" ? "white" : undefined,
+            borderColor: filters.facturacion === "completados_sin_facturar" ? "#F59E0B" : undefined,
+          }}
+          onClick={() => setFilters(f => ({
+            ...f,
+            facturacion: f.facturacion === "completados_sin_facturar" ? "" : "completados_sin_facturar",
+          }))}
+          title="Mostrar solo pedidos Completados que aún no fueron facturados"
+        >
+          {filters.facturacion === "completados_sin_facturar" ? "✓ Completados s/ factura" : "Completados s/ factura"}
+        </button>
+        <button className="agromat-btn-secondary" style={{ height: "38px" }} onClick={() => setFilters({ client: "", product: "", dateStart: "", dateEnd: "", status: "", remito: "", facturacion: "" })}>Limpiar</button>
+      </div>
+
+      {/* Panel de totalizadores */}
+      <div className="mb-5" style={{
+        background: "white", borderRadius: "14px", border: "1px solid #e5e7eb",
+        boxShadow: "0 1px 10px rgba(0,0,0,0.04)", padding: "14px 16px"
+      }}>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Pedidos</span>
+            <div className="text-lg font-black text-gray-800 leading-tight">{summary.count}</div>
+          </div>
+          <div>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Total</span>
+            <div className="text-lg font-black text-indigo-600 leading-tight">{fmtEUR(summary.total)}</div>
+          </div>
+          <div className="h-10 w-px bg-gray-200" />
+          {STATUS_OPTIONS.map(s => {
+            const d = summary.porStatus[s] || { count: 0, total: 0 };
+            return (
+              <div key={s} className="min-w-[120px]">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">{s}</span>
+                <div className="text-sm font-bold text-gray-700 leading-tight">
+                  {d.count} · {fmtEUR(d.total)}
+                </div>
+              </div>
+            );
+          })}
+          <div className="h-10 w-px bg-gray-200" />
+          <div className="min-w-[150px]">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Facturados</span>
+            <div className="text-sm font-bold text-emerald-700 leading-tight">
+              {summary.facturados.count} · {fmtEUR(summary.facturados.total)}
+            </div>
+          </div>
+          <div className="min-w-[150px]">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Sin facturar</span>
+            <div className="text-sm font-bold text-amber-700 leading-tight">
+              {summary.sinFacturar.count} · {fmtEUR(summary.sinFacturar.total)}
+            </div>
+          </div>
+          {summary.completadosSinFacturar > 0 && (
+            <div className="ml-auto px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200">
+              {summary.completadosSinFacturar} Completado(s) sin facturar
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tabla */}
@@ -547,29 +692,65 @@ export default function Pedidos() {
               <th style={S.th}>Fecha</th>
               <th style={S.th}>Cliente</th>
               <th style={S.th} className="text-center">Estado</th>
+              <th style={S.th} className="text-center">Factura</th>
               <th style={S.th} className="text-right">Total</th>
               <th style={S.th} className="text-center">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="p-10 text-center text-gray-400">Cargando registros...</td></tr>
-            ) : paginatedItems.map(row => (
-              <tr key={row.id_pedido} className="hover:bg-gray-50 transition-colors">
+              <tr><td colSpan={7} className="p-10 text-center text-gray-400">Cargando registros...</td></tr>
+            ) : paginatedItems.map(row => {
+              const facturado = estaFacturado(row);
+              const pendienteFacturar = row.status === "Completado" && !facturado;
+              return (
+              <tr
+                key={row.id_pedido}
+                className={`transition-colors ${pendienteFacturar ? "bg-amber-50/60 hover:bg-amber-100/60" : "hover:bg-gray-50"}`}
+                style={pendienteFacturar ? { boxShadow: "inset 3px 0 0 #F59E0B" } : undefined}
+              >
                 <td style={S.td} className="font-bold text-indigo-600">#{row.id_pedido}</td>
                 <td style={S.td} className="text-gray-500 text-xs">{row.fecha_pedido}</td>
                 <td style={S.td}>
                   <div className="font-bold text-gray-800">{row.Cliente?.nombre_cliente || "N/A"}</div>
-                  <div className="text-xs text-gray-400">{row.quien_pidio}</div>
+                  <div className="text-xs text-gray-400">
+                    {row.Cliente?.nombre_contacto || row.quien_pidio}
+                    {row.Cliente?.nombre_contacto && row.quien_pidio && row.quien_pidio !== row.Cliente?.nombre_contacto ? ` · ${row.quien_pidio}` : ""}
+                  </div>
                 </td>
-                <td style={S.td} className="text-center flex justify-center">{getStatusBadge(row.status)}</td>
-                
+                <td style={S.td} className="text-center">
+                  <div className="flex flex-col items-center gap-1">
+                    {getStatusBadge(row.status)}
+                    {pendienteFacturar && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        Sin facturar
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td style={S.td} className="text-center">
+                  {facturado ? (
+                    <div className="flex flex-col items-center">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+                        {row.numero_factura}
+                      </span>
+                      {row.fecha_facturacion && (
+                        <span className="text-[10px] text-gray-400 mt-0.5">
+                          {String(row.fecha_facturacion).slice(0, 10)}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+
                 {/* Visualización del Total Histórico */}
                 <td style={S.td} className="text-right font-bold text-gray-900">
                     {/* Usamos el moneda y tasa GUARDADOS en la DB */}
                     {formatMoney(row.total, row.moneda, row.tasa_cambio)}
                 </td>
-                
+
                 <td style={S.td}>
                   <div className="flex gap-2 justify-center">
                     <button title="Detalles del Pedido" style={S.btnAction("#6366F1")} onClick={() => verDetalles(row)}><Eye size={14} /></button>
@@ -581,7 +762,8 @@ export default function Pedidos() {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -676,6 +858,91 @@ export default function Pedidos() {
 
                 <div className="agromat-form-field"><label>Remito</label><input type="text" className="agromat-input" value={form.numero_remito} onChange={e => setForm({ ...form, numero_remito: e.target.value })} /></div>
                 <div className="agromat-form-field"><label>Contacto</label><input type="text" className="agromat-input" value={form.quien_pidio} onChange={e => setForm({ ...form, quien_pidio: e.target.value })} /></div>
+              </div>
+
+              {/* Sección de Facturación */}
+              <div className="mt-4 p-4 rounded-xl border" style={{
+                background: estaFacturado(form) ? "#ECFDF5" : "#FFFBEB",
+                borderColor: estaFacturado(form) ? "#A7F3D0" : "#FDE68A",
+              }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-sm" style={{ color: estaFacturado(form) ? "#065F46" : "#92400E" }}>
+                      Facturación
+                    </h4>
+                    {estaFacturado(form) ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                        Facturado
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        Sin facturar
+                      </span>
+                    )}
+                  </div>
+                  {!estaFacturado(form) && (
+                    <button
+                      type="button"
+                      className="agromat-btn-primary"
+                      style={{ padding: "6px 14px", fontSize: "0.8rem" }}
+                      onClick={() => {
+                        setForm(prev => ({
+                          ...prev,
+                          fecha_facturacion: prev.fecha_facturacion || new Date().toISOString(),
+                        }));
+                      }}
+                      title="Setea la fecha de facturación a ahora. Recordá ingresar el número de factura."
+                    >
+                      Marcar facturado (ahora)
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="agromat-form-field">
+                    <label>N° Factura</label>
+                    <input
+                      type="text"
+                      className="agromat-input"
+                      placeholder="Ej: 0001-00001425"
+                      value={form.numero_factura || ""}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setForm(prev => {
+                          const next = { ...prev, numero_factura: val };
+                          // Si acaba de recibir un número y no había fecha, setear fecha actual.
+                          if (val.trim() !== "" && !prev.fecha_facturacion) {
+                            next.fecha_facturacion = new Date().toISOString();
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
+                  <div className="agromat-form-field">
+                    <label>Fecha de facturación</label>
+                    <input
+                      type="datetime-local"
+                      className="agromat-input"
+                      value={
+                        form.fecha_facturacion
+                          ? String(form.fecha_facturacion).slice(0, 16)
+                          : ""
+                      }
+                      onChange={e => {
+                        const v = e.target.value;
+                        setForm(prev => ({
+                          ...prev,
+                          fecha_facturacion: v ? new Date(v).toISOString() : "",
+                        }));
+                      }}
+                    />
+                  </div>
+                </div>
+                {estaFacturado(form) && (
+                  <p className="mt-2 text-xs text-emerald-800">
+                    Este pedido ya fue facturado. Podés editar el número o la fecha si hace falta; los cambios quedarán registrados en la auditoría.
+                  </p>
+                )}
               </div>
 
               {/* Items */}
