@@ -9,22 +9,116 @@ import { getClientes } from "../api/clientes";
 import { getEmpleados } from "../api/empleados";
 import logoAgromat from "../assets/agromat-logo.png"; 
 import {
-  CheckCircle, Clock, XCircle, Package, Download, Eye
+  CheckCircle, Clock, XCircle, Package, Download, Eye, FileCheck
 } from "lucide-react";
 
 // =============================
-// Estilos Compactos
+// Estilos
 // =============================
 const S = {
   page: { padding: "1.5rem" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" },
   title: { fontSize: "1.5rem", fontWeight: "750", margin: 0, letterSpacing: "-0.02em" },
-  filterBar: {
-    background: "white", padding: "16px", borderRadius: "14px",
-    boxShadow: "0 1px 10px rgba(0,0,0,0.04)", marginBottom: "20px",
-    display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "flex-end",
-    border: "1px solid #e5e7eb"
+
+  // --- Filter card ---
+  filterCard: {
+    background: "white", borderRadius: "14px", border: "1px solid #E5E7EB",
+    boxShadow: "0 1px 10px rgba(0,0,0,0.04)", marginBottom: "16px", overflow: "hidden",
   },
+  filterRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(220px,2fr) minmax(140px,1fr) minmax(140px,1fr) minmax(140px,1fr)",
+    gap: "14px",
+    padding: "14px 16px",
+  },
+  filterRowSegmented: {
+    display: "flex", flexWrap: "wrap", gap: "18px 28px",
+    alignItems: "flex-end", padding: "14px 16px",
+    borderTop: "1px solid #F1F5F9", background: "#FAFAFB",
+  },
+  fieldLabel: {
+    display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#9CA3AF",
+    textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px",
+  },
+  segWrap: { display: "flex", flexDirection: "column", minWidth: 0 },
+  segGroup: {
+    display: "inline-flex", padding: "3px", borderRadius: "10px",
+    background: "#F3F4F6", border: "1px solid #E5E7EB",
+  },
+  segBtn: (active) => ({
+    padding: "7px 14px", borderRadius: "7px", border: "none", cursor: "pointer",
+    fontSize: "0.78rem", fontWeight: 700, letterSpacing: "-0.005em",
+    background: active ? "white" : "transparent",
+    color: active ? "#4F46E5" : "#6B7280",
+    boxShadow: active ? "0 1px 2px rgba(16,24,40,0.08), 0 0 0 1px rgba(79,70,229,0.15)" : "none",
+    transition: "all 0.12s ease",
+    whiteSpace: "nowrap",
+  }),
+  clearBtn: {
+    padding: "8px 16px", borderRadius: "10px", border: "1px solid #E5E7EB",
+    background: "white", color: "#6B7280", fontWeight: 600, fontSize: "0.8rem",
+    cursor: "pointer", height: "38px", alignSelf: "flex-end",
+  },
+
+  // --- Summary card ---
+  summaryCard: {
+    background: "white", borderRadius: "14px", border: "1px solid #E5E7EB",
+    boxShadow: "0 1px 10px rgba(0,0,0,0.04)", marginBottom: "20px",
+    padding: "18px 20px",
+  },
+  summaryTop: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    gap: "24px", flexWrap: "wrap",
+    paddingBottom: "16px", marginBottom: "16px",
+    borderBottom: "1px dashed #E5E7EB",
+  },
+  summaryTopMetrics: {
+    display: "flex", alignItems: "center", gap: "36px", flexWrap: "wrap",
+  },
+  metricBig: {
+    display: "flex", flexDirection: "column", gap: "2px",
+  },
+  metricBigLabel: {
+    fontSize: "0.65rem", fontWeight: 700, color: "#9CA3AF",
+    textTransform: "uppercase", letterSpacing: "0.1em",
+  },
+  metricBigValue: (color = "#111827") => ({
+    fontSize: "1.65rem", fontWeight: 800, color, letterSpacing: "-0.02em",
+    fontVariantNumeric: "tabular-nums", lineHeight: 1.1,
+  }),
+  statGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: "10px",
+  },
+  statCard: (accent) => ({
+    padding: "12px 14px", borderRadius: "10px",
+    background: "#FAFAFB", border: "1px solid #F1F5F9",
+    borderLeft: `3px solid ${accent}`,
+    display: "flex", flexDirection: "column", gap: "4px",
+  }),
+  statCardLabel: {
+    fontSize: "0.65rem", fontWeight: 700, color: "#9CA3AF",
+    textTransform: "uppercase", letterSpacing: "0.08em",
+  },
+  statCardCount: (color) => ({
+    fontSize: "1.05rem", fontWeight: 800, color, fontVariantNumeric: "tabular-nums",
+    lineHeight: 1.1,
+  }),
+  statCardTotal: {
+    fontSize: "0.78rem", fontWeight: 600, color: "#6B7280",
+    fontVariantNumeric: "tabular-nums",
+  },
+  alertBadge: {
+    display: "inline-flex", alignItems: "center", gap: "6px",
+    padding: "7px 14px", borderRadius: "999px",
+    background: "#FEF3C7", color: "#92400E",
+    border: "1px solid #FDE68A",
+    fontSize: "0.78rem", fontWeight: 700,
+    fontVariantNumeric: "tabular-nums",
+  },
+
+  // --- Table ---
   tableCard: {
     background: "white", borderRadius: "14px", border: "1px solid #e5e7eb",
     boxShadow: "0 1px 10px rgba(0,0,0,0.04)", overflowX: "auto"
@@ -43,6 +137,52 @@ const S = {
     background: active ? "#4F46E5" : "white", color: active ? "white" : "#374151",
     cursor: "pointer", fontWeight: "700", fontSize: "0.85rem"
   })
+};
+
+// Panel de facturación dentro del modal de edición/nuevo pedido
+const SF = {
+  panel: (facturado) => ({
+    marginTop: "18px", padding: "14px 16px", borderRadius: "12px",
+    background: facturado ? "#ECFDF5" : "#FFFBEB",
+    border: `1px solid ${facturado ? "#A7F3D0" : "#FDE68A"}`,
+  }),
+  header: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    gap: "12px", flexWrap: "wrap", marginBottom: "12px",
+  },
+  headerLeft: { display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" },
+  title: (facturado) => ({
+    margin: 0, fontSize: "0.92rem", fontWeight: 800,
+    color: facturado ? "#065F46" : "#92400E", letterSpacing: "-0.01em",
+  }),
+  pill: (facturado) => ({
+    display: "inline-flex", alignItems: "center", gap: "4px",
+    padding: "3px 10px", borderRadius: "999px",
+    fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.02em",
+    background: facturado ? "#D1FAE5" : "#FEF3C7",
+    color: facturado ? "#065F46" : "#92400E",
+    border: `1px solid ${facturado ? "#A7F3D0" : "#FDE68A"}`,
+  }),
+  cta: {
+    padding: "7px 14px", borderRadius: "8px", border: "none",
+    background: "#4F46E5", color: "white", cursor: "pointer",
+    fontSize: "0.78rem", fontWeight: 700, whiteSpace: "nowrap",
+    boxShadow: "0 1px 2px rgba(79,70,229,0.25)",
+  },
+  fields: {
+    display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px",
+  },
+  note: {
+    marginTop: "10px", fontSize: "0.75rem", color: "#065F46", lineHeight: 1.4,
+  },
+};
+
+// Colores semánticos por status (para stat cards y pills)
+const STATUS_COLOR = {
+  "Pendiente":  { accent: "#9CA3AF", count: "#374151" },
+  "En proceso": { accent: "#3B82F6", count: "#1D4ED8" },
+  "Completado": { accent: "#10B981", count: "#047857" },
+  "Cancelado":  { accent: "#EF4444", count: "#B91C1C" },
 };
 
 const STATUS_OPTIONS = ["Pendiente", "En proceso", "Completado", "Cancelado"];
@@ -443,6 +583,48 @@ export default function Pedidos() {
     );
   };
 
+  // Marca un pedido como facturado sin abrir el modal completo.
+  const marcarFacturadoRapido = async (pedido) => {
+    const { value: numero, isConfirmed } = await Swal.fire({
+      title: `Facturar pedido #${pedido.id_pedido}`,
+      html: `
+        <div style="text-align:left;font-size:13px;color:#4B5563;background:#F9FAFB;padding:10px 12px;border-radius:8px;margin-bottom:12px">
+          <div><strong>Cliente:</strong> ${pedido.Cliente?.nombre_cliente || "N/A"}</div>
+          <div><strong>Total:</strong> ${formatMoney(pedido.total, pedido.moneda, pedido.tasa_cambio)}</div>
+        </div>
+      `,
+      input: "text",
+      inputLabel: "N° de factura",
+      inputPlaceholder: "Ej: 0001-00001425",
+      inputAttributes: { autocapitalize: "off", autocorrect: "off" },
+      showCancelButton: true,
+      confirmButtonText: "Marcar facturado",
+      confirmButtonColor: "#10B981",
+      cancelButtonText: "Cancelar",
+      inputValidator: (value) => {
+        if (!value || !value.trim()) return "Ingresá el número de factura";
+      },
+    });
+    if (!isConfirmed || !numero) return;
+
+    try {
+      await updatePedido(pedido.id_pedido, {
+        numero_factura: numero.trim(),
+        fecha_facturacion: new Date().toISOString(),
+      });
+      Swal.fire({
+        title: "Facturado",
+        text: `Pedido #${pedido.id_pedido} marcado como facturado.`,
+        icon: "success",
+        timer: 1800,
+        showConfirmButton: false,
+      });
+      load();
+    } catch (err) {
+      Swal.fire("Error", err.response?.data?.error || "Error al marcar facturado", "error");
+    }
+  };
+
   const save = async (e) => {
     e.preventDefault();
     if (!form.id_cliente) return Swal.fire("Error", "Selecciona un cliente", "warning");
@@ -582,104 +764,112 @@ export default function Pedidos() {
       </div>
 
       {/* Barra de Filtros */}
-      <div style={S.filterBar}>
-        {/* ... filtros existentes ... */}
-        <div style={{ flex: 2, minWidth: "150px" }}>
-          <label className="text-xs font-bold text-gray-400 mb-1 block">Cliente / Contacto</label>
-          <input type="text" className="agromat-input" placeholder="Buscar..." value={filters.client} onChange={e => setFilters({ ...filters, client: e.target.value })} />
+      <div style={S.filterCard}>
+        {/* Fila 1: buscadores y fechas */}
+        <div style={S.filterRow}>
+          <div>
+            <label style={S.fieldLabel}>Cliente / Contacto</label>
+            <input type="text" className="agromat-input" placeholder="Buscar..."
+              value={filters.client} onChange={e => setFilters({ ...filters, client: e.target.value })} />
+          </div>
+          <div>
+            <label style={S.fieldLabel}>Remito</label>
+            <input type="text" className="agromat-input" placeholder="REM-..."
+              value={filters.remito} onChange={e => setFilters({ ...filters, remito: e.target.value })} />
+          </div>
+          <div>
+            <label style={S.fieldLabel}>Desde</label>
+            <input type="date" className="agromat-input"
+              value={filters.dateStart} onChange={e => setFilters({ ...filters, dateStart: e.target.value })} />
+          </div>
+          <div>
+            <label style={S.fieldLabel}>Hasta</label>
+            <input type="date" className="agromat-input"
+              value={filters.dateEnd} onChange={e => setFilters({ ...filters, dateEnd: e.target.value })} />
+          </div>
         </div>
-        <div style={{ flex: 1, minWidth: "120px" }}>
-          <label className="text-xs font-bold text-gray-400 mb-1 block">Remito</label>
-          <input type="text" className="agromat-input" placeholder="REM-..." value={filters.remito} onChange={e => setFilters({ ...filters, remito: e.target.value })} />
+
+        {/* Fila 2: categóricos (segmented) */}
+        <div style={S.filterRowSegmented}>
+          <div style={S.segWrap}>
+            <label style={S.fieldLabel}>Estado</label>
+            <div style={S.segGroup} role="radiogroup" aria-label="Filtrar por estado">
+              <button type="button" style={S.segBtn(filters.status === "")}
+                onClick={() => setFilters({ ...filters, status: "" })}>Todos</button>
+              {STATUS_OPTIONS.map(s => (
+                <button key={s} type="button" style={S.segBtn(filters.status === s)}
+                  onClick={() => setFilters({ ...filters, status: s })}>{s}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={S.segWrap}>
+            <label style={S.fieldLabel}>Facturación</label>
+            <div style={S.segGroup} role="radiogroup" aria-label="Filtrar por facturación">
+              <button type="button" style={S.segBtn(filters.facturacion === "")}
+                onClick={() => setFilters({ ...filters, facturacion: "" })}>Todos</button>
+              <button type="button" style={S.segBtn(filters.facturacion === "facturados")}
+                onClick={() => setFilters({ ...filters, facturacion: "facturados" })}>Facturados</button>
+              <button type="button" style={S.segBtn(filters.facturacion === "sin_facturar")}
+                onClick={() => setFilters({ ...filters, facturacion: "sin_facturar" })}>Sin facturar</button>
+              <button type="button" style={S.segBtn(filters.facturacion === "completados_sin_facturar")}
+                onClick={() => setFilters({ ...filters, facturacion: "completados_sin_facturar" })}
+                title="Solo pedidos Completados que aún no fueron facturados">Completados s/ factura</button>
+            </div>
+          </div>
+
+          <button type="button" style={S.clearBtn}
+            onClick={() => setFilters({ client: "", product: "", dateStart: "", dateEnd: "", status: "", remito: "", facturacion: "" })}>
+            Limpiar filtros
+          </button>
         </div>
-        <div style={{ width: "130px" }}>
-          <label className="text-xs font-bold text-gray-400 mb-1 block">Estado</label>
-          <select className="agromat-select" value={filters.status} onChange={e => setFilters({ ...filters, status: e.target.value })}>
-            <option value="">Todos</option>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div style={{ width: "140px" }}>
-          <label className="text-xs font-bold text-gray-400 mb-1 block">Desde</label>
-          <input type="date" className="agromat-input" value={filters.dateStart} onChange={e => setFilters({ ...filters, dateStart: e.target.value })} />
-        </div>
-        <div style={{ width: "140px" }}>
-          <label className="text-xs font-bold text-gray-400 mb-1 block">Hasta</label>
-          <input type="date" className="agromat-input" value={filters.dateEnd} onChange={e => setFilters({ ...filters, dateEnd: e.target.value })} />
-        </div>
-        <div style={{ width: "170px" }}>
-          <label className="text-xs font-bold text-gray-400 mb-1 block">Facturación</label>
-          <select className="agromat-select" value={filters.facturacion} onChange={e => setFilters({ ...filters, facturacion: e.target.value })}>
-            <option value="">Todos</option>
-            <option value="facturados">Facturados</option>
-            <option value="sin_facturar">Sin facturar</option>
-            <option value="completados_sin_facturar">Completados sin facturar</option>
-          </select>
-        </div>
-        <button
-          type="button"
-          className="agromat-btn-secondary"
-          style={{
-            height: "38px",
-            background: filters.facturacion === "completados_sin_facturar" ? "#F59E0B" : undefined,
-            color: filters.facturacion === "completados_sin_facturar" ? "white" : undefined,
-            borderColor: filters.facturacion === "completados_sin_facturar" ? "#F59E0B" : undefined,
-          }}
-          onClick={() => setFilters(f => ({
-            ...f,
-            facturacion: f.facturacion === "completados_sin_facturar" ? "" : "completados_sin_facturar",
-          }))}
-          title="Mostrar solo pedidos Completados que aún no fueron facturados"
-        >
-          {filters.facturacion === "completados_sin_facturar" ? "✓ Completados s/ factura" : "Completados s/ factura"}
-        </button>
-        <button className="agromat-btn-secondary" style={{ height: "38px" }} onClick={() => setFilters({ client: "", product: "", dateStart: "", dateEnd: "", status: "", remito: "", facturacion: "" })}>Limpiar</button>
       </div>
 
       {/* Panel de totalizadores */}
-      <div className="mb-5" style={{
-        background: "white", borderRadius: "14px", border: "1px solid #e5e7eb",
-        boxShadow: "0 1px 10px rgba(0,0,0,0.04)", padding: "14px 16px"
-      }}>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div>
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Pedidos</span>
-            <div className="text-lg font-black text-gray-800 leading-tight">{summary.count}</div>
-          </div>
-          <div>
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Total</span>
-            <div className="text-lg font-black text-indigo-600 leading-tight">{fmtEUR(summary.total)}</div>
-          </div>
-          <div className="h-10 w-px bg-gray-200" />
-          {STATUS_OPTIONS.map(s => {
-            const d = summary.porStatus[s] || { count: 0, total: 0 };
-            return (
-              <div key={s} className="min-w-[120px]">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">{s}</span>
-                <div className="text-sm font-bold text-gray-700 leading-tight">
-                  {d.count} · {fmtEUR(d.total)}
-                </div>
-              </div>
-            );
-          })}
-          <div className="h-10 w-px bg-gray-200" />
-          <div className="min-w-[150px]">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Facturados</span>
-            <div className="text-sm font-bold text-emerald-700 leading-tight">
-              {summary.facturados.count} · {fmtEUR(summary.facturados.total)}
+      <div style={S.summaryCard}>
+        {/* Zona de métricas principales */}
+        <div style={S.summaryTop}>
+          <div style={S.summaryTopMetrics}>
+            <div style={S.metricBig}>
+              <span style={S.metricBigLabel}>Pedidos</span>
+              <div style={S.metricBigValue("#111827")}>{summary.count}</div>
             </div>
-          </div>
-          <div className="min-w-[150px]">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Sin facturar</span>
-            <div className="text-sm font-bold text-amber-700 leading-tight">
-              {summary.sinFacturar.count} · {fmtEUR(summary.sinFacturar.total)}
+            <div style={S.metricBig}>
+              <span style={S.metricBigLabel}>Total facturable</span>
+              <div style={S.metricBigValue("#4F46E5")}>{fmtEUR(summary.total)}</div>
             </div>
           </div>
           {summary.completadosSinFacturar > 0 && (
-            <div className="ml-auto px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200">
-              {summary.completadosSinFacturar} Completado(s) sin facturar
+            <div style={S.alertBadge}>
+              <Clock size={14} />
+              {summary.completadosSinFacturar} completado{summary.completadosSinFacturar !== 1 ? "s" : ""} sin facturar
             </div>
           )}
+        </div>
+
+        {/* Grid de stat cards */}
+        <div style={S.statGrid}>
+          {STATUS_OPTIONS.map(s => {
+            const d = summary.porStatus[s] || { count: 0, total: 0 };
+            const c = STATUS_COLOR[s] || { accent: "#9CA3AF", count: "#374151" };
+            return (
+              <div key={s} style={S.statCard(c.accent)}>
+                <span style={S.statCardLabel}>{s}</span>
+                <div style={S.statCardCount(c.count)}>{d.count}</div>
+                <div style={S.statCardTotal}>{fmtEUR(d.total)}</div>
+              </div>
+            );
+          })}
+          <div style={S.statCard("#10B981")}>
+            <span style={S.statCardLabel}>Facturados</span>
+            <div style={S.statCardCount("#047857")}>{summary.facturados.count}</div>
+            <div style={S.statCardTotal}>{fmtEUR(summary.facturados.total)}</div>
+          </div>
+          <div style={S.statCard("#F59E0B")}>
+            <span style={S.statCardLabel}>Sin facturar</span>
+            <div style={S.statCardCount("#B45309")}>{summary.sinFacturar.count}</div>
+            <div style={S.statCardTotal}>{fmtEUR(summary.sinFacturar.total)}</div>
+          </div>
         </div>
       </div>
 
@@ -719,10 +909,16 @@ export default function Pedidos() {
                   </div>
                 </td>
                 <td style={S.td} className="text-center">
-                  <div className="flex flex-col items-center gap-1">
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                     {getStatusBadge(row.status)}
                     {pendienteFacturar && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                      <span style={{
+                        display: "inline-flex", alignItems: "center",
+                        padding: "2px 8px", borderRadius: "999px",
+                        fontSize: "10px", fontWeight: 700, letterSpacing: "0.01em",
+                        background: "#FEF3C7", color: "#92400E",
+                        border: "1px solid #FDE68A",
+                      }}>
                         Sin facturar
                       </span>
                     )}
@@ -752,9 +948,18 @@ export default function Pedidos() {
                 </td>
 
                 <td style={S.td}>
-                  <div className="flex gap-2 justify-center">
+                  <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" }}>
                     <button title="Detalles del Pedido" style={S.btnAction("#6366F1")} onClick={() => verDetalles(row)}><Eye size={14} /></button>
                     <button title="Exportar Cotización" style={S.btnAction("#4F46E5")} onClick={() => descargarPDF(row)}><Download size={14} /></button>
+                    {!facturado && (
+                      <button
+                        title="Marcar como facturado"
+                        style={S.btnAction("#10B981")}
+                        onClick={() => marcarFacturadoRapido(row)}
+                      >
+                        <FileCheck size={14} /> Facturar
+                      </button>
+                    )}
                     <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setCurrency(row.moneda || 'EUR'); setProductSearch(""); setClientSearch(row.Cliente?.nombre_cliente || ""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>Editar</button>
                     <button style={S.btnAction("#DC2626")} onClick={() => {
                       Swal.fire({ title: '¿Eliminar?', icon: 'warning', showCancelButton: true }).then(r => r.isConfirmed && deletePedido(row.id_pedido).then(() => load()));
@@ -861,89 +1066,80 @@ export default function Pedidos() {
               </div>
 
               {/* Sección de Facturación */}
-              <div className="mt-4 p-4 rounded-xl border" style={{
-                background: estaFacturado(form) ? "#ECFDF5" : "#FFFBEB",
-                borderColor: estaFacturado(form) ? "#A7F3D0" : "#FDE68A",
-              }}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-sm" style={{ color: estaFacturado(form) ? "#065F46" : "#92400E" }}>
-                      Facturación
-                    </h4>
-                    {estaFacturado(form) ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                        Facturado
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                        Sin facturar
-                      </span>
+              {(() => {
+                const fact = estaFacturado(form);
+                return (
+                  <div style={SF.panel(fact)}>
+                    <div style={SF.header}>
+                      <div style={SF.headerLeft}>
+                        <h4 style={SF.title(fact)}>Facturación</h4>
+                        <span style={SF.pill(fact)}>
+                          {fact ? "Facturado" : "Sin facturar"}
+                        </span>
+                      </div>
+                      {!fact && (
+                        <button
+                          type="button"
+                          style={SF.cta}
+                          onClick={() => {
+                            setForm(prev => ({
+                              ...prev,
+                              fecha_facturacion: prev.fecha_facturacion || new Date().toISOString(),
+                            }));
+                          }}
+                          title="Setea la fecha de facturación a ahora. Recordá ingresar el número de factura."
+                        >
+                          Marcar facturado (ahora)
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={SF.fields}>
+                      <div className="agromat-form-field">
+                        <label>N° Factura</label>
+                        <input
+                          type="text"
+                          className="agromat-input"
+                          placeholder="Ej: 0001-00001425"
+                          value={form.numero_factura || ""}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setForm(prev => {
+                              const next = { ...prev, numero_factura: val };
+                              if (val.trim() !== "" && !prev.fecha_facturacion) {
+                                next.fecha_facturacion = new Date().toISOString();
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                      <div className="agromat-form-field">
+                        <label>Fecha de facturación</label>
+                        <input
+                          type="datetime-local"
+                          className="agromat-input"
+                          value={form.fecha_facturacion ? String(form.fecha_facturacion).slice(0, 16) : ""}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setForm(prev => ({
+                              ...prev,
+                              fecha_facturacion: v ? new Date(v).toISOString() : "",
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {fact && (
+                      <p style={SF.note}>
+                        Este pedido ya fue facturado. Podés editar el número o la fecha si hace falta;
+                        los cambios quedarán registrados en la auditoría.
+                      </p>
                     )}
                   </div>
-                  {!estaFacturado(form) && (
-                    <button
-                      type="button"
-                      className="agromat-btn-primary"
-                      style={{ padding: "6px 14px", fontSize: "0.8rem" }}
-                      onClick={() => {
-                        setForm(prev => ({
-                          ...prev,
-                          fecha_facturacion: prev.fecha_facturacion || new Date().toISOString(),
-                        }));
-                      }}
-                      title="Setea la fecha de facturación a ahora. Recordá ingresar el número de factura."
-                    >
-                      Marcar facturado (ahora)
-                    </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="agromat-form-field">
-                    <label>N° Factura</label>
-                    <input
-                      type="text"
-                      className="agromat-input"
-                      placeholder="Ej: 0001-00001425"
-                      value={form.numero_factura || ""}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setForm(prev => {
-                          const next = { ...prev, numero_factura: val };
-                          // Si acaba de recibir un número y no había fecha, setear fecha actual.
-                          if (val.trim() !== "" && !prev.fecha_facturacion) {
-                            next.fecha_facturacion = new Date().toISOString();
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                  </div>
-                  <div className="agromat-form-field">
-                    <label>Fecha de facturación</label>
-                    <input
-                      type="datetime-local"
-                      className="agromat-input"
-                      value={
-                        form.fecha_facturacion
-                          ? String(form.fecha_facturacion).slice(0, 16)
-                          : ""
-                      }
-                      onChange={e => {
-                        const v = e.target.value;
-                        setForm(prev => ({
-                          ...prev,
-                          fecha_facturacion: v ? new Date(v).toISOString() : "",
-                        }));
-                      }}
-                    />
-                  </div>
-                </div>
-                {estaFacturado(form) && (
-                  <p className="mt-2 text-xs text-emerald-800">
-                    Este pedido ya fue facturado. Podés editar el número o la fecha si hace falta; los cambios quedarán registrados en la auditoría.
-                  </p>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Items */}
               <div className="mt-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
