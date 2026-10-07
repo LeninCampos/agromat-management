@@ -20,7 +20,7 @@ const TIPOS_CAMBIO = {
   },
   cambio_precio: {
     label: "Cambios de Precio",
-    campos: ["precio", "precio_unitario"],
+    campos: ["precio", "precio_unitario", "moneda"],
     tablas: ["productos", "contiene"],
     accion: "UPDATE",
   },

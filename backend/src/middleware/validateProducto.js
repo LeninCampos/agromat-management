@@ -42,6 +42,10 @@ export const validateProductoCreate = [
     .bail()
     .isFloat({ min: 0 })
     .withMessage("El precio debe ser un número positivo"),
+  body("moneda")
+    .optional()
+    .isIn(["EUR", "USD"])
+    .withMessage("La moneda debe ser EUR o USD"),
   body("stock")
     .notEmpty()
     .withMessage("El stock es obligatorio")
@@ -76,6 +80,10 @@ export const validateProductoUpdate = [
     .optional()
     .isFloat({ min: 0 })
     .withMessage("El precio debe ser un número positivo"),
+  body("moneda")
+    .optional()
+    .isIn(["EUR", "USD"])
+    .withMessage("La moneda debe ser EUR o USD"),
   body("stock")
     .optional()
     .isInt({ min: 0 })
