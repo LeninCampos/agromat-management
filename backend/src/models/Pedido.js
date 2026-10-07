@@ -91,6 +91,23 @@ const Pedido = sequelize.define(
       allowNull: false,
       defaultValue: 0,
     },
+    // Totales por moneda (pedidos nuevos). En históricos total_eur = total.
+    total_eur: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    total_usd: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    // 0 = histórico (se muestra con moneda + tasa_cambio); 1 = por línea
+    multimoneda: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     last_change: {
       type: DataTypes.STRING(255),
       allowNull: true,

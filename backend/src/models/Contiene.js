@@ -8,6 +8,7 @@ const Contiene = sequelize.define("Contiene", {
   cantidad: { type: DataTypes.INTEGER, allowNull: false },
   precio_unitario: { type: DataTypes.DECIMAL(10,2) },
   subtotal_linea: { type: DataTypes.DECIMAL(10,2) },
+  moneda: { type: DataTypes.STRING(3), allowNull: false, defaultValue: "EUR" },
 }, {
   tableName: "contiene",
   timestamps: false,
