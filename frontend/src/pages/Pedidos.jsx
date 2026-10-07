@@ -8,7 +8,7 @@ import { getProductos } from "../api/productos";
 import { getClientes } from "../api/clientes";
 import { getEmpleados } from "../api/empleados";
 import logoAgromat from "../assets/agromat-logo.png"; 
-import { formatMonto, formatMontoPlano, formatTotales, totalesPorMoneda, textoTotalPedido, vistaPedido, aportePedido } from "../utils/money.js";
+import { formatMonto, formatMontoPlano, formatTotales, totalesPorMoneda, textoTotalPedido, vistaPedido, aportePedido, desgloseGrupo } from "../utils/money.js";
 import {
   CheckCircle, Clock, XCircle, Package, Download, Eye, FileCheck
 } from "lucide-react";
@@ -366,17 +366,16 @@ export default function Pedidos() {
     let y = totalsSectionY;
 
     vista.grupos.forEach((g) => {
-      const iva = g.subtotal * IVA_RATE;
-      const totalConIva = g.subtotal + iva;
+      const d = desgloseGrupo(g, IVA_RATE);
       const etiqueta = vista.grupos.length > 1 ? ` (${g.moneda})` : '';
 
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(60);
       doc.text(`Total sin IVA${etiqueta}:`, labelX, y, { align: 'right' });
-      doc.text(formatMontoPlano(g.subtotal, g.moneda), totalsX, y, { align: 'right' });
+      doc.text(formatMontoPlano(d.sinIva, g.moneda), totalsX, y, { align: 'right' });
       doc.text('IVA (21%):', labelX, y + 7, { align: 'right' });
-      doc.text(formatMontoPlano(iva, g.moneda), totalsX, y + 7, { align: 'right' });
+      doc.text(formatMontoPlano(d.iva, g.moneda), totalsX, y + 7, { align: 'right' });
 
       doc.setDrawColor(79, 70, 229);
       doc.setLineWidth(0.4);
@@ -386,7 +385,7 @@ export default function Pedidos() {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(79, 70, 229);
       doc.text(`Total con IVA${etiqueta}:`, labelX, y + 18, { align: 'right' });
-      doc.text(formatMontoPlano(totalConIva, g.moneda), totalsX, y + 18, { align: 'right' });
+      doc.text(formatMontoPlano(d.conIva, g.moneda), totalsX, y + 18, { align: 'right' });
 
       y += 28;
     });
@@ -441,12 +440,12 @@ export default function Pedidos() {
             <tbody>${itemsHTML}</tbody>
           </table>
           ${vista.grupos.map(g => {
-            const iva = g.subtotal * IVA_RATE;
+            const d = desgloseGrupo(g, IVA_RATE);
             const etiqueta = vista.grupos.length > 1 ? ` (${g.moneda})` : '';
             return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;padding-top:8px;border-top:2px solid #e5e7eb">
-              <div style="font-size:13px;color:#666">Total sin IVA${etiqueta}: <strong>${formatMontoPlano(g.subtotal, g.moneda)}</strong></div>
-              <div style="font-size:13px;color:#666">IVA (21%): <strong>${formatMontoPlano(iva, g.moneda)}</strong></div>
-              <div style="font-size:16px;font-weight:bold;color:#4F46E5;margin-top:4px">Total con IVA${etiqueta}: ${formatMontoPlano(g.subtotal + iva, g.moneda)}</div>
+              <div style="font-size:13px;color:#666">Total sin IVA${etiqueta}: <strong>${formatMontoPlano(d.sinIva, g.moneda)}</strong></div>
+              <div style="font-size:13px;color:#666">IVA (21%): <strong>${formatMontoPlano(d.iva, g.moneda)}</strong></div>
+              <div style="font-size:16px;font-weight:bold;color:#4F46E5;margin-top:4px">Total con IVA${etiqueta}: ${formatMontoPlano(d.conIva, g.moneda)}</div>
             </div>`;
           }).join('')}
         </div>

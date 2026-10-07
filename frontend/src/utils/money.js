@@ -57,6 +57,10 @@ export function textoTotalPedido(p) {
 }
 
 // Vista unificada para PDF y detalle: histórico = una moneda con tasa; nuevo = por línea.
+// Histórico: se replica EXACTAMENTE la fórmula previa (suma en float de cantidad*precio en la
+// moneda base, sin redondear por línea; IVA sobre esa base; recién después se escala por la tasa).
+// Cada grupo trae `base` (suma sin escalar) y `factor` (tasa si USD histórico, 1 si no); usar
+// desgloseGrupo() para obtener sin IVA / IVA / con IVA ya escalados.
 export function vistaPedido(pedido) {
   const legacy = !Number(pedido.multimoneda);
   const monLegacy = normalizarMoneda(pedido.moneda);
@@ -65,14 +69,36 @@ export function vistaPedido(pedido) {
   const lineas = (pedido.items || []).map((it) => {
     const moneda = legacy ? monLegacy : normalizarMoneda(it.moneda);
     const precio = Number(it.precio_unitario) * factor;
-    return { ...it, moneda, precio, subtotal: precio * Number(it.cantidad) };
+    // histórico: (cantidad*precio_base)*tasa, igual que el formateo anterior
+    const subtotal = legacy
+      ? Number(it.cantidad) * Number(it.precio_unitario) * factor
+      : precio * Number(it.cantidad);
+    return { ...it, moneda, precio, subtotal };
   });
 
-  const grupos = MONEDAS.filter((m) => lineas.some((l) => l.moneda === m)).map((m) => ({
-    moneda: m,
-    subtotal:
-      lineas.filter((l) => l.moneda === m).reduce((acc, l) => acc + aCentavos(l.subtotal), 0) / 100,
-  }));
+  if (legacy) {
+    const base = (pedido.items || []).reduce(
+      (acc, it) => acc + Number(it.cantidad) * Number(it.precio_unitario), 0
+    );
+    return { legacy, lineas, grupos: [{ moneda: monLegacy, subtotal: base * factor, base, factor }] };
+  }
 
-  return { legacy, lineas, grupos: grupos.length ? grupos : [{ moneda: legacy ? monLegacy : "EUR", subtotal: 0 }] };
+  const grupos = MONEDAS.filter((m) => lineas.some((l) => l.moneda === m)).map((m) => {
+    const subtotal =
+      lineas.filter((l) => l.moneda === m).reduce((acc, l) => acc + aCentavos(l.subtotal), 0) / 100;
+    return { moneda: m, subtotal, base: subtotal, factor: 1 };
+  });
+
+  return { legacy, lineas, grupos: grupos.length ? grupos : [{ moneda: "EUR", subtotal: 0, base: 0, factor: 1 }] };
+}
+
+// Montos de un grupo ya escalados a la moneda mostrada: el IVA se calcula sobre la base
+// (como el código histórico) y luego se escala.
+export function desgloseGrupo(g, ivaRate) {
+  const iva = g.base * ivaRate;
+  return {
+    sinIva: g.base * g.factor,
+    iva: iva * g.factor,
+    conIva: (g.base + iva) * g.factor,
+  };
 }
