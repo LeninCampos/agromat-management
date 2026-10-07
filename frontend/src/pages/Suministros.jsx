@@ -22,9 +22,6 @@ export default function Suministros() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados de Tasa de Cambio (EUR→USD)
-  const [exchangeRate, setExchangeRate] = useState(1.09);
-
   // Modal registro
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -72,14 +69,6 @@ export default function Suministros() {
   };
 
   useEffect(() => { load(); }, []);
-
-  // Obtener tasa de cambio actual EUR→USD
-  useEffect(() => {
-    fetch("https://api.frankfurter.app/latest?from=EUR&to=USD")
-      .then((res) => res.json())
-      .then((data) => { if (data?.rates?.USD) setExchangeRate(data.rates.USD); })
-      .catch((err) => console.error("Error tasa cambio:", err));
-  }, []);
 
   const filteredItems = useMemo(() => {
     return items.filter(row => {
@@ -169,22 +158,17 @@ export default function Suministros() {
           </select>
 
           <label style="display:block; margin-bottom: 4px; font-weight:600;">Moneda del Excel</label>
-          <div style="display:flex; gap: 15px; margin-bottom: 10px;">
-            <label style="cursor:pointer; display:flex; alignItems:center; gap:5px;">
-                <input type="radio" name="swal-moneda" value="EUR" checked onchange="document.getElementById('div-tasa').style.display='none'">
+          <div style="display:flex; gap: 15px; margin-bottom: 4px;">
+            <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
+                <input type="radio" name="swal-moneda" value="EUR" checked>
                 🇪🇺 Euros (EUR)
             </label>
-            <label style="cursor:pointer; display:flex; alignItems:center; gap:5px;">
-                <input type="radio" name="swal-moneda" value="USD" onchange="document.getElementById('div-tasa').style.display='block'">
+            <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
+                <input type="radio" name="swal-moneda" value="USD">
                 🇺🇸 Dólares (USD)
             </label>
           </div>
-
-          <div id="div-tasa" style="display:none; background:#f9fafb; padding:10px; border-radius:8px; margin-bottom:10px;">
-             <label style="display:block; font-size:0.8rem;">Tasa de Cambio (1 EUR = X USD)</label>
-             <input id="swal-tasa" type="number" step="0.001" class="swal2-input" style="width:100%; margin:5px 0 0 0;" value="${exchangeRate}">
-             <small style="color:#666;">Se convertirán los precios a EUR automáticamente.</small>
-          </div>
+          <small style="display:block; color:#666; margin-bottom:10px;">Los precios se guardan tal cual, en la moneda elegida (sin conversión).</small>
 
           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
             <div>
@@ -205,15 +189,13 @@ export default function Suministros() {
       preConfirm: () => {
         const idProv = document.getElementById('swal-proveedor').value;
         const moneda = document.querySelector('input[name="swal-moneda"]:checked').value;
-        const tasa = document.getElementById('swal-tasa').value;
 
         if (!idProv) return Swal.showValidationMessage('Selecciona un proveedor');
         return {
           id_proveedor: idProv,
           fecha_llegada: document.getElementById('swal-fecha').value,
           hora_llegada: document.getElementById('swal-hora').value,
-          moneda,
-          tasa_cambio: tasa
+          moneda
         }
       }
     });
@@ -226,9 +208,8 @@ export default function Suministros() {
       formData.append("hora_llegada", formValues.hora_llegada);
       formData.append("id_empleado", user.id);
       
-      // Enviamos moneda y tasa
+      // Moneda del Excel (sin conversión)
       formData.append("moneda", formValues.moneda);
-      formData.append("tasa_cambio", formValues.tasa_cambio);
 
       try {
         setLoading(true);
