@@ -38,9 +38,10 @@ async function recalcTotales(id_pedido, descuento_total = 0, impuesto_total = 0,
   const total = Number(subtotal) - Number(descuento_total) + Number(impuesto_total);
   const cambios = { subtotal, descuento_total, impuesto_total, total, total_eur: total, total_usd };
   // Un pedido histórico solo pasa a modo por-línea si ahora tiene líneas USD.
-  // Sin líneas USD conserva su moneda/tasa/visualización exactamente como estaba.
+  // Al pasar a modo por-línea conserva su moneda/tasa_cambio guardadas sin tocar
+  // (ya no se usan para mostrarlo); sin líneas USD queda exactamente como estaba.
   if (lineas.some((l) => normalizarMoneda(l.moneda) === "USD")) {
-    Object.assign(cambios, { multimoneda: true, moneda: "EUR", tasa_cambio: 1 });
+    Object.assign(cambios, { multimoneda: true });
   }
   await Pedido.update(cambios, { where: { id_pedido }, transaction: t, ...auditOptions });
   return { subtotal, descuento_total, impuesto_total, total, total_eur: total, total_usd };
