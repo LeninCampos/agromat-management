@@ -56,6 +56,13 @@ export function textoTotalPedido(p) {
   return formatTotales({ eur: p.total_eur, usd: p.total_usd });
 }
 
+// Listados compactos (Envíos / Dashboard): histórico = string literal previa (base EUR, sin tasa
+// ni conversión); nuevo = totales EUR/USD separados.
+export function textoTotalCompacto(p) {
+  if (!Number(p.multimoneda)) return `€${Number(p.total).toFixed(2)}`;
+  return formatTotales({ eur: p.total_eur, usd: p.total_usd });
+}
+
 // Vista unificada para PDF y detalle: histórico = una moneda con tasa; nuevo = por línea.
 // Histórico: se replica EXACTAMENTE la fórmula previa (suma en float de cantidad*precio en la
 // moneda base, sin redondear por línea; IVA sobre esa base; recién después se escala por la tasa).

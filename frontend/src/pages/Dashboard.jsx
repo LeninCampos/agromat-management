@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getProductos } from "../api/productos";
 import { getClientes } from "../api/clientes";
 import { getPedidos } from "../api/pedidos";
-import { textoTotalPedido } from "../utils/money.js";
+import { textoTotalCompacto } from "../utils/money.js";
 import { getEnvios } from "../api/envios";
 // ✅ Importamos la API de suministros para el punto 3.6
 import { getSuministros } from "../api/suministros";
@@ -210,7 +210,7 @@ export default function Dashboard() {
                           <td style={{ padding: "8px", fontWeight: 500 }}>#{p.id_pedido}</td>
                           <td style={{ padding: "8px", color: "#6b7280" }}>{p.fecha_pedido}</td>
                           <td style={{ padding: "8px" }}>{p.Cliente?.nombre_cliente || "N/A"}</td>
-                          <td style={{ padding: "8px", textAlign: "right" }}>{textoTotalPedido(p)}</td>
+                          <td style={{ padding: "8px", textAlign: "right" }}>{textoTotalCompacto(p)}</td>
                           <td style={{ padding: "8px", textAlign: "center" }}>
                             <StatusBadge status={p.status} />
                           </td>

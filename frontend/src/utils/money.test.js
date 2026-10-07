@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   normalizarMoneda, formatMontoPlano, formatTotales, totalesPorMoneda,
-  textoTotalPedido, vistaPedido, aportePedido, desgloseGrupo,
+  textoTotalPedido, textoTotalCompacto, vistaPedido, aportePedido, desgloseGrupo,
 } from "./money.js";
 
 const sinNbsp = (s) => s.replace(/ /g, " ");
@@ -144,4 +144,15 @@ test("histórico: 2000 pedidos aleatorios coinciden con la fórmula previa (celd
     };
     assert.deepEqual(nuevo(p), viejo(p));
   }
+});
+
+test("textoTotalCompacto histórico: string previa exacta, sin conversión USD", () => {
+  assert.equal(textoTotalCompacto({ multimoneda: 0, total: "1234.5", moneda: "USD", tasa_cambio: 1.1886 }), "€1234.50");
+  assert.equal(textoTotalCompacto({ total: "1234.5", moneda: "USD", tasa_cambio: 1.1886 }), "€1234.50");
+});
+
+test("textoTotalCompacto nuevo: totales por moneda", () => {
+  const t = sinNbsp(textoTotalCompacto({ multimoneda: 1, total_eur: 20, total_usd: 7 }));
+  assert.ok(t.includes(" + ") && t.includes("20,00"));
+  assert.ok(!textoTotalCompacto({ multimoneda: 1, total_eur: 20, total_usd: 0 }).includes("US$"));
 });
