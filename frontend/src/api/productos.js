@@ -17,15 +17,9 @@ export const updateProducto = (id, data) => api.put(`/productos/${id}`, data);
 // DELETE eliminar producto (uno)
 export const deleteProducto = (id) => api.delete(`/productos/${id}`);
 
-// MODIFICADO: Ahora acepta moneda y tasa para enviarlos al backend
-export const descargarInventarioExcel = (moneda = "USD", tasa = 1) =>
-  api.get("/productos/exportar-excel", {
-    responseType: "blob",
-    params: {
-      moneda,
-      tasa,
-    },
-  });
+// Inventario con cada precio en su moneda de origen (sin conversión)
+export const descargarInventarioExcel = () =>
+  api.get("/productos/exportar-excel", { responseType: "blob" });
 
 // DELETE eliminar productos múltiples
 export const bulkDeleteProductos = (ids) =>

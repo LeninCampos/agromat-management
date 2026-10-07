@@ -150,6 +150,7 @@ export const createProducto = async (req, res, next) => {
       await existente.update({
         stock: nuevoStock,
         precio: datos.precio,
+        moneda: datos.moneda ?? existente.moneda,
         nombre_producto: datos.nombre_producto,
         descripcion: datos.descripcion,
         id_proveedor: datos.id_proveedor,
@@ -462,16 +463,10 @@ export const reconciliarStock = async (req, res, next) => {
 
 /* =========================================================
    GET /api/productos/exportar-excel
-   MODIFICADO: Incluye Dólares y Euros en el mismo archivo
+   MODIFICADO: Precio en su moneda de origen, sin conversión
 ========================================================= */
 export const exportarProductosExcel = async (req, res, next) => {
   try {
-    // 1. Obtener la tasa del Query String
-    const { tasa } = req.query; 
-    
-    // Usamos la tasa que viene del front (ej: 0.95), o 1 si fallara.
-    const tasaCambio = tasa ? parseFloat(tasa) : 1;
-
     const productos = await Producto.findAll({
       include: [
         { model: Proveedor, attributes: ["nombre_proveedor"] },
@@ -498,18 +493,14 @@ export const exportarProductosExcel = async (req, res, next) => {
       })
     );
 
-    // 2. Construir el JSON con ambas monedas
+    // Construir el JSON con cada precio en su moneda de origen
     const datosExcel = productosConFechas.map(({ producto: p, fecha_ultimo_ingreso, fecha_ultimo_egreso }) => {
       const ubicacion = p.SeUbicas?.[0]?.Zona;
       const ubicacionTexto = ubicacion ? `${ubicacion.codigo} (R:${ubicacion.rack} M:${ubicacion.modulo} P:${ubicacion.piso})` : "Sin asignar";
       
       const stock = Number(p.stock);
-      const precioEUR = Number(p.precio); // BD almacena EUR
-      const totalEUR = precioEUR * stock;
-
-      // Conversión a Dólares (tasa es EUR→USD)
-      const precioUSD = precioEUR * tasaCambio;
-      const totalUSD = totalEUR * tasaCambio;
+      const precio = Number(p.precio);
+      const moneda = p.moneda === "USD" ? "USD" : "EUR";
 
       return {
         "Código": p.id_producto,
@@ -517,17 +508,21 @@ export const exportarProductosExcel = async (req, res, next) => {
         "Proveedor": p.Proveedor?.nombre_proveedor || "Sin proveedor",
         "Ubicación": ubicacionTexto,
         "Stock": stock,
-        // Sección EUROS (base)
-        "Precio (EUR)": precioEUR,
-        "Total (EUR)": totalEUR,
-        // Sección DÓLARES (conversión)
-        "Precio (USD)": precioUSD,
-        "Total (USD)": totalUSD,
-
+        "Moneda": moneda,
+        "Precio": precio,
+        "Total": Math.round(precio * stock * 100) / 100,
         "Último Ingreso": fecha_ultimo_ingreso,
         "Última Salida": fecha_ultimo_egreso
       };
     });
+
+    // Totales de inventario por moneda (sin mezclar)
+    const totalPorMoneda = (m) =>
+      datosExcel.filter((r) => r.Moneda === m).reduce((acc, r) => acc + r.Total, 0);
+    datosExcel.push(
+      { "Código": "TOTAL EUR", "Total": Math.round(totalPorMoneda("EUR") * 100) / 100 },
+      { "Código": "TOTAL USD", "Total": Math.round(totalPorMoneda("USD") * 100) / 100 }
+    );
 
     const workBook = XLSX.utils.book_new();
     const workSheet = XLSX.utils.json_to_sheet(datosExcel);
@@ -539,10 +534,9 @@ export const exportarProductosExcel = async (req, res, next) => {
         { wch: 20 }, // Proveedor
         { wch: 20 }, // Ubicación
         { wch: 8 },  // Stock
-        { wch: 12 }, // Precio EUR
-        { wch: 15 }, // Total EUR
-        { wch: 12 }, // Precio USD
-        { wch: 15 }, // Total USD
+        { wch: 8 },  // Moneda
+        { wch: 12 }, // Precio
+        { wch: 15 }, // Total
         { wch: 15 }, // Ingreso
         { wch: 15 }  // Salida
     ];

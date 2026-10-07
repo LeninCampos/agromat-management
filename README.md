@@ -67,7 +67,7 @@ El sistema se divide en **11 módulos** accesibles desde un panel administrativo
 |---|---|
 | **Dashboard** | KPIs en tiempo real: stock total, productos, clientes, pedidos y envíos. Actividad de los últimos 30 días (pedidos, ingresos, altas de clientes) y listado de últimos movimientos. |
 | **Inventario (Productos)** | ABM de productos con stock, precio y ubicación física por rack (columna A/B/C, largo 1–6, piso 1–3). |
-| **Ingresos (Suministros)** | Registro de compras a proveedores con soporte de **importación masiva desde Excel** (parseo con `xlsx`, validación y alta transaccional). Soporta moneda y tasa de cambio. |
+| **Ingresos (Suministros)** | Registro de compras a proveedores con soporte de **importación masiva desde Excel** (parseo con `xlsx`, validación y alta transaccional). Soporta moneda por producto (EUR/USD) sin conversión. |
 | **Pedidos** | Armado de pedidos con búsqueda tokenizada de clientes, cálculo de IVA 21% y **exportación a PDF profesional** (logo sin distorsión, tabla de ítems, preview de detalles). |
 | **Despachos (Envíos)** | Asignación de pedidos a envíos, estado logístico y upload de fotos de entrega vía Multer. |
 | **Clientes** | ABM con búsqueda tokenizada y paginación flexible. |

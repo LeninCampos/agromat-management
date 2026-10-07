@@ -1,5 +1,6 @@
 import { sequelize, Producto, Suministro, Suministra, Zona, SeUbica } from "../models/index.js";
 import xlsx from "xlsx";
+import { normalizarMoneda } from "../utils/moneda.js";
 
 // Valores válidos para ubicación
 const RACKS_VALIDOS = ['A', 'B', 'C'];
@@ -27,8 +28,9 @@ export const importarSuministroExcel = async (req, res, next) => {
     const sheetName = workbook.SheetNames[0];
     const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-    // 👇 Recibimos datos del body, incluyendo moneda y tasa
-    const { id_proveedor, fecha_llegada, hora_llegada, id_empleado, moneda, tasa_cambio } = req.body;
+    // Moneda del Excel: el precio se guarda tal cual, sin conversión
+    const { id_proveedor, fecha_llegada, hora_llegada, id_empleado } = req.body;
+    const monedaImport = normalizarMoneda(req.body.moneda);
 
     // 1️⃣ Crear el Suministro (Cabecera)
     const suministro = await Suministro.create(
@@ -91,14 +93,6 @@ export const importarSuministroExcel = async (req, res, next) => {
         const parsed = parseFloat(precioLimpio);
         if (!isNaN(parsed)) {
           precioValidado = parsed;
-
-          // 💶 CONVERSIÓN DE DIVISA
-          if (moneda === 'USD' && tasa_cambio) {
-            const tasa = parseFloat(tasa_cambio);
-            if (!isNaN(tasa) && tasa > 0) {
-              precioValidado = precioValidado / tasa;
-            }
-          }
         }
       }
 
@@ -167,6 +161,7 @@ export const importarSuministroExcel = async (req, res, next) => {
             nombre_producto: descripcion || "Producto Importado",
             id_proveedor: id_proveedor,
             precio: precio !== null ? precio : 0,
+            moneda: monedaImport,
             stock: 0,
             descripcion: "Importado automáticamente desde Excel",
             imagen_url: null,
@@ -177,7 +172,7 @@ export const importarSuministroExcel = async (req, res, next) => {
       } else {
         if (precio !== null) {
           await producto.update(
-            { precio: precio },
+            { precio: precio, moneda: monedaImport },
             { transaction: t, ...auditOptions }
           );
         }

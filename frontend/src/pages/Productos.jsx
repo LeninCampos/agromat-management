@@ -13,6 +13,7 @@ import {
   descargarInventarioExcel,
 } from "../api/productos";
 import { uploadProductoImagen } from "../api/upload.js";
+import { formatMonto } from "../utils/money.js";
 
 const BACKEND_URL = import.meta.env.VITE_API_URL;
 
@@ -21,6 +22,7 @@ const emptyForm = {
   nombre_producto: "",
   descripcion: "",
   precio: "",
+  moneda: "EUR",
   existencias: "",
   id_proveedor: "",
   zonaId: "",
@@ -53,17 +55,6 @@ export default function Productos() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados de Moneda (Base: EUR)
-  const [currency, setCurrency] = useState("EUR");
-  const [exchangeRate, setExchangeRate] = useState(1.09); // Tasa EUR→USD
-
-  useEffect(() => {
-    fetch("https://api.frankfurter.app/latest?from=EUR&to=USD")
-      .then((res) => res.json())
-      .then((data) => { if (data?.rates?.USD) setExchangeRate(data.rates.USD); })
-      .catch((err) => console.error("Error tasa cambio:", err));
-  }, []);
-
   // Filtros
   const [q, setQ] = useState("");
   const [showNoStock, setShowNoStock] = useState(false);
@@ -92,27 +83,19 @@ export default function Productos() {
   const cameraInputRef = useRef(null);
 
   // Helpers
-  const formatCurrency = (value) => {
-    const num = Number(value || 0);
-    if (currency === "USD") {
-      return (num * exchangeRate).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
-    }
-    return num.toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
-  };
-
   const stats = useMemo(() => {
     const total = items.length;
-    let sinStock = 0, bajoStock = 0, valor = 0;
+    let sinStock = 0, bajoStock = 0, valorEUR = 0, valorUSD = 0;
     for (const p of items) {
       const stock = Number(p.existencias) || 0;
       const precio = Number(p.precio) || 0;
       if (stock === 0) sinStock++;
       else if (stock > 0 && stock <= lowStockThreshold) bajoStock++;
-      valor += stock * precio;
+      if (p.moneda === "USD") valorUSD += stock * precio;
+      else valorEUR += stock * precio;
     }
-    if (currency === "USD") valor *= exchangeRate;
-    return { total, sinStock, bajoStock, valor };
-  }, [items, lowStockThreshold, currency, exchangeRate]);
+    return { total, sinStock, bajoStock, valorEUR, valorUSD };
+  }, [items, lowStockThreshold]);
 
   // Filtrado y Ordenamiento
   const filtered = useMemo(() => {
@@ -194,6 +177,7 @@ export default function Productos() {
           nombre_producto: p.nombre_producto,
           descripcion: p.descripcion,
           precio: Number(p.precio ?? p.precio_unitario ?? 0),
+          moneda: p.moneda === "USD" ? "USD" : "EUR",
           existencias: Number(p.stock),
           id_proveedor: p.id_proveedor,
           nombre_proveedor: p.Proveedor?.nombre_proveedor || "Sin proveedor",
@@ -220,10 +204,10 @@ export default function Productos() {
   // Handlers CRUD y Exportar
   const handleExport = async () => {
     try {
-      const response = await descargarInventarioExcel(currency, exchangeRate);
+      const response = await descargarInventarioExcel();
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const now = new Date();
-      const fileName = `INVENTARIO_${currency}_${now.toISOString().slice(0, 10)}.xlsx`;
+      const fileName = `INVENTARIO_${now.toISOString().slice(0, 10)}.xlsx`;
       const link = document.createElement("a");
       link.href = url; link.setAttribute("download", fileName); document.body.appendChild(link); link.click(); link.parentNode.removeChild(link);
       Swal.fire({ icon: 'success', title: 'Descarga iniciada', toast: true, position: 'top-end', timer: 3000, showConfirmButton: false });
@@ -293,18 +277,13 @@ export default function Productos() {
         <StatCard title="Total productos" value={stats.total} colorText="#6b7280" colorValue="#111827" borderColor="#e5e7eb" />
         <StatCard title="Sin stock" value={stats.sinStock} colorText="#b91c1c" colorValue="#b91c1c" borderColor="#fee2e2" />
         <StatCard title={`Bajo stock (≤${lowStockThreshold})`} value={stats.bajoStock} colorText="#92400e" colorValue="#92400e" borderColor="#fef3c7" />
-        <StatCard title={`Valor (${currency})`} value={formatCurrency(stats.valor)} colorText="#047857" colorValue="#047857" borderColor="#d1fae5" />
+        <StatCard title="Valor (EUR)" value={formatMonto(stats.valorEUR, "EUR")} colorText="#047857" colorValue="#047857" borderColor="#d1fae5" />
+        <StatCard title="Valor (USD)" value={formatMonto(stats.valorUSD, "USD")} colorText="#047857" colorValue="#047857" borderColor="#d1fae5" />
       </div>
 
       {/* 3. Toolbar */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", marginBottom: "1.5rem" }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Buscar..." style={{ flex: 1, minWidth: "200px", padding: "10px 14px", borderRadius: "8px", border: "1px solid #ddd" }} />
-        <div style={{ display: "flex", border: "1px solid #ddd", borderRadius: "8px", overflow: "hidden" }}>
-          {["EUR", "USD"].map(m => (
-            <button key={m} onClick={() => setCurrency(m)} style={{ padding: "10px 14px", border: "none", background: currency === m ? "#eff6ff" : "white", color: currency === m ? "#1d4ed8" : "#6b7280", fontWeight: currency === m ? "bold" : "normal", cursor: "pointer" }}>{m === "USD" ? "🇺🇸" : "🇪🇺"} {m}</button>
-          ))}
-        </div>
-        {currency === "USD" && <input type="number" step="0.01" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} placeholder="Tasa" style={{ width: "70px", padding: "10px", borderRadius: "8px", border: "1px solid #ddd" }} />}
         
         <select value={filterZona} onChange={(e) => setFilterZona(e.target.value)} style={{ padding: "10px 14px", borderRadius: "8px", border: "1px solid #ddd", backgroundColor: "white" }}>
           <option value="">🗺️ Zonas</option>
@@ -380,7 +359,7 @@ export default function Productos() {
                   <td style={{ padding: "12px 16px", color: "#6b7280" }}>{row.codigo_zona || "-"}</td>
                   <td style={{ padding: "12px 16px", color: "#6b7280" }}>{row.fecha_ultimo_ingreso}</td>
                   <td style={{ padding: "12px 16px", color: "#6b7280" }}>{row.fecha_ultimo_egreso}</td>
-                  <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 500 }}>{formatCurrency(row.precio)}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 500 }}>{formatMonto(row.precio, row.moneda)}</td>
                   <td style={{ padding: "12px 16px", textAlign: "right" }}><span style={{ padding: "4px 8px", borderRadius: 999, backgroundColor: stockBg, color: stockColor, fontSize: "0.85rem", fontWeight: 600 }}>{stock}</span></td>
                   <td style={{ padding: "12px 16px", textAlign: "center" }}>
                     <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
@@ -413,7 +392,13 @@ export default function Productos() {
                   <option value="">Zona (Opcional)</option>
                   {zonas.map(z => <option key={z.id_zona} value={z.id_zona}>{z.codigo}</option>)}
                 </select>
-                <input type="number" placeholder="Precio (EUR)" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})} style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px" }} />
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input type="number" step="0.01" placeholder="Precio" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})} style={{ flex: 1, padding: "10px", border: "1px solid #ddd", borderRadius: "8px" }} />
+                  <select value={form.moneda} onChange={e => setForm({...form, moneda: e.target.value})} style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px" }}>
+                    <option value="EUR">🇪🇺 EUR</option>
+                    <option value="USD">🇺🇸 USD</option>
+                  </select>
+                </div>
                 <input type="number" placeholder="Stock" value={form.existencias} onChange={e => setForm({...form, existencias: e.target.value})} style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px" }} />
                 <div style={{ gridColumn: "1 / -1", display: "flex", gap: "10px", alignItems: "center" }}>
                    <button type="button" onClick={() => fileInputRef.current.click()} style={{ padding: "8px", border: "1px solid #ddd", borderRadius: "6px", cursor: "pointer" }}>📂 Archivo</button>

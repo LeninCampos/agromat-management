@@ -8,6 +8,7 @@ import {
   Envio,
 } from "../models/index.js";
 import { Op } from "sequelize";
+import { sumarPorMoneda, normalizarMoneda } from "../utils/moneda.js";
 
 // =============================
 // Helpers
@@ -26,10 +27,24 @@ function calcSubtotalLine(cantidad, precio_unitario) {
 }
 
 async function recalcTotales(id_pedido, descuento_total = 0, impuesto_total = 0, t, auditOptions = {}) {
-  const subtotal = (await Contiene.sum("subtotal_linea", { where: { id_pedido }, transaction: t })) || 0;
+  const lineas = await Contiene.findAll({
+    where: { id_pedido },
+    attributes: ["moneda", "subtotal_linea"],
+    transaction: t,
+    raw: true,
+  });
+  const { total_eur, total_usd } = sumarPorMoneda(lineas);
+  const subtotal = total_eur;
   const total = Number(subtotal) - Number(descuento_total) + Number(impuesto_total);
-  await Pedido.update({ subtotal, descuento_total, impuesto_total, total }, { where: { id_pedido }, transaction: t, ...auditOptions });
-  return { subtotal, descuento_total, impuesto_total, total };
+  const cambios = { subtotal, descuento_total, impuesto_total, total, total_eur: total, total_usd };
+  // Un pedido histórico solo pasa a modo por-línea si ahora tiene líneas USD.
+  // Al pasar a modo por-línea conserva su moneda/tasa_cambio guardadas sin tocar
+  // (ya no se usan para mostrarlo); sin líneas USD queda exactamente como estaba.
+  if (lineas.some((l) => normalizarMoneda(l.moneda) === "USD")) {
+    Object.assign(cambios, { multimoneda: true });
+  }
+  await Pedido.update(cambios, { where: { id_pedido }, transaction: t, ...auditOptions });
+  return { subtotal, descuento_total, impuesto_total, total, total_eur: total, total_usd };
 }
 
 async function actualizarStockProductos(items, operacion, t, auditOptions = {}) {
@@ -89,7 +104,7 @@ export const getAllPedidos = async (req, res, next) => {
       include: [
         { model: Cliente, attributes: ["id_cliente", "nombre_cliente", "direccion"] },
         { model: Empleado, attributes: ["id_empleado", "nombre_empleado"] },
-        { model: Producto, through: { attributes: ["cantidad", "precio_unitario", "subtotal_linea"] }, attributes: ["id_producto", "nombre_producto", "precio"] },
+        { model: Producto, through: { attributes: ["cantidad", "precio_unitario", "subtotal_linea", "moneda"] }, attributes: ["id_producto", "nombre_producto", "precio", "moneda"] },
       ],
       order: [["id_pedido", "DESC"]],
     });
@@ -108,7 +123,7 @@ export const getPedidoById = async (req, res, next) => {
       include: [
         { model: Cliente, attributes: ["id_cliente", "nombre_cliente", "direccion"] },
         { model: Empleado, attributes: ["id_empleado", "nombre_empleado"] },
-        { model: Producto, through: { attributes: ["cantidad", "precio_unitario", "subtotal_linea"] }, attributes: ["id_producto", "nombre_producto", "precio"] },
+        { model: Producto, through: { attributes: ["cantidad", "precio_unitario", "subtotal_linea", "moneda"] }, attributes: ["id_producto", "nombre_producto", "precio", "moneda"] },
       ],
     });
     if (!row) return res.status(404).json({ error: "Pedido no encontrado" });
@@ -129,12 +144,8 @@ export const createPedido = async (req, res, next) => {
     const {
       fecha_pedido, hora_pedido, status, id_empleado, id_cliente, direccion_envio,
       descuento_total = 0, impuesto_total = 0, items = [],
-      quien_pidio, fecha_entrega_estimada, observaciones, numero_remito,
-      moneda, tasa // Recibimos la configuración de divisa
+      quien_pidio, fecha_entrega_estimada, observaciones, numero_remito
     } = req.body;
-
-    const monedaFinal = moneda || 'EUR';
-    const tasaFinal = (monedaFinal === 'USD' && tasa) ? parseFloat(tasa) : 1;
 
     // Verificar Stock
     if (debeDescontarStock(status)) {
@@ -155,29 +166,30 @@ export const createPedido = async (req, res, next) => {
       fecha_entrega_estimada: fecha_entrega_estimada || null,
       observaciones: observaciones || null,
       numero_remito: numero_remito || null,
-      moneda: monedaFinal,
-      tasa_cambio: tasaFinal
+      moneda: "EUR",
+      tasa_cambio: 1,
+      multimoneda: true
     }, { transaction: t, ...auditOptions });
 
-    // Preparar Items: Forzar uso de precio en EUR desde la DB
+    // Preparar Items: precio y moneda SIEMPRE desde la DB (snapshot por línea)
     const productIds = items.map(i => i.id_producto);
     const dbProducts = await Producto.findAll({
         where: { id_producto: productIds },
-        attributes: ['id_producto', 'precio'],
+        attributes: ['id_producto', 'precio', 'moneda'],
         transaction: t
     });
 
     const lineas = items.map((i) => {
       const prodDB = dbProducts.find(p => p.id_producto === i.id_producto);
-      // El precio base SIEMPRE es el de la DB (EUR), ignoramos lo que envíe el front como precio
-      const precioBaseEUR = prodDB ? Number(prodDB.precio) : 0;
+      const precio = prodDB ? Number(prodDB.precio) : 0;
 
       return {
         id_pedido: pedido.id_pedido,
         id_producto: i.id_producto,
         cantidad: i.cantidad,
-        precio_unitario: precioBaseEUR,
-        subtotal_linea: (precioBaseEUR * Number(i.cantidad)).toFixed(2),
+        precio_unitario: precio,
+        moneda: normalizarMoneda(prodDB?.moneda),
+        subtotal_linea: (precio * Number(i.cantidad)).toFixed(2),
       };
     });
 
@@ -208,8 +220,8 @@ export const updatePedido = async (req, res, next) => {
 
   try {
     const { id } = req.params;
-    // Excluir moneda/tasa del update para no corromper historial
-    const { items, moneda, tasa, tasa_cambio, ...headerData } = req.body;
+    // Excluir moneda/tasa/totales del update: los calcula el servidor (no mass-assignment)
+    const { items, moneda, tasa, tasa_cambio, multimoneda, total_eur, total_usd, ...headerData } = req.body;
 
     const pedido = await Pedido.findByPk(id, { transaction: t });
     if (!pedido) {
@@ -244,25 +256,39 @@ export const updatePedido = async (req, res, next) => {
         }
       }
 
+      // Snapshot actual de las líneas del pedido: lo ya pedido conserva su precio y moneda
+      const lineasActuales = await Contiene.findAll({
+        where: { id_pedido: id },
+        attributes: ["id_producto", "precio_unitario", "moneda"],
+        transaction: t,
+        raw: true,
+      });
+      const snapshotPorProducto = new Map(lineasActuales.map((l) => [String(l.id_producto), l]));
+
       await Contiene.destroy({ where: { id_pedido: id }, transaction: t });
       
-      // Fetch fresh prices for update (EUR from DB)
+      // Preparar Items: productos ya presentes conservan precio/moneda guardados;
+      // solo los productos nuevos toman precio y moneda del catálogo (DB)
       const productIds = items.map(i => i.id_producto);
       const dbProducts = await Producto.findAll({
           where: { id_producto: productIds },
-          attributes: ['id_producto', 'precio'],
+          attributes: ['id_producto', 'precio', 'moneda'],
           transaction: t
       });
 
       const lineas = items.map((i) => {
+        const guardada = snapshotPorProducto.get(String(i.id_producto));
         const prodDB = dbProducts.find(p => p.id_producto === i.id_producto);
-        const precioBaseEUR = prodDB ? Number(prodDB.precio) : 0;
+        const precio = guardada ? Number(guardada.precio_unitario) : (prodDB ? Number(prodDB.precio) : 0);
+        const monedaLinea = guardada ? normalizarMoneda(guardada.moneda) : normalizarMoneda(prodDB?.moneda);
+
         return {
-            id_pedido: id,
-            id_producto: i.id_producto,
-            cantidad: i.cantidad,
-            precio_unitario: precioBaseEUR,
-            subtotal_linea: (precioBaseEUR * Number(i.cantidad)).toFixed(2),
+          id_pedido: id,
+          id_producto: i.id_producto,
+          cantidad: i.cantidad,
+          precio_unitario: precio,
+          moneda: monedaLinea,
+          subtotal_linea: (precio * Number(i.cantidad)).toFixed(2),
         };
       });
 
@@ -370,12 +396,13 @@ export const addPedidoItem = async (req, res, next) => {
         }
     }
 
-    // Usar precio de BD (EUR) en vez de confiar en el body
-    const precioBaseEUR = Number(producto.precio) || 0;
+    // Usar precio y moneda de BD en vez de confiar en el body
+    const precio = Number(producto.precio) || 0;
     await Contiene.create({
       id_pedido: id, id_producto, cantidad,
-      precio_unitario: precioBaseEUR,
-      subtotal_linea: calcSubtotalLine(cantidad, precioBaseEUR),
+      precio_unitario: precio,
+      moneda: normalizarMoneda(producto.moneda),
+      subtotal_linea: calcSubtotalLine(cantidad, precio),
     }, { transaction: t, ...auditOptions });
 
     // Actualizar stock solo si el estado lo requiere

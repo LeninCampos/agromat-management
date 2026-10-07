@@ -6,7 +6,8 @@
   "main": "src/app.js",
   "scripts": {
     "dev": "cross-env NODE_ENV=development node src/app.js",
-    "start": "NODE_ENV=production node src/app.js"
+    "start": "NODE_ENV=production node src/app.js",
+    "test": "node --test \"src/utils/*.test.js\""
   },
   "keywords": [],
   "author": "",

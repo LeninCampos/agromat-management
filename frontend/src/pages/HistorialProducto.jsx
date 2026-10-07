@@ -128,6 +128,8 @@ export default function HistorialProducto() {
     return stockActual * precio;
   }, [stockActual, producto]);
 
+  const simboloMoneda = producto?.moneda === "USD" ? "US$" : "€";
+
   // Generar puntos para el SVG con mejor escala
   const chartData = useMemo(() => {
     if (movimientos.length === 0) return { points: "", areaPoints: "", circles: [] };
@@ -315,10 +317,10 @@ export default function HistorialProducto() {
                   color: "#111827",
                 }}
               >
-                €{valorInventario.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                {simboloMoneda}{valorInventario.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
               </p>
               <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#9ca3af" }}>
-                Precio unit: €{Number(producto?.precio || 0).toFixed(2)}
+                Precio unit: {simboloMoneda}{Number(producto?.precio || 0).toFixed(2)}
               </p>
             </div>
 

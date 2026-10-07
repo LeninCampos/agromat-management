@@ -30,7 +30,7 @@ export const getAllEnvios = async (req, res, next) => {
       include: [
         {
           model: Pedido,
-          attributes: ["id_pedido", "status", "total", "direccion_envio", "numero_remito"],
+          attributes: ["id_pedido", "status", "total", "total_eur", "total_usd", "multimoneda", "direccion_envio", "numero_remito"],
           include: [{ model: Cliente, attributes: ["nombre_cliente", "direccion"] }],
         },
         { model: Empleado, as: "responsable", attributes: ["id_empleado", "nombre_empleado", "rol"] },
@@ -51,7 +51,7 @@ export const getEnvioById = async (req, res, next) => {
       include: [
         {
           model: Pedido,
-          attributes: ["id_pedido", "status", "total", "direccion_envio", "numero_remito"],
+          attributes: ["id_pedido", "status", "total", "total_eur", "total_usd", "multimoneda", "direccion_envio", "numero_remito"],
           include: [{ model: Cliente, attributes: ["nombre_cliente", "direccion"] }],
         },
         { model: Empleado, as: "responsable", attributes: ["id_empleado", "nombre_empleado", "rol"] },
