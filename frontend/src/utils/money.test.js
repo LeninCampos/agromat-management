@@ -13,9 +13,13 @@ test("normalizarMoneda", () => {
   assert.equal(normalizarMoneda(undefined), "EUR");
 });
 
-test("formatMontoPlano", () => {
-  assert.equal(sinNbsp(formatMontoPlano(1234.5, "EUR")), "1.234,50 €");
+test("formatMontoPlano 4 dígitos: sin separador (es-ES histórico)", () => {
+  assert.equal(sinNbsp(formatMontoPlano(1234.5, "EUR")), "1234,50 €");
   assert.equal(sinNbsp(formatMontoPlano(10, "USD")), "10,00 $");
+});
+
+test("formatMontoPlano 5+ dígitos: con separador", () => {
+  assert.equal(sinNbsp(formatMontoPlano(12345.5, "EUR")), "12.345,50 €");
 });
 
 test("formatTotales omite la moneda en cero", () => {
@@ -23,6 +27,11 @@ test("formatTotales omite la moneda en cero", () => {
   assert.ok(sinNbsp(formatTotales({ eur: 20, usd: 0 })).includes("20,00"));
   assert.ok(formatTotales({ eur: 20, usd: 5 }).includes(" + "));
   assert.ok(sinNbsp(formatTotales({ eur: 0, usd: 0 })).includes("0,00"));
+});
+
+test("formatTotales normaliza null/undefined a cero", () => {
+  assert.ok(sinNbsp(formatTotales({ eur: null, usd: undefined })).includes("0,00"));
+  assert.ok(!sinNbsp(formatTotales({ eur: null, usd: undefined })).includes("NaN"));
 });
 
 test("totalesPorMoneda separa y redondea", () => {

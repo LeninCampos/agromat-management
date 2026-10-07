@@ -18,7 +18,6 @@ export function formatMontoPlano(valor, moneda) {
   const n = Number(valor || 0).toLocaleString("es-ES", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-    useGrouping: true,
   });
   return n + (normalizarMoneda(moneda) === "USD" ? " $" : " €");
 }
@@ -26,9 +25,11 @@ export function formatMontoPlano(valor, moneda) {
 const aCentavos = (v) => Math.round(Number(v || 0) * 100);
 
 export function formatTotales({ eur = 0, usd = 0 }) {
+  const e = Number(eur) || 0;
+  const u = Number(usd) || 0;
   const partes = [];
-  if (Number(eur) !== 0) partes.push(formatMonto(eur, "EUR"));
-  if (Number(usd) !== 0) partes.push(formatMonto(usd, "USD"));
+  if (e !== 0) partes.push(formatMonto(e, "EUR"));
+  if (u !== 0) partes.push(formatMonto(u, "USD"));
   return partes.length ? partes.join(" + ") : formatMonto(0, "EUR");
 }
 
