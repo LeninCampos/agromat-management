@@ -8,6 +8,7 @@ import { getProductos } from "../api/productos";
 import { getClientes } from "../api/clientes";
 import { getEmpleados } from "../api/empleados";
 import logoAgromat from "../assets/agromat-logo.png"; 
+import { formatMonto, formatMontoPlano, formatTotales, totalesPorMoneda, textoTotalPedido, vistaPedido, aportePedido } from "../utils/money.js";
 import {
   CheckCircle, Clock, XCircle, Package, Download, Eye, FileCheck
 } from "lucide-react";
@@ -225,17 +226,6 @@ export default function Pedidos() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Estados de Divisa (para nuevo pedido) - Base: EUR
-  const [currency, setCurrency] = useState("EUR");
-  const [exchangeRate, setExchangeRate] = useState(1.09); // Tasa EUR→USD
-
-  useEffect(() => {
-    fetch("https://api.frankfurter.app/latest?from=EUR&to=USD")
-      .then(res => res.json())
-      .then(data => { if (data?.rates?.USD) setExchangeRate(data.rates.USD); })
-      .catch(console.error);
-  }, []);
-
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -270,7 +260,8 @@ export default function Pedidos() {
           id_producto: prod.id_producto,
           nombre_producto: prod.nombre_producto,
           cantidad: prod.Contiene?.cantidad || 0,
-          precio_unitario: prod.Contiene?.precio_unitario || prod.precio
+          precio_unitario: prod.Contiene?.precio_unitario || prod.precio,
+          moneda: prod.Contiene?.moneda || prod.moneda || "EUR"
         }))
       })));
       setProductos(resProd.data);
@@ -283,16 +274,6 @@ export default function Pedidos() {
 
   useEffect(() => { load(); }, []);
 
-  // Helper para visualizar precios (base EUR)
-  // Si se pasa 'rate' se usa ese (para pedidos históricos), si no, 1 (EUR)
-  const formatMoney = (amountEUR, currencyCode, rate = 1) => {
-    const value = currencyCode === 'USD' ? amountEUR * rate : amountEUR;
-    return Number(value).toLocaleString("es-ES", {
-      style: "currency",
-      currency: currencyCode || 'EUR'
-    });
-  };
-
   // =============================
   // Lógica de PDF (Cotización profesional)
   // =============================
@@ -304,17 +285,9 @@ export default function Pedidos() {
     const marginLeft = 15;
     const marginRight = 15;
 
-    // Moneda y tasa histórica del pedido
-    const mon = pedido.moneda || 'EUR';
-    const tasa = Number(pedido.tasa_cambio) || 1;
-
-    const fmt = (val) => {
-      const num = mon === 'USD' ? val * tasa : val;
-      return Number(num).toLocaleString('es-ES', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }) + (mon === 'USD' ? ' $' : ' \u20ac');
-    };
+    // Vista del pedido: histórico = una moneda con su tasa; nuevo = moneda por línea
+    const vista = vistaPedido(pedido);
+    const monedasTexto = vista.grupos.map(g => g.moneda).join(' + ');
 
     // ── Header: Logo (aspect ratio correcto) + meta derecha ──
     const logoW = 50;
@@ -325,7 +298,7 @@ export default function Pedidos() {
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text(`Fecha: ${pedido.fecha_pedido}`, pageWidth - marginRight, 16, { align: 'right' });
-    doc.text(`Moneda: ${mon}`, pageWidth - marginRight, 22, { align: 'right' });
+    doc.text(`Moneda: ${monedasTexto}`, pageWidth - marginRight, 22, { align: 'right' });
 
     // Línea separadora bajo header
     const headerEndY = 38;
@@ -350,17 +323,22 @@ export default function Pedidos() {
     // ── Tabla de productos ──
     const tableStartY = clientY + 14;
 
-    const tableBody = pedido.items.map(it => [
-      it.id_producto,
-      it.nombre_producto,
-      fmt(it.precio_unitario),
-      it.cantidad,
-      fmt(it.cantidad * it.precio_unitario)
+    const tableBody = vista.lineas.map(l => [
+      l.id_producto,
+      l.nombre_producto,
+      formatMontoPlano(l.precio, l.moneda),
+      l.cantidad,
+      formatMontoPlano(l.subtotal, l.moneda)
     ]);
+
+    // Histórico: se conserva el encabezado con la moneda del pedido (igual que antes)
+    const headPDF = vista.legacy
+      ? ['Código', 'Producto', `P. Unitario (${monedasTexto})`, 'Cant.', `Subtotal (${monedasTexto})`]
+      : ['Código', 'Producto', 'P. Unitario', 'Cant.', 'Subtotal'];
 
     autoTable(doc, {
       startY: tableStartY,
-      head: [['Código', 'Producto', `P. Unitario (${mon})`, 'Cant.', `Subtotal (${mon})`]],
+      head: [headPDF],
       body: tableBody,
       headStyles: {
         fillColor: [79, 70, 229],
@@ -383,38 +361,35 @@ export default function Pedidos() {
     // ── Bloque de totales con IVA ──
     const totalsSectionY = doc.lastAutoTable.finalY + 12;
 
-    // Calcular totales desde los items (siempre en moneda base EUR, luego convertir)
-    const totalSinIva = pedido.items.reduce(
-      (acc, it) => acc + (Number(it.cantidad) * Number(it.precio_unitario)), 0
-    );
-    const iva = totalSinIva * IVA_RATE;
-    const totalConIva = totalSinIva + iva;
-
     const totalsX = pageWidth - marginRight;
     const labelX = totalsX - 60;
+    let y = totalsSectionY;
 
-    // Total sin IVA
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(60);
-    doc.text('Total sin IVA:', labelX, totalsSectionY, { align: 'right' });
-    doc.text(fmt(totalSinIva), totalsX, totalsSectionY, { align: 'right' });
+    vista.grupos.forEach((g) => {
+      const iva = g.subtotal * IVA_RATE;
+      const totalConIva = g.subtotal + iva;
+      const etiqueta = vista.grupos.length > 1 ? ` (${g.moneda})` : '';
 
-    // IVA (21%)
-    doc.text('IVA (21%):', labelX, totalsSectionY + 7, { align: 'right' });
-    doc.text(fmt(iva), totalsX, totalsSectionY + 7, { align: 'right' });
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(60);
+      doc.text(`Total sin IVA${etiqueta}:`, labelX, y, { align: 'right' });
+      doc.text(formatMontoPlano(g.subtotal, g.moneda), totalsX, y, { align: 'right' });
+      doc.text('IVA (21%):', labelX, y + 7, { align: 'right' });
+      doc.text(formatMontoPlano(iva, g.moneda), totalsX, y + 7, { align: 'right' });
 
-    // Línea separadora antes del total con IVA
-    doc.setDrawColor(79, 70, 229);
-    doc.setLineWidth(0.4);
-    doc.line(labelX - 5, totalsSectionY + 11, totalsX, totalsSectionY + 11);
+      doc.setDrawColor(79, 70, 229);
+      doc.setLineWidth(0.4);
+      doc.line(labelX - 5, y + 11, totalsX, y + 11);
 
-    // Total con IVA (destacado)
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(79, 70, 229);
-    doc.text('Total con IVA:', labelX, totalsSectionY + 18, { align: 'right' });
-    doc.text(fmt(totalConIva), totalsX, totalsSectionY + 18, { align: 'right' });
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(79, 70, 229);
+      doc.text(`Total con IVA${etiqueta}:`, labelX, y + 18, { align: 'right' });
+      doc.text(formatMontoPlano(totalConIva, g.moneda), totalsX, y + 18, { align: 'right' });
+
+      y += 28;
+    });
 
     doc.save(`Cotizacion_Agromat_${pedido.id_pedido}.pdf`);
   };
@@ -423,27 +398,15 @@ export default function Pedidos() {
   // Preview de detalles del pedido
   // =============================
   const verDetalles = (pedido) => {
-    const mon = pedido.moneda || 'EUR';
-    const tasa = Number(pedido.tasa_cambio) || 1;
-    const fmtHTML = (val) => {
-      const num = mon === 'USD' ? val * tasa : val;
-      return Number(num).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        + (mon === 'USD' ? ' $' : ' €');
-    };
+    const vista = vistaPedido(pedido);
 
-    const totalSinIva = pedido.items.reduce(
-      (acc, it) => acc + (Number(it.cantidad) * Number(it.precio_unitario)), 0
-    );
-    const iva = totalSinIva * IVA_RATE;
-    const totalConIva = totalSinIva + iva;
-
-    const itemsHTML = pedido.items.map(it =>
+    const itemsHTML = vista.lineas.map(l =>
       `<tr>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px">${it.id_producto}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px">${it.nombre_producto}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;font-size:13px">${fmtHTML(it.precio_unitario)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;font-size:13px">${it.cantidad}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;font-size:13px">${fmtHTML(it.cantidad * it.precio_unitario)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px">${l.id_producto}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:13px">${l.nombre_producto}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;font-size:13px">${formatMontoPlano(l.precio, l.moneda)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;font-size:13px">${l.cantidad}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;font-size:13px">${formatMontoPlano(l.subtotal, l.moneda)}</td>
       </tr>`
     ).join('');
 
@@ -457,7 +420,7 @@ export default function Pedidos() {
             <div><strong>Contacto:</strong> ${pedido.quien_pidio || '-'}</div>
             <div><strong>Fecha:</strong> ${pedido.fecha_pedido}</div>
             <div><strong>Estado:</strong> ${pedido.status}</div>
-            <div><strong>Moneda:</strong> ${mon}</div>
+            <div><strong>Moneda:</strong> ${vista.grupos.map(g => g.moneda).join(' + ')}</div>
             <div><strong>N° Remito:</strong> ${pedido.numero_remito || '-'}</div>
             <div><strong>N° Factura:</strong> ${pedido.numero_factura ? `<span style="color:#065F46;font-weight:700">${pedido.numero_factura}</span>` : '<span style="color:#9CA3AF">Sin facturar</span>'}</div>
             <div><strong>Fecha facturación:</strong> ${pedido.fecha_facturacion ? String(pedido.fecha_facturacion).slice(0, 10) : '-'}</div>
@@ -477,11 +440,15 @@ export default function Pedidos() {
             </thead>
             <tbody>${itemsHTML}</tbody>
           </table>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;padding-top:8px;border-top:2px solid #e5e7eb">
-            <div style="font-size:13px;color:#666">Total sin IVA: <strong>${fmtHTML(totalSinIva)}</strong></div>
-            <div style="font-size:13px;color:#666">IVA (21%): <strong>${fmtHTML(iva)}</strong></div>
-            <div style="font-size:16px;font-weight:bold;color:#4F46E5;margin-top:4px">Total con IVA: ${fmtHTML(totalConIva)}</div>
-          </div>
+          ${vista.grupos.map(g => {
+            const iva = g.subtotal * IVA_RATE;
+            const etiqueta = vista.grupos.length > 1 ? ` (${g.moneda})` : '';
+            return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;padding-top:8px;border-top:2px solid #e5e7eb">
+              <div style="font-size:13px;color:#666">Total sin IVA${etiqueta}: <strong>${formatMontoPlano(g.subtotal, g.moneda)}</strong></div>
+              <div style="font-size:13px;color:#666">IVA (21%): <strong>${formatMontoPlano(iva, g.moneda)}</strong></div>
+              <div style="font-size:16px;font-weight:bold;color:#4F46E5;margin-top:4px">Total con IVA${etiqueta}: ${formatMontoPlano(g.subtotal + iva, g.moneda)}</div>
+            </div>`;
+          }).join('')}
         </div>
       `,
       showCloseButton: true,
@@ -539,34 +506,35 @@ export default function Pedidos() {
   const summary = useMemo(() => {
     const acc = {
       count: 0,
-      total: 0,
-      porStatus: {}, // { [status]: { count, total } }
-      facturados: { count: 0, total: 0 },
-      sinFacturar: { count: 0, total: 0 },
+      total: { eur: 0, usd: 0 },
+      porStatus: {}, // { [status]: { count, total: {eur, usd} } }
+      facturados: { count: 0, total: { eur: 0, usd: 0 } },
+      sinFacturar: { count: 0, total: { eur: 0, usd: 0 } },
       completadosSinFacturar: 0,
     };
+    const sumar = (dest, p) => {
+      const a = aportePedido(p);
+      dest.eur += a.eur;
+      dest.usd += a.usd;
+    };
     for (const p of processedItems) {
-      const t = Number(p.total) || 0;
       acc.count++;
-      acc.total += t;
+      sumar(acc.total, p);
       const s = p.status || "Pendiente";
-      if (!acc.porStatus[s]) acc.porStatus[s] = { count: 0, total: 0 };
+      if (!acc.porStatus[s]) acc.porStatus[s] = { count: 0, total: { eur: 0, usd: 0 } };
       acc.porStatus[s].count++;
-      acc.porStatus[s].total += t;
+      sumar(acc.porStatus[s].total, p);
       if (estaFacturado(p)) {
         acc.facturados.count++;
-        acc.facturados.total += t;
+        sumar(acc.facturados.total, p);
       } else {
         acc.sinFacturar.count++;
-        acc.sinFacturar.total += t;
+        sumar(acc.sinFacturar.total, p);
         if (p.status === "Completado") acc.completadosSinFacturar++;
       }
     }
     return acc;
   }, [processedItems]);
-
-  // Formateador simple para EUR (moneda por defecto del resumen)
-  const fmtEUR = (v) => Number(v || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 
   const getStatusBadge = (s = "Pendiente") => {
     const meta = {
@@ -590,7 +558,7 @@ export default function Pedidos() {
       html: `
         <div style="text-align:left;font-size:13px;color:#4B5563;background:#F9FAFB;padding:10px 12px;border-radius:8px;margin-bottom:12px">
           <div><strong>Cliente:</strong> ${pedido.Cliente?.nombre_cliente || "N/A"}</div>
-          <div><strong>Total:</strong> ${formatMoney(pedido.total, pedido.moneda, pedido.tasa_cambio)}</div>
+          <div><strong>Total:</strong> ${textoTotalPedido(pedido)}</div>
         </div>
       `,
       input: "text",
@@ -642,12 +610,8 @@ export default function Pedidos() {
       };
 
       if (editingId) {
-        // Al editar, NO enviamos moneda/tasa para no corromper historial
         await updatePedido(editingId, payload);
       } else {
-        // Al crear, sí enviamos la moneda y tasa actual
-        payload.moneda = currency;
-        payload.tasa = exchangeRate;
         await createPedido(payload);
       }
       Swal.fire("Éxito", "Operación completada", "success");
@@ -657,8 +621,7 @@ export default function Pedidos() {
     }
   };
 
-  // Cálculo del total en tiempo real (en la moneda seleccionada)
-  const totalCalculado = form.items.reduce((acc, it) => acc + (it.cantidad * it.precio_unitario), 0);
+  const totalesForm = totalesPorMoneda(form.items);
   
   // Autocomplete: productos filtrados por búsqueda (nombre o código)
   const filteredProducts = useMemo(() => {
@@ -836,7 +799,7 @@ export default function Pedidos() {
             </div>
             <div style={S.metricBig}>
               <span style={S.metricBigLabel}>Total facturable</span>
-              <div style={S.metricBigValue("#4F46E5")}>{fmtEUR(summary.total)}</div>
+              <div style={S.metricBigValue("#4F46E5")}>{formatTotales(summary.total)}</div>
             </div>
           </div>
           {summary.completadosSinFacturar > 0 && (
@@ -850,25 +813,25 @@ export default function Pedidos() {
         {/* Grid de stat cards */}
         <div style={S.statGrid}>
           {STATUS_OPTIONS.map(s => {
-            const d = summary.porStatus[s] || { count: 0, total: 0 };
+            const d = summary.porStatus[s] || { count: 0, total: { eur: 0, usd: 0 } };
             const c = STATUS_COLOR[s] || { accent: "#9CA3AF", count: "#374151" };
             return (
               <div key={s} style={S.statCard(c.accent)}>
                 <span style={S.statCardLabel}>{s}</span>
                 <div style={S.statCardCount(c.count)}>{d.count}</div>
-                <div style={S.statCardTotal}>{fmtEUR(d.total)}</div>
+                <div style={S.statCardTotal}>{formatTotales(d.total)}</div>
               </div>
             );
           })}
           <div style={S.statCard("#10B981")}>
             <span style={S.statCardLabel}>Facturados</span>
             <div style={S.statCardCount("#047857")}>{summary.facturados.count}</div>
-            <div style={S.statCardTotal}>{fmtEUR(summary.facturados.total)}</div>
+            <div style={S.statCardTotal}>{formatTotales(summary.facturados.total)}</div>
           </div>
           <div style={S.statCard("#F59E0B")}>
             <span style={S.statCardLabel}>Sin facturar</span>
             <div style={S.statCardCount("#B45309")}>{summary.sinFacturar.count}</div>
-            <div style={S.statCardTotal}>{fmtEUR(summary.sinFacturar.total)}</div>
+            <div style={S.statCardTotal}>{formatTotales(summary.sinFacturar.total)}</div>
           </div>
         </div>
       </div>
@@ -943,8 +906,7 @@ export default function Pedidos() {
 
                 {/* Visualización del Total Histórico */}
                 <td style={S.td} className="text-right font-bold text-gray-900">
-                    {/* Usamos el moneda y tasa GUARDADOS en la DB */}
-                    {formatMoney(row.total, row.moneda, row.tasa_cambio)}
+                    {textoTotalPedido(row)}
                 </td>
 
                 <td style={S.td}>
@@ -960,7 +922,7 @@ export default function Pedidos() {
                         <FileCheck size={14} /> Facturar
                       </button>
                     )}
-                    <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setCurrency(row.moneda || 'EUR'); setProductSearch(""); setClientSearch(row.Cliente?.nombre_cliente || ""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>Editar</button>
+                    <button style={S.btnAction("#F59E0B")} onClick={() => { setEditingId(row.id_pedido); setForm({ ...row }); setProductSearch(""); setClientSearch(row.Cliente?.nombre_cliente || ""); setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 }); setModalOpen(true); }}>Editar</button>
                     <button style={S.btnAction("#DC2626")} onClick={() => {
                       Swal.fire({ title: '¿Eliminar?', icon: 'warning', showCancelButton: true }).then(r => r.isConfirmed && deletePedido(row.id_pedido).then(() => load()));
                     }}>Borrar</button>
@@ -1050,17 +1012,6 @@ export default function Pedidos() {
                 </div>
                 <div className="agromat-form-field"><label>Vendedor</label><select className="agromat-select" value={form.id_empleado} onChange={e => setForm({ ...form, id_empleado: e.target.value })} required><option value="">Selecciona...</option>{empleados.map(e => <option key={e.id_empleado} value={e.id_empleado}>{e.nombre_empleado}</option>)}</select></div>
                 
-                {/* SELECTOR DE MONEDA (Solo visible al crear) */}
-                {!editingId && (
-                    <div className="agromat-form-field">
-                        <label>Moneda</label>
-                        <div style={{display: 'flex', gap: '5px'}}>
-                            <button type="button" onClick={() => setCurrency("EUR")} style={{padding:'8px', border: currency==='EUR' ? '2px solid blue' : '1px solid #ddd', borderRadius: '6px'}}>EUR</button>
-                            <button type="button" onClick={() => setCurrency("USD")} style={{padding:'8px', border: currency==='USD' ? '2px solid blue' : '1px solid #ddd', borderRadius: '6px'}}>USD</button>
-                        </div>
-                    </div>
-                )}
-
                 <div className="agromat-form-field"><label>Remito</label><input type="text" className="agromat-input" value={form.numero_remito} onChange={e => setForm({ ...form, numero_remito: e.target.value })} /></div>
                 <div className="agromat-form-field"><label>Contacto</label><input type="text" className="agromat-input" value={form.quien_pidio} onChange={e => setForm({ ...form, quien_pidio: e.target.value })} /></div>
               </div>
@@ -1144,10 +1095,10 @@ export default function Pedidos() {
               {/* Items */}
               <div className="mt-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
                 <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-bold text-gray-700 text-sm">Productos ({currency})</h4>
-                  {/* Total visual en la moneda seleccionada */}
+                  <h4 className="font-bold text-gray-700 text-sm">Productos</h4>
+                  {/* Subtotal por moneda */}
                   <span className="text-indigo-600 font-black">
-                      Subtotal: {formatMoney(totalCalculado, currency, 1)}
+                      Subtotal: {formatTotales(totalesForm)}
                   </span>
                 </div>
                 <div className="flex gap-2 mb-4">
@@ -1199,7 +1150,7 @@ export default function Pedidos() {
                               <span style={{ color: "#9CA3AF", marginLeft: "6px" }}>— {p.id_producto}</span>
                             </span>
                             <span style={{ fontWeight: 600, color: "#4F46E5", fontSize: "0.8rem", whiteSpace: "nowrap", marginLeft: "12px" }}>
-                              {formatMoney(p.precio, currency, exchangeRate)}
+                              {formatMonto(p.precio, p.moneda)}
                             </span>
                           </div>
                         ))}
@@ -1212,9 +1163,7 @@ export default function Pedidos() {
                     const prod = productos.find(p => p.id_producto === nuevoItem.id_producto);
                     if (!prod) return;
 
-                    const precioParaForm = currency === 'USD' ? prod.precio * exchangeRate : prod.precio;
-
-                    setForm(prev => ({ ...prev, items: [...prev.items, { ...nuevoItem, nombre_producto: prod.nombre_producto, precio_unitario: precioParaForm }] }));
+                    setForm(prev => ({ ...prev, items: [...prev.items, { ...nuevoItem, nombre_producto: prod.nombre_producto, precio_unitario: Number(prod.precio), moneda: prod.moneda === "USD" ? "USD" : "EUR" }] }));
                     setNuevoItem({ id_producto: "", cantidad: 1, precio_unitario: 0 });
                     setProductSearch("");
                   }}>+</button>
@@ -1222,7 +1171,7 @@ export default function Pedidos() {
                 <div className="max-h-40 overflow-y-auto">
                   {form.items.map((it, idx) => (
                     <div key={idx} className="flex justify-between py-2 border-b text-xs">
-                      <span>{it.nombre_producto} <b>x{it.cantidad}</b> ({formatMoney(it.precio_unitario, currency, 1)})</span>
+                      <span>{it.nombre_producto} <b>x{it.cantidad}</b> ({formatMonto(it.precio_unitario, it.moneda)})</span>
                       <button type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))} className="text-red-500 font-black">✕</button>
                     </div>
                   ))}
