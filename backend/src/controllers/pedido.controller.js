@@ -255,9 +255,19 @@ export const updatePedido = async (req, res, next) => {
         }
       }
 
+      // Snapshot actual de las líneas del pedido: lo ya pedido conserva su precio y moneda
+      const lineasActuales = await Contiene.findAll({
+        where: { id_pedido: id },
+        attributes: ["id_producto", "precio_unitario", "moneda"],
+        transaction: t,
+        raw: true,
+      });
+      const snapshotPorProducto = new Map(lineasActuales.map((l) => [String(l.id_producto), l]));
+
       await Contiene.destroy({ where: { id_pedido: id }, transaction: t });
       
-      // Preparar Items: precio y moneda SIEMPRE desde la DB (snapshot por línea)
+      // Preparar Items: productos ya presentes conservan precio/moneda guardados;
+      // solo los productos nuevos toman precio y moneda del catálogo (DB)
       const productIds = items.map(i => i.id_producto);
       const dbProducts = await Producto.findAll({
           where: { id_producto: productIds },
@@ -266,15 +276,17 @@ export const updatePedido = async (req, res, next) => {
       });
 
       const lineas = items.map((i) => {
+        const guardada = snapshotPorProducto.get(String(i.id_producto));
         const prodDB = dbProducts.find(p => p.id_producto === i.id_producto);
-        const precio = prodDB ? Number(prodDB.precio) : 0;
+        const precio = guardada ? Number(guardada.precio_unitario) : (prodDB ? Number(prodDB.precio) : 0);
+        const monedaLinea = guardada ? normalizarMoneda(guardada.moneda) : normalizarMoneda(prodDB?.moneda);
 
         return {
           id_pedido: id,
           id_producto: i.id_producto,
           cantidad: i.cantidad,
           precio_unitario: precio,
-          moneda: normalizarMoneda(prodDB?.moneda),
+          moneda: monedaLinea,
           subtotal_linea: (precio * Number(i.cantidad)).toFixed(2),
         };
       });
