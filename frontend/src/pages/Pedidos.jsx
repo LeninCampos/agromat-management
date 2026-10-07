@@ -365,7 +365,12 @@ export default function Pedidos() {
     const labelX = totalsX - 60;
     let y = totalsSectionY;
 
-    vista.grupos.forEach((g) => {
+    vista.grupos.forEach((g, idx) => {
+      // Salto de página solo desde el 2.º bloque (el 1.º conserva sus coordenadas históricas)
+      if (idx >= 1 && y + 24 > doc.internal.pageSize.getHeight() - 10) {
+        doc.addPage();
+        y = 20;
+      }
       const d = desgloseGrupo(g, IVA_RATE);
       const etiqueta = vista.grupos.length > 1 ? ` (${g.moneda})` : '';
 
