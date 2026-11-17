@@ -12,6 +12,7 @@ const emptyForm = {
   nombre_empleado: "",
   numero_empleado: "",
   correo: "",
+  telefono: "",
   password: "",
   rol: "empleado",
 };
@@ -33,7 +34,8 @@ export default function Empleados() {
       (x) =>
         x.nombre_empleado?.toLowerCase().includes(query) ||
         x.numero_empleado?.toLowerCase().includes(query) ||
-        x.correo?.toLowerCase().includes(query)
+        x.correo?.toLowerCase().includes(query) ||
+        x.telefono?.toLowerCase().includes(query)
     );
   }, [q, items]);
 
@@ -69,6 +71,7 @@ export default function Empleados() {
       nombre_empleado: row.nombre_empleado ?? "",
       numero_empleado: row.numero_empleado ?? "",
       correo: row.correo ?? "",
+      telefono: row.telefono ?? "",
       // No cargamos fecha_alta al form para que no sea editable
       rol: row.rol ?? "empleado",
     });
@@ -84,6 +87,7 @@ export default function Empleados() {
         nombre_empleado: form.nombre_empleado,
         numero_empleado: form.numero_empleado,
         correo: form.correo,
+        telefono: form.telefono.trim() || null,
         rol: form.rol,
         // La contraseña es opcional al editar
         ...(form.password ? { password: form.password } : {}),
@@ -159,7 +163,7 @@ export default function Empleados() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre, número o correo…"
+          placeholder="Buscar por nombre, número, correo o teléfono…"
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -196,6 +200,7 @@ export default function Empleados() {
               <th style={{ padding: "10px" }}>Nombre</th>
               <th style={{ padding: "10px" }}>Número</th>
               <th style={{ padding: "10px" }}>Correo</th>
+              <th style={{ padding: "10px" }}>Teléfono</th>
               <th style={{ padding: "10px" }}>Rol</th>
               <th style={{ padding: "10px" }}>Fecha Alta</th>
               <th style={{ padding: "10px", textAlign: "center" }}>Acciones</th>
@@ -205,13 +210,13 @@ export default function Empleados() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>
+                <td colSpan={8} style={{ textAlign: "center", padding: "20px" }}>
                   Cargando…
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: "20px" }}>
+                <td colSpan={8} style={{ textAlign: "center", padding: "20px" }}>
                   Sin resultados
                 </td>
               </tr>
@@ -222,6 +227,7 @@ export default function Empleados() {
                   <td style={{ padding: "10px" }}>{row.nombre_empleado}</td>
                   <td style={{ padding: "10px" }}>{row.numero_empleado}</td>
                   <td style={{ padding: "10px" }}>{row.correo}</td>
+                  <td style={{ padding: "10px" }}>{row.telefono || "-"}</td>
                   <td style={{ padding: "10px" }}>
                     <span style={{
                       background: row.rol === 'admin' ? '#10B981' : '#6B7280',
@@ -326,6 +332,16 @@ export default function Empleados() {
               value={form.correo}
               onChange={(e) =>
                 setForm((f) => ({ ...f, correo: e.target.value }))
+              }
+              style={{ width: "100%", marginBottom: "10px", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
+            />
+
+            <label>Teléfono (opcional):</label>
+            <input
+              type="tel"
+              value={form.telefono}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, telefono: e.target.value }))
               }
               style={{ width: "100%", marginBottom: "10px", padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
             />

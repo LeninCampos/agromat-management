@@ -15,6 +15,7 @@ const Empleado = sequelize.define("Empleado", {
       isEmail: true
     }
   },
+  telefono: { type: DataTypes.STRING(20), allowNull: true },
   fecha_alta: { type: DataTypes.DATEONLY, allowNull: false },
   
   password: {
